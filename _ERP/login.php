@@ -21,9 +21,16 @@ if (isset($_GET['msg'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
+    $clientIp = getClientIp();
 
-    if (empty($username) || empty($password)) {
+    // Validasi CSRF
+    $csrfPost = $_POST['_csrf'] ?? '';
+    if (!hash_equals(getCsrfToken(), $csrfPost)) {
+        $error = 'Request tidak valid. Silakan coba lagi.';
+    } elseif (empty($username) || empty($password)) {
         $error = 'Username dan password wajib diisi.';
+    } elseif (isLoginLocked($username, $clientIp)) {
+        $error = '🔒 Terlalu banyak percobaan login. Akun dikunci 15 menit. Hubungi administrator jika butuh bantuan.';
     } else {
         initAuthTable();
         $stmt = getDB()->prepare("SELECT * FROM hl_users WHERE username = ? AND is_active = 1");
@@ -31,12 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
-            // Update last login
+            clearLoginAttempts($username, $clientIp);
+
             getDB()->prepare("UPDATE hl_users SET last_login = NOW() WHERE id = ?")
                 ->execute([$user['id']]);
 
-            // Set session — load role dari hl_roles jika ada
-            $roleName = $user['role']; // fallback ke role lama
+            $roleName = $user['role'];
             $roleId   = $user['role_id'] ?? null;
             if ($roleId) {
                 try {
@@ -51,18 +58,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'id'        => $user['id'],
                 'username'  => $user['username'],
                 'nama'      => $user['nama'],
-                'role'      => $user['role'],      // role lama untuk backward compat
+                'role'      => $user['role'],
                 'role_id'   => $roleId,
-                'role_nama' => $roleName,          // nama role dari hl_roles
+                'role_nama' => $roleName,
             ];
             $_SESSION['hl_login_time']    = time();
             $_SESSION['hl_last_activity'] = time();
 
             session_regenerate_id(true);
+            logAudit('login', 'auth', 'Login berhasil', $user['id']);
             header('Location: dashboard.php');
             exit;
         } else {
-            // Delay untuk prevent brute force
+            recordLoginAttempt($username, $clientIp);
             sleep(1);
             $error = 'Username atau password salah.';
         }
@@ -312,6 +320,7 @@ input[type="password"]:focus {
   <?php endif; ?>
 
   <form method="POST" id="loginForm">
+    <input type="hidden" name="_csrf" value="<?= htmlspecialchars(getCsrfToken()) ?>"/>
     <div class="form-group">
       <label>Username</label>
       <div class="input-wrap">

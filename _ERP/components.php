@@ -163,6 +163,7 @@ function renderToast(): void { ?>
 function renderHead(string $title = 'Harpy Laundry'): void { ?>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="csrf-token" content="<?= htmlspecialchars(getCsrfToken()) ?>"/>
     <title><?= htmlspecialchars($title) ?> — Harpy Laundry</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

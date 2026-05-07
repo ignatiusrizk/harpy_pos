@@ -14,7 +14,7 @@ $pdo    = getDB();
 $user   = currentUser();
 
 // ── KONFIGURASI ───────────────────────────────────────
-define('ANTHROPIC_API_KEY', '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'); // sk-ant-...
+// ANTHROPIC_API_KEY didefinisikan di config.local.php
 define('ANTHROPIC_MODEL',   'claude-sonnet-4-5');
 define('ANTHROPIC_MAX_TOKENS', 1024);
 
@@ -92,6 +92,11 @@ function callClaude(string $systemPrompt, string $userMessage): array {
     if (empty($data['content'][0]['text'])) return ['error' => 'Empty response from AI'];
 
     return ['text' => $data['content'][0]['text']];
+}
+
+// Semua POST ke ai.php wajib valid CSRF
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verifyCsrf();
 }
 
 // ── ACTION: UPSELLING REKOMENDASI ─────────────────────

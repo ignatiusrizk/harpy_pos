@@ -28,6 +28,8 @@ if ($action) {
 
     // SAVE transaksi
     if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!hasPermission('pos.create')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
+        verifyCsrf();
         $data  = json_decode(file_get_contents('php://input'), true);
         $items = $data['items'] ?? [];
         if (empty($items)) { echo json_encode(['error'=>'Minimal 1 item']); exit; }

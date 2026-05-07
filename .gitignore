@@ -2,3 +2,6 @@
 _ERP.zip
 *.sql
 reset.php
+
+# Kredensial sensitif — JANGAN PERNAH dicommit
+_ERP/config.local.php

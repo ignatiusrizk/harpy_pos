@@ -4,47 +4,57 @@
 // Include file ini di semua halaman yang dilindungi
 // ══════════════════════════════════════════════
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'u269895997_Laundry_Masuk');
-define('DB_USER', 'u269895997_HL_Admin');
-define('DB_PASS', '1Kq7um&p*b@');
+require_once __DIR__ . '/config.local.php';
 
 // Timezone Indonesia WIB
 date_default_timezone_set('Asia/Jakarta');
 
 // ── SESSION CONFIG ────────────────────────────
-define('SESSION_TIMEOUT',  1 * 60 * 60);  // 8 jam — auto logout jika tidak aktif
-define('SESSION_LIFETIME', 10 * 60 * 60); // 12 jam — maksimal sejak login
+define('SESSION_TIMEOUT',  1 * 60 * 60);   // idle 1 jam
+define('SESSION_LIFETIME', 10 * 60 * 60);  // maks 10 jam sejak login
 
-ini_set('session.cookie_httponly', 1);     // Cegah akses cookie via JS
-ini_set('session.use_strict_mode', 1);     // Tolak session ID yang tidak valid
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_strict_mode', 1);
 ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.cookie_secure', 1);   // hanya kirim via HTTPS
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ── SECURITY HEADERS ─────────────────────────
+function sendSecurityHeaders(): void {
+    if (headers_sent()) return;
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-XSS-Protection: 1; mode=block');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+}
+
 // ── DATABASE ──────────────────────────────────
-function getDB() {
+function getDB(): PDO {
     static $pdo = null;
     if ($pdo === null) {
         try {
             $pdo = new PDO(
-                "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+                'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
                 DB_USER, DB_PASS,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                [PDO::ATTR_ERRMODE         => PDO::ERRMODE_EXCEPTION,
                  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
             );
             $pdo->exec("SET time_zone = '+07:00'");
         } catch (PDOException $e) {
-            die('<div style="font-family:sans-serif;padding:40px;color:red">Database error: ' . $e->getMessage() . '</div>');
+            // Jangan expose detail koneksi ke browser
+            error_log('DB connection error: ' . $e->getMessage());
+            http_response_code(500);
+            die('<div style="font-family:sans-serif;padding:40px">Koneksi database gagal. Hubungi administrator.</div>');
         }
     }
     return $pdo;
 }
 
 // ── Auto create users table & seed default admin ──
-function initAuthTable() {
+function initAuthTable(): void {
     $pdo = getDB();
     $pdo->exec("CREATE TABLE IF NOT EXISTS hl_users (
         id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,7 +67,6 @@ function initAuthTable() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Seed default admin jika belum ada user
     $count = $pdo->query("SELECT COUNT(*) FROM hl_users")->fetchColumn();
     if ($count == 0) {
         $hash = password_hash('HarpyAdmin2025!', PASSWORD_DEFAULT);
@@ -66,30 +75,97 @@ function initAuthTable() {
     }
 }
 
+// ── LOGIN ATTEMPT / BRUTE FORCE PROTECTION ────
+function initLoginAttemptsTable(): void {
+    getDB()->exec("CREATE TABLE IF NOT EXISTS hl_login_attempts (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        identifier VARCHAR(100) NOT NULL,
+        ip_address VARCHAR(45)  NOT NULL,
+        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_identifier (identifier),
+        INDEX idx_ip (ip_address),
+        INDEX idx_time (attempted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// Return true jika identifier/IP sedang dikunci
+function isLoginLocked(string $identifier, string $ip): bool {
+    try {
+        initLoginAttemptsTable();
+        $pdo   = getDB();
+        $since = date('Y-m-d H:i:s', time() - 15 * 60); // window 15 menit
+        $stmt  = $pdo->prepare("SELECT COUNT(*) FROM hl_login_attempts
+            WHERE (identifier=? OR ip_address=?) AND attempted_at >= ?");
+        $stmt->execute([$identifier, $ip, $since]);
+        return (int)$stmt->fetchColumn() >= 5;
+    } catch (Exception $e) { return false; }
+}
+
+function recordLoginAttempt(string $identifier, string $ip): void {
+    try {
+        initLoginAttemptsTable();
+        getDB()->prepare("INSERT INTO hl_login_attempts (identifier, ip_address) VALUES (?,?)")
+            ->execute([$identifier, $ip]);
+    } catch (Exception $e) {}
+}
+
+function clearLoginAttempts(string $identifier, string $ip): void {
+    try {
+        getDB()->prepare("DELETE FROM hl_login_attempts WHERE identifier=? OR ip_address=?")
+            ->execute([$identifier, $ip]);
+    } catch (Exception $e) {}
+}
+
+// ── CSRF ─────────────────────────────────────
+function getCsrfToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function verifyCsrf(): void {
+    $token = $_POST['_csrf']
+        ?? $_SERVER['HTTP_X_CSRF_TOKEN']
+        ?? '';
+    if (!hash_equals(getCsrfToken(), $token)) {
+        http_response_code(403);
+        if (!empty($_GET['action'])) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'CSRF token tidak valid.']);
+        } else {
+            die('Request tidak valid (CSRF).');
+        }
+        exit;
+    }
+}
+
+// ── IP ADDRESS (safe) ─────────────────────────
+function getClientIp(): string {
+    // Ambil IP pertama dari X-Forwarded-For (jika di balik proxy)
+    $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+    if ($forwarded) {
+        $first = trim(explode(',', $forwarded)[0]);
+        if (filter_var($first, FILTER_VALIDATE_IP)) return $first;
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '-';
+}
+
 // ── Cek & enforce session timeout ────────────
-function checkSessionTimeout() {
+function checkSessionTimeout(): void {
     $now = time();
-
-    // Cek idle timeout (tidak ada aktivitas)
     if (isset($_SESSION['hl_last_activity'])) {
-        if ($now - $_SESSION['hl_last_activity'] > SESSION_TIMEOUT) {
-            doLogout('timeout');
-        }
+        if ($now - $_SESSION['hl_last_activity'] > SESSION_TIMEOUT) doLogout('timeout');
     }
-
-    // Cek lifetime (maksimal sejak login)
     if (isset($_SESSION['hl_login_time'])) {
-        if ($now - $_SESSION['hl_login_time'] > SESSION_LIFETIME) {
-            doLogout('timeout');
-        }
+        if ($now - $_SESSION['hl_login_time'] > SESSION_LIFETIME) doLogout('timeout');
     }
-
-    // Update last activity
     $_SESSION['hl_last_activity'] = $now;
 }
 
-// ── Require login — redirect jika belum login ──
-function requireLogin() {
+// ── Require login ─────────────────────────────
+function requireLogin(): void {
+    sendSecurityHeaders();
     initAuthTable();
     if (empty($_SESSION['hl_user'])) {
         header('Location: login.php?msg=not_logged_in');
@@ -98,48 +174,42 @@ function requireLogin() {
     checkSessionTimeout();
 }
 
-// ── Cek login (tanpa redirect) ──
-function isLoggedIn() {
+function isLoggedIn(): bool {
     return !empty($_SESSION['hl_user']);
 }
 
-// ── Get current user ──
-function currentUser() {
+function currentUser(): ?array {
     return $_SESSION['hl_user'] ?? null;
 }
 
-// ── Logout ──
-function doLogout($reason = 'logout') {
+// ── Logout ──────────────────────────────────
+function doLogout(string $reason = 'logout'): void {
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $p = session_get_cookie_params();
         setcookie(session_name(), '', time() - 3600,
-            $p['path'], $p['domain'],
-            $p['secure'], $p['httponly']
-        );
+            $p['path'], $p['domain'], $p['secure'], $p['httponly']);
     }
     session_destroy();
     $msg = $reason === 'timeout' ? 'session_expired' : 'logout';
     header('Location: login.php?msg=' . $msg);
     exit;
 }
+
 // ══════════════════════════════════════════════════════
 // RBAC — Role-Based Access Control
 // ══════════════════════════════════════════════════════
 
-// ── Cache permissions di session ─────────────────────
 function loadUserPermissions(): void {
     if (isset($_SESSION['hl_permissions'])) return;
     $user = currentUser();
     if (!$user) return;
 
-    // Superadmin lama → selalu full access
     if ($user['role'] === 'superadmin') {
         $_SESSION['hl_permissions'] = ['*' => 'all'];
         return;
     }
 
-    // Cek dari role_id (RBAC baru)
     if (!empty($user['role_id'])) {
         try {
             $pdo  = getDB();
@@ -157,7 +227,6 @@ function loadUserPermissions(): void {
         } catch (Exception $e) {}
     }
 
-    // Fallback: map role lama ke permission set default
     $defaultPerms = [
         'admin' => ['pos.view','pos.create','orders.view_all','orders.create','orders.edit',
             'orders.update_status','orders.update_payment','kas.view','kas.create','kas.edit',
@@ -176,25 +245,18 @@ function loadUserPermissions(): void {
     $_SESSION['hl_permissions'] = $perms;
 }
 
-// ── Cek permission ────────────────────────────────────
-// $kode  : 'orders.view_all' | 'kas.create' | dst
-// return : false | 'all' | 'own' | 'today'
 function hasPermission(string $kode): string|false {
     loadUserPermissions();
     $perms = $_SESSION['hl_permissions'] ?? [];
-
-    // Wildcard — superadmin / owner
     if (isset($perms['*'])) return 'all';
-
     return $perms[$kode] ?? false;
 }
 
-// ── Require permission — die jika tidak punya akses ──
 function requirePermission(string $kode): void {
     if (!hasPermission($kode)) {
         if (!empty($_GET['action'])) {
             header('Content-Type: application/json');
-            echo json_encode(['error' => 'Akses ditolak — tidak punya permission: ' . $kode]);
+            echo json_encode(['error' => 'Akses ditolak']);
         } else {
             http_response_code(403);
             die('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>403</title>
@@ -209,19 +271,15 @@ function requirePermission(string $kode): void {
     }
 }
 
-// ── Get filter data untuk query ───────────────────────
-// Return: 'all' | 'own' | 'today'
 function getDataFilter(string $kode): string {
     $filter = hasPermission($kode);
     return $filter ?: 'own';
 }
 
-// ── Clear permission cache (saat role berubah) ────────
 function clearPermissionCache(): void {
     unset($_SESSION['hl_permissions']);
 }
 
-// ── Reload user session dari DB ───────────────────────
 function reloadUserSession(): void {
     $user = currentUser();
     if (!$user) return;
@@ -247,7 +305,6 @@ function logAudit(string $aksi, string $modul, string $keterangan = '', $refId =
         $pdo  = getDB();
         $user = currentUser();
 
-        // Auto-create tabel jika belum ada
         $pdo->exec("CREATE TABLE IF NOT EXISTS hl_audit_log (
             id          INT AUTO_INCREMENT PRIMARY KEY,
             user_id     INT DEFAULT NULL,
@@ -265,9 +322,6 @@ function logAudit(string $aksi, string $modul, string $keterangan = '', $refId =
             INDEX idx_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        $ip = $_SERVER['HTTP_X_FORWARDED_FOR']
-            ?? $_SERVER['REMOTE_ADDR']
-            ?? '-';
         $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '-', 0, 255);
 
         $pdo->prepare("INSERT INTO hl_audit_log
@@ -277,14 +331,9 @@ function logAudit(string $aksi, string $modul, string $keterangan = '', $refId =
                 $user['id']        ?? null,
                 $user['nama']      ?? null,
                 $user['role_nama'] ?? $user['role'] ?? null,
-                $modul,
-                $aksi,
-                $keterangan,
-                $refId,
-                $ip,
+                $modul, $aksi, $keterangan, $refId,
+                getClientIp(),
                 $ua,
             ]);
-    } catch (Exception $e) {
-        // Jangan sampai audit log error ganggu flow utama
-    }
+    } catch (Exception $e) {}
 }
