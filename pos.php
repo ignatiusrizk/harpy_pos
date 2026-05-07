@@ -872,7 +872,7 @@ async function loadAIRekomendasi() {
   try {
     const r = await fetch('ai.php?action=upselling', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
       body: JSON.stringify({
         pelanggan_id:  currentPelangganId,
         current_items: items,
@@ -952,7 +952,7 @@ async function saveTransaksi() {
 
   try {
     const res  = await fetch('pos.php?action=save', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
       body: JSON.stringify(payload)
     });
     const data = await res.json();

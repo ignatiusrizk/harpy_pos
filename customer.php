@@ -404,7 +404,7 @@ async function saveCustomer() {
   const nama = document.getElementById('f_nama').value.trim();
   if (!nama) { showToast('⚠️ Nama wajib diisi','error'); return; }
   const r = await fetch('customer.php?action=save', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({
       id:       document.getElementById('f_id').value,
       nama,

@@ -240,7 +240,7 @@ async function saveLayanan() {
   if (!harga) { showToast('⚠️ Harga wajib diisi','error'); return; }
 
   const r = await fetch('layanan.php?action=save', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({
       id: document.getElementById('f_id').value,
       nama, harga,
@@ -257,7 +257,7 @@ async function saveLayanan() {
 
 async function toggleLayanan(id, active) {
   await fetch('layanan.php?action=toggle', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id, is_active: active ? 1 : 0})
   });
   loadLayanan(); loadStats();
@@ -266,7 +266,7 @@ async function toggleLayanan(id, active) {
 async function deleteLayanan(id) {
   if (!confirm('Nonaktifkan layanan ini?')) return;
   await fetch('layanan.php?action=delete', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id})
   });
   showToast('✅ Layanan dinonaktifkan','success'); loadLayanan(); loadStats();

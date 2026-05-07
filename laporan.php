@@ -946,7 +946,7 @@ async function askAI(quickQuestion = null) {
   try {
     const r = await fetch('ai.php?action=laporan_analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
       body: JSON.stringify({
         pertanyaan,
         tipe:    ctx.tipe,

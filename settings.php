@@ -416,7 +416,7 @@ function toggleModul(modul, checked) {
 async function savePerms() {
   if (!currentRoleId) return;
   const r = await fetch('settings.php?action=save_perms', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({ role_id: currentRoleId, permissions: currentRolePerms })
   });
   const d = await r.json();
@@ -459,7 +459,7 @@ async function saveRole() {
     if (!nama) { showToast('⚠️ Nama role wajib diisi','error'); return; }
   }
   const r = await fetch('settings.php?action=save_role', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({
       id:        document.getElementById('r_id').value,
       nama,
@@ -479,7 +479,7 @@ async function duplicateRole(id) {
   const role = allRoles.find(r=>r.id==id);
   if (!confirm('Duplikat role "'+role.nama+'" beserta semua permission-nya?')) return;
   const r = await fetch('settings.php?action=duplicate_role', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id})
   });
   const d = await r.json();
@@ -491,7 +491,7 @@ async function deleteRole(id) {
   const role = allRoles.find(r=>r.id==id);
   if (!confirm('Hapus role "'+role.nama+'"? Aksi ini tidak bisa dibatalkan.')) return;
   const r = await fetch('settings.php?action=delete_role', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id})
   });
   const d = await r.json();

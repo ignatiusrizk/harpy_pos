@@ -1260,7 +1260,7 @@ async function saveEdit() {
   };
 
   const r = await fetch('orders.php?action=update', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify(payload)
   });
   const d = await r.json();

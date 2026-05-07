@@ -156,6 +156,7 @@ function renderTopbar(string $activePage = ''): void {
 function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
     <script>
+    function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}
     function toggleFilter(id){
       var bar=document.getElementById(id),btn=document.getElementById(id+'Btn');
       if(!bar||!btn)return;

@@ -628,7 +628,7 @@ async function saveKas() {
   };
 
   const r = await fetch('kas.php?action=save', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify(payload)
   });
   const d = await r.json();
@@ -673,7 +673,7 @@ async function editKas(id) {
 async function deleteKas(id) {
   if (!confirm('Hapus catatan kas ini?')) return;
   const r = await fetch('kas.php?action=delete', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id})
   });
   const d = await r.json();

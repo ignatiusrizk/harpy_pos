@@ -554,7 +554,7 @@ async function clockIn() {
   btn.disabled = true; btn.textContent = '⏳...';
 
   const r = await fetch('absensi.php?action=clock_in', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({})
   });
   const d = await r.json();
@@ -575,7 +575,7 @@ async function clockOut() {
   btn.disabled = true; btn.textContent = '⏳...';
 
   const r = await fetch('absensi.php?action=clock_out', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({})
   });
   const d = await r.json();
@@ -658,7 +658,7 @@ async function submitIzin() {
   if (!payload.alasan.trim()) { showToast('⚠️ Alasan wajib diisi','error'); return; }
 
   const r = await fetch('absensi.php?action=input_izin', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify(payload)
   });
   const d = await r.json();
@@ -752,7 +752,7 @@ async function loadIzinList() {
 
 async function approveIzin(id, status) {
   const r = await fetch('absensi.php?action=approve_izin', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id, status})
   });
   const d = await r.json();

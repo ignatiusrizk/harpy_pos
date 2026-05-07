@@ -471,7 +471,7 @@ async function saveKaryawan() {
   if (!username) { showToast('⚠️ Username wajib diisi','error'); return; }
 
   const r = await fetch('karyawan.php?action=save', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({
       id:         document.getElementById('f_id').value,
       nama, username,
@@ -504,7 +504,7 @@ async function generateGaji() {
   if (!bulan) return;
   if (!confirm('Generate slip gaji untuk semua karyawan bulan ' + bulan + '?')) return;
   const r = await fetch('karyawan.php?action=generate_gaji', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({bulan})
   });
   const d = await r.json();
@@ -567,7 +567,7 @@ function recalcGaji() {
 }
 async function saveGaji() {
   const r = await fetch('karyawan.php?action=save_gaji', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({
       id:        document.getElementById('gf_id').value,
       gaji_pokok:document.getElementById('gf_pokok').value,
@@ -582,7 +582,7 @@ async function saveGaji() {
 async function bayarGaji(id) {
   if (!confirm('Tandai gaji ini sudah dibayar? Akan otomatis tercatat di kas keluar.')) return;
   const r = await fetch('karyawan.php?action=bayar_gaji', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
     body: JSON.stringify({id})
   });
   const d = await r.json();
