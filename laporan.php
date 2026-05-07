@@ -963,19 +963,18 @@ async function askAI(quickQuestion = null) {
     }
 
     const jawaban = d.jawaban || '';
-    respEl.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:10px">
-        <span style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:100px;white-space:nowrap;margin-top:2px">AI</span>
-        <div style="font-size:14px;color:var(--dark);line-height:1.7;flex:1">${formatAIResponse(jawaban)}</div>
-      </div>
-      <div style="font-size:11px;color:var(--gray);text-align:right;margin-top:10px">
-        ${new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}
-      </div>`;
 
-    // Add to history
+    // Tampilkan hanya di chat history, sembunyikan panel loading
+    respEl.style.display = 'none';
+    respEl.innerHTML = '';
+
     histEl.innerHTML += `
-      <div style="display:flex;justify-content:flex-start;margin-bottom:10px">
-        <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:4px 12px 12px 12px;padding:10px 14px;max-width:85%;font-size:13px;color:var(--dark);line-height:1.6">${formatAIResponse(jawaban)}</div>
+      <div style="display:flex;justify-content:flex-start;margin-bottom:12px;gap:8px">
+        <span style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:100px;white-space:nowrap;margin-top:2px;flex-shrink:0">AI</span>
+        <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:4px 12px 12px 12px;padding:10px 14px;max-width:85%;font-size:13px;color:var(--dark);line-height:1.6">
+          ${formatAIResponse(jawaban)}
+          <div style="font-size:11px;color:var(--gray);text-align:right;margin-top:6px">${new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
       </div>`;
     histEl.scrollTop = histEl.scrollHeight;
 
