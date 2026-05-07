@@ -33,6 +33,27 @@ if ($action) {
         $data  = json_decode(file_get_contents('php://input'), true);
         $items = $data['items'] ?? [];
         if (empty($items)) { echo json_encode(['error'=>'Minimal 1 item']); exit; }
+        if (count($items) > 30) { echo json_encode(['error'=>'Maksimal 30 item per order']); exit; }
+
+        // Validasi field utama
+        $errors = validateInputs([
+            'nama_pelanggan' => ['Nama pelanggan', false, 100],
+            'telepon'        => ['Telepon',        false, 20],
+            'catatan'        => ['Catatan',        false, 500],
+        ], $data);
+        if ($errors) { echo json_encode(['error' => implode(' ', $errors)]); exit; }
+
+        // Sanitize
+        $data['nama_pelanggan'] = sanitizeStr($data['nama_pelanggan'] ?? '', 100);
+        $data['telepon']        = sanitizeStr(preg_replace('/[^0-9+\-\s]/', '', $data['telepon'] ?? ''), 20);
+        $data['catatan']        = sanitizeStr($data['catatan'] ?? '', 500);
+
+        // Validasi setiap item
+        foreach ($items as $i => $item) {
+            if (floatval($item['jumlah'] ?? 0) <= 0)       { echo json_encode(['error'=>'Jumlah item harus lebih dari 0']); exit; }
+            if (floatval($item['harga_satuan'] ?? 0) < 0)  { echo json_encode(['error'=>'Harga tidak boleh negatif']); exit; }
+            if (empty($item['nama_layanan']))               { echo json_encode(['error'=>'Nama layanan tidak boleh kosong']); exit; }
+        }
 
         $pdo->beginTransaction();
         try {

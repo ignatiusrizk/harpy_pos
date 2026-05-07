@@ -94,9 +94,15 @@ function callClaude(string $systemPrompt, string $userMessage): array {
     return ['text' => $data['content'][0]['text']];
 }
 
-// Semua POST ke ai.php wajib valid CSRF
+// Semua POST ke ai.php wajib valid CSRF + rate limit
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
+    if (!checkRateLimit('ai', 20, 3600)) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Terlalu banyak request AI. Batas 20 request/jam. Coba lagi nanti.']);
+        exit;
+    }
+    recordRateLimit('ai');
 }
 
 // ── ACTION: UPSELLING REKOMENDASI ─────────────────────
@@ -340,11 +346,11 @@ MSG;
 // ── ACTION: ANALISIS LAPORAN ──────────────────────────
 if ($action === 'laporan_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $d          = json_decode(file_get_contents('php://input'), true);
-    $pertanyaan = trim($d['pertanyaan'] ?? '');
+    $pertanyaan = sanitizeStr($d['pertanyaan'] ?? '', 500);
     $tipe       = $d['tipe']    ?? 'harian';
     $periode    = $d['periode'] ?? '-';
     $data       = $d['data']    ?? [];
-    $history    = $d['history'] ?? [];
+    $history    = array_slice($d['history'] ?? [], -10); // maks 10 history
 
     if (!$pertanyaan) { echo json_encode(['error' => 'Pertanyaan tidak boleh kosong']); exit; }
 

@@ -1,0 +1,13 @@
+# ── HTTPS Enforcement ────────────────────────
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ── Blokir akses langsung ke file sensitif ───
+<FilesMatch "^(config\.local\.php|config\.example\.php|php\.ini|\.gitignore)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# ── Sembunyikan directory listing ────────────
+Options -Indexes

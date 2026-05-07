@@ -116,6 +116,66 @@ function clearLoginAttempts(string $identifier, string $ip): void {
     } catch (Exception $e) {}
 }
 
+// ── RATE LIMITING ────────────────────────────
+function initRateLimitTable(): void {
+    getDB()->exec("CREATE TABLE IF NOT EXISTS hl_rate_limits (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        user_id      INT NOT NULL,
+        endpoint     VARCHAR(50) NOT NULL,
+        requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_endpoint (user_id, endpoint),
+        INDEX idx_time (requested_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+// Return true jika masih dalam batas, false jika sudah melebihi limit
+function checkRateLimit(string $endpoint, int $maxRequests = 20, int $windowSeconds = 3600): bool {
+    $user = currentUser();
+    if (!$user) return false;
+    try {
+        initRateLimitTable();
+        $pdo   = getDB();
+        $since = date('Y-m-d H:i:s', time() - $windowSeconds);
+        $stmt  = $pdo->prepare("SELECT COUNT(*) FROM hl_rate_limits
+            WHERE user_id=? AND endpoint=? AND requested_at >= ?");
+        $stmt->execute([$user['id'], $endpoint, $since]);
+        return (int)$stmt->fetchColumn() < $maxRequests;
+    } catch (Exception $e) { return true; }
+}
+
+function recordRateLimit(string $endpoint): void {
+    $user = currentUser();
+    if (!$user) return;
+    try {
+        initRateLimitTable();
+        getDB()->prepare("INSERT INTO hl_rate_limits (user_id, endpoint) VALUES (?,?)")
+            ->execute([$user['id'], $endpoint]);
+        // Bersihkan entri lama (>24 jam) agar tabel tidak membengkak
+        getDB()->prepare("DELETE FROM hl_rate_limits WHERE requested_at < ?")
+            ->execute([date('Y-m-d H:i:s', time() - 86400)]);
+    } catch (Exception $e) {}
+}
+
+// ── INPUT VALIDATION ─────────────────────────
+function sanitizeStr(string $value, int $maxLen = 255): string {
+    return mb_substr(trim($value), 0, $maxLen);
+}
+
+// $rules: ['field' => ['Label', required, maxLen]]
+// Return array of error strings (kosong = valid)
+function validateInputs(array $rules, array $data): array {
+    $errors = [];
+    foreach ($rules as $field => [$label, $required, $maxLen]) {
+        $val = trim($data[$field] ?? '');
+        if ($required && $val === '') {
+            $errors[] = "{$label} wajib diisi.";
+        } elseif ($val !== '' && mb_strlen($val) > $maxLen) {
+            $errors[] = "{$label} maksimal {$maxLen} karakter.";
+        }
+    }
+    return $errors;
+}
+
 // ── CSRF ─────────────────────────────────────
 function getCsrfToken(): string {
     if (empty($_SESSION['csrf_token'])) {
