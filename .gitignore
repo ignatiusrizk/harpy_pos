@@ -5,3 +5,4 @@ reset.php
 
 # Kredensial sensitif — JANGAN PERNAH dicommit
 _ERP/config.local.php
+config.local.php
