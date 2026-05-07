@@ -115,26 +115,32 @@ if ($action) {
   </div>
 
   <!-- FILTER -->
-  <div class="hl-filter-bar">
-    <input type="text" id="fSearch" class="hl-input" placeholder="🔍 Cari aksi, keterangan, user..."
-      oninput="debounce()" style="flex:1;max-width:280px"/>
-    <select id="fModul" class="hl-input" style="width:auto" onchange="loadLog(1)">
-      <option value="">Semua Modul</option>
-      <option value="orders">Orders</option>
-      <option value="kas">Kas</option>
-      <option value="customer">Customer</option>
-      <option value="karyawan">Karyawan</option>
-      <option value="layanan">Layanan</option>
-      <option value="settings">Settings</option>
-      <option value="auth">Auth (Login)</option>
-    </select>
-    <select id="fUser" class="hl-input" style="width:auto" onchange="loadLog(1)">
-      <option value="">Semua User</option>
-    </select>
-    <input type="date" id="fDari" class="hl-input" style="width:auto" onchange="loadLog(1)"/>
-    <input type="date" id="fSampai" class="hl-input" style="width:auto" onchange="loadLog(1)"/>
-    <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="resetFilter()">✕</button>
-    <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadLog(1)">↻</button>
+  <div class="hl-filter-collapsible">
+    <button class="hl-filter-toggle-btn" id="auditFilterBtn" onclick="toggleFilter('auditFilter')">
+      🔍 Filter Log <span class="hl-filter-active-dot" id="auditFilterDot"></span>
+      <span class="hl-toggle-arrow">▼</span>
+    </button>
+    <div class="hl-filter-bar" id="auditFilter">
+      <input type="text" id="fSearch" class="hl-input" placeholder="Cari aksi, keterangan, user..."
+        oninput="debounce()" style="flex:1;max-width:280px"/>
+      <select id="fModul" class="hl-input" style="width:auto" onchange="loadLog(1)">
+        <option value="">Semua Modul</option>
+        <option value="orders">Orders</option>
+        <option value="kas">Kas</option>
+        <option value="customer">Customer</option>
+        <option value="karyawan">Karyawan</option>
+        <option value="layanan">Layanan</option>
+        <option value="settings">Settings</option>
+        <option value="auth">Auth (Login)</option>
+      </select>
+      <select id="fUser" class="hl-input" style="width:auto" onchange="loadLog(1)">
+        <option value="">Semua User</option>
+      </select>
+      <input type="date" id="fDari" class="hl-input" style="width:auto" onchange="loadLog(1)"/>
+      <input type="date" id="fSampai" class="hl-input" style="width:auto" onchange="loadLog(1)"/>
+      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="resetFilter()">✕ Reset</button>
+      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadLog(1)">↻</button>
+    </div>
   </div>
 
   <!-- TABLE -->
@@ -172,6 +178,7 @@ let searchTimer = null;
 let currentPage = 1;
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilter('auditFilter');
   const today = localDateStr();
   document.getElementById('fDari').value   = today;
   document.getElementById('fSampai').value = today;

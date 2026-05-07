@@ -699,31 +699,37 @@ textarea{resize:vertical;min-height:64px}
   </div>
 
   <!-- FILTER -->
-  <div class="filter-bar">
-    <input type="text" id="searchInput" placeholder="🔍 Cari nama, no. order, telepon..."
-      oninput="debounce()" style="flex:1;min-width:180px"/>
-    <select id="filterStatus" onchange="loadOrders(1)">
-      <option value="">Semua Status</option>
-      <option value="masuk">Masuk</option>
-      <option value="cuci">Proses Cuci</option>
-      <option value="kering">Proses Kering</option>
-      <option value="setrika">Setrika</option>
-      <option value="siap">Siap Diambil</option>
-      <option value="diambil">Sudah Diambil</option>
-    </select>
-    <select id="filterBayar" onchange="loadOrders(1)">
-      <option value="">Semua Pembayaran</option>
-      <option value="belum_bayar">Belum Bayar</option>
-      <option value="dp">DP</option>
-      <option value="lunas">Lunas</option>
-    </select>
-    <input type="date" id="filterDari" onchange="loadOrders(1)" title="Dari tanggal"
-      style="width:auto;padding:9px 10px;border:1.5px solid rgba(27,45,90,.14);border-radius:var(--r);font-family:var(--font);font-size:13px;background:var(--white);outline:none"/>
-    <input type="date" id="filterSampai" onchange="loadOrders(1)" title="Sampai tanggal"
-      style="width:auto;padding:9px 10px;border:1.5px solid rgba(27,45,90,.14);border-radius:var(--r);font-family:var(--font);font-size:13px;background:var(--white);outline:none"/>
-    <button class="btn btn-outline btn-sm" onclick="resetFilter()" title="Reset filter">✕</button>
-    <button class="btn btn-teal-sm" onclick="loadOrders(1)">↻</button>
-    <a href="pos.php" class="btn btn-teal-sm">+ Order Baru</a>
+  <div class="hl-filter-collapsible">
+    <button class="hl-filter-toggle-btn" id="orderFilterBtn" onclick="toggleFilter('orderFilter')">
+      🔍 Filter &amp; Pencarian <span class="hl-filter-active-dot" id="orderFilterDot"></span>
+      <span class="hl-toggle-arrow">▼</span>
+    </button>
+    <div class="hl-filter-bar" id="orderFilter">
+      <input type="text" id="searchInput" placeholder="Cari nama, no. order, telepon..."
+        oninput="debounce()" style="flex:1;min-width:180px"/>
+      <select id="filterStatus" onchange="loadOrders(1)">
+        <option value="">Semua Status</option>
+        <option value="masuk">Masuk</option>
+        <option value="cuci">Proses Cuci</option>
+        <option value="kering">Proses Kering</option>
+        <option value="setrika">Setrika</option>
+        <option value="siap">Siap Diambil</option>
+        <option value="diambil">Sudah Diambil</option>
+      </select>
+      <select id="filterBayar" onchange="loadOrders(1)">
+        <option value="">Semua Pembayaran</option>
+        <option value="belum_bayar">Belum Bayar</option>
+        <option value="dp">DP</option>
+        <option value="lunas">Lunas</option>
+      </select>
+      <input type="date" id="filterDari" onchange="loadOrders(1)" title="Dari tanggal"
+        style="width:auto;padding:9px 10px;border:1.5px solid rgba(27,45,90,.14);border-radius:var(--r);font-family:var(--font);font-size:13px;background:var(--white);outline:none"/>
+      <input type="date" id="filterSampai" onchange="loadOrders(1)" title="Sampai tanggal"
+        style="width:auto;padding:9px 10px;border:1.5px solid rgba(27,45,90,.14);border-radius:var(--r);font-family:var(--font);font-size:13px;background:var(--white);outline:none"/>
+      <button class="btn btn-outline btn-sm" onclick="resetFilter()" title="Reset filter">✕ Reset</button>
+      <button class="btn btn-teal-sm" onclick="loadOrders(1)">↻</button>
+      <a href="pos.php" class="btn btn-teal-sm">+ Order Baru</a>
+    </div>
   </div>
 
   <!-- TABLE -->
@@ -912,6 +918,7 @@ let editItems = [];
 let layananAll = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilter('orderFilter');
   loadSummary();
   loadOrders();
   loadLayanan();

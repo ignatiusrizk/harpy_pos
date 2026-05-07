@@ -389,10 +389,15 @@ if ($action) {
 
   <!-- REKAP ALL -->
   <div id="tabRekap">
-    <div class="hl-filter-bar">
-      <span class="hl-filter-label">Bulan</span>
-      <input type="month" id="rekapBulan" class="hl-input" style="width:auto"/>
-      <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="loadRekapAll()">🔍 Tampilkan</button>
+    <div class="hl-filter-collapsible">
+      <button class="hl-filter-toggle-btn" id="rekapFilterBtn" onclick="toggleFilter('rekapFilter')">
+        📅 Periode Rekap <span class="hl-toggle-arrow">▼</span>
+      </button>
+      <div class="hl-filter-bar" id="rekapFilter">
+        <span class="hl-filter-label">Bulan</span>
+        <input type="month" id="rekapBulan" class="hl-input" style="width:auto"/>
+        <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="loadRekapAll()">🔍 Tampilkan</button>
+      </div>
     </div>
     <div class="hl-card">
       <div class="hl-card-header">
@@ -484,6 +489,7 @@ function localMonthStr(d) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilter('rekapFilter');
   const today = localDateStr();
   const bulan = today.substring(0,7);
   document.getElementById('calBulan').value    = bulan;

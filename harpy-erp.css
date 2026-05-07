@@ -355,13 +355,55 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 .hl-toast.error   { background: var(--red); }
 .hl-toast.info    { background: var(--navy); }
 
-/* ── FILTER BAR ────────────────────────────────────── */
+/* ── FILTER COLLAPSIBLE ─────────────────────────────── */
+.hl-filter-collapsible { margin-bottom: 18px; }
+
+.hl-filter-toggle-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 10px 16px;
+  background: var(--white); border: 1px solid rgba(27,45,90,.07);
+  border-radius: var(--r-lg); box-shadow: var(--shadow);
+  cursor: pointer; font-family: var(--font);
+  font-size: 13px; font-weight: 600; color: var(--navy);
+  transition: background .15s, border-radius .25s;
+  text-align: left;
+}
+.hl-filter-toggle-btn:hover { background: var(--off); }
+.hl-filter-toggle-btn.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: var(--light);
+}
+.hl-toggle-arrow {
+  margin-left: auto; font-size: 10px; color: var(--gray);
+  transition: transform .25s;
+}
+.hl-filter-toggle-btn.open .hl-toggle-arrow { transform: rotate(180deg); }
+.hl-filter-active-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--teal); display: none;
+}
+.hl-filter-active-dot.show { display: inline-block; }
+
+/* ── FILTER BAR (body) ──────────────────────────────── */
 .hl-filter-bar {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   background: var(--white); padding: 12px 18px;
-  border-radius: var(--r-lg); border: 1px solid rgba(27,45,90,.07);
-  box-shadow: var(--shadow); margin-bottom: 18px;
+  border: 1px solid rgba(27,45,90,.07); border-top: none;
+  border-bottom-left-radius: var(--r-lg);
+  border-bottom-right-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  max-height: 300px; opacity: 1; overflow: hidden;
+  transition: max-height .28s ease, opacity .2s ease, padding .2s ease;
 }
+.hl-filter-bar.collapsed {
+  max-height: 0; opacity: 0;
+  padding-top: 0; padding-bottom: 0; border-bottom: none;
+}
+/* Standalone (tanpa toggle wrapper) — tetap rounded penuh */
+.hl-filter-bar:not(.hl-filter-body-inner) { border-radius: var(--r-lg); border-top: 1px solid rgba(27,45,90,.07); margin-bottom: 18px; }
+.hl-filter-collapsible .hl-filter-bar { border-radius: 0 0 var(--r-lg) var(--r-lg); margin-bottom: 0; }
+
 .hl-filter-label { font-size: 12px; font-weight: 700; color: var(--navy); white-space: nowrap; }
 
 /* ── EMPTY & LOADING ───────────────────────────────── */

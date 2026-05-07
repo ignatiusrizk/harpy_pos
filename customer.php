@@ -139,18 +139,24 @@ if ($action) {
     </div>
   </div>
 
-  <div class="hl-filter-bar">
-    <input type="text" id="fSearch" class="hl-input" placeholder="🔍 Cari nama, telepon, alamat..." oninput="debounce()" style="flex:1;max-width:320px"/>
-    <select id="fTipe" class="hl-input" style="width:auto" onchange="loadCustomer(1)">
-      <option value="">Semua Tipe</option>
-      <option value="retail">Retail</option>
-      <option value="b2b">B2B / Korporat</option>
-    </select>
-    <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadCustomer()">↻</button>
-    <span id="custInfo" style="font-size:12px;color:var(--gray);margin-left:auto"></span>
-    <div class="view-toggle">
-      <button class="view-btn active" id="btnGrid" onclick="setView('grid')" title="Grid">⊞</button>
-      <button class="view-btn" id="btnList" onclick="setView('list')" title="List">☰</button>
+  <div class="hl-filter-collapsible">
+    <button class="hl-filter-toggle-btn" id="custFilterBtn" onclick="toggleFilter('custFilter')">
+      🔍 Filter &amp; Pencarian <span class="hl-filter-active-dot" id="custFilterDot"></span>
+      <span class="hl-toggle-arrow">▼</span>
+    </button>
+    <div class="hl-filter-bar" id="custFilter">
+      <input type="text" id="fSearch" class="hl-input" placeholder="Cari nama, telepon, alamat..." oninput="debounce()" style="flex:1;max-width:320px"/>
+      <select id="fTipe" class="hl-input" style="width:auto" onchange="loadCustomer(1)">
+        <option value="">Semua Tipe</option>
+        <option value="retail">Retail</option>
+        <option value="b2b">B2B / Korporat</option>
+      </select>
+      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadCustomer()">↻</button>
+      <span id="custInfo" style="font-size:12px;color:var(--gray);margin-left:auto"></span>
+      <div class="view-toggle">
+        <button class="view-btn active" id="btnGrid" onclick="setView('grid')" title="Grid">⊞</button>
+        <button class="view-btn" id="btnList" onclick="setView('list')" title="List">☰</button>
+      </div>
     </div>
   </div>
 
@@ -239,7 +245,7 @@ let allCustomer = [];
 let searchTimer = null;
 let currentDetailId = null;
 
-document.addEventListener('DOMContentLoaded', () => { loadCustomer(); loadStats(); });
+document.addEventListener('DOMContentLoaded', () => { initFilter('custFilter'); loadCustomer(); loadStats(); });
 
 async function loadStats() {
   const r = await fetch('customer.php?action=stats');

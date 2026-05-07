@@ -155,6 +155,23 @@ function renderTopbar(string $activePage = ''): void {
 }
 function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
+    <script>
+    function toggleFilter(id){
+      var bar=document.getElementById(id),btn=document.getElementById(id+'Btn');
+      if(!bar||!btn)return;
+      var collapsed=bar.classList.toggle('collapsed');
+      btn.classList.toggle('open',!collapsed);
+      try{localStorage.setItem('hlFilter_'+id,collapsed?'0':'1');}catch(e){}
+    }
+    function initFilter(id,defaultOpen){
+      var bar=document.getElementById(id),btn=document.getElementById(id+'Btn');
+      if(!bar||!btn)return;
+      var saved=null;
+      try{saved=localStorage.getItem('hlFilter_'+id);}catch(e){}
+      var open=saved!==null?saved==='1':(defaultOpen!==false);
+      if(open){btn.classList.add('open');}else{bar.classList.add('collapsed');}
+    }
+    </script>
     <?php
 }
 

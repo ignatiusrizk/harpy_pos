@@ -225,11 +225,16 @@ if ($action) {
 
   <!-- TAB GAJI -->
   <div id="tabGaji" style="display:none">
-    <div class="hl-filter-bar">
-      <span class="hl-filter-label">Bulan</span>
-      <input type="month" id="gajiBulan" class="hl-input" style="width:auto"/>
-      <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="loadGaji()">🔍 Tampilkan</button>
-      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="generateGaji()">⚡ Generate Slip Gaji</button>
+    <div class="hl-filter-collapsible">
+      <button class="hl-filter-toggle-btn" id="gajiFilterBtn" onclick="toggleFilter('gajiFilter')">
+        📅 Periode Gaji <span class="hl-toggle-arrow">▼</span>
+      </button>
+      <div class="hl-filter-bar" id="gajiFilter">
+        <span class="hl-filter-label">Bulan</span>
+        <input type="month" id="gajiBulan" class="hl-input" style="width:auto"/>
+        <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="loadGaji()">🔍 Tampilkan</button>
+        <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="generateGaji()">⚡ Generate Slip Gaji</button>
+      </div>
     </div>
     <div class="hl-card">
       <div class="hl-card-header">
@@ -380,6 +385,7 @@ if ($action) {
 let allKaryawan = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilter('gajiFilter');
   loadKaryawan(); loadStats();
   document.getElementById('gajiBulan').value = localMonthStr();
 });

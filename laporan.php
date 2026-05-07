@@ -364,12 +364,17 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
   <!-- ══ TAB HARIAN ═══════════════════════════════════ -->
   <?php if (hasPermission('laporan.view_harian')): ?>
   <div id="tabHarian">
-    <div class="filter-bar no-print">
-      <label>Tanggal</label>
-      <input type="date" id="hTgl"/>
-      <button class="btn btn-primary btn-sm" onclick="loadHarian()">🔍 Tampilkan</button>
-      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
-      <button class="btn btn-outline btn-sm" onclick="exportCSV('harian')">📥 Export CSV</button>
+    <div class="hl-filter-collapsible no-print">
+      <button class="hl-filter-toggle-btn" id="harianFilterBtn" onclick="toggleFilter('harianFilter')">
+        📅 Pilih Tanggal <span class="hl-toggle-arrow">▼</span>
+      </button>
+      <div class="hl-filter-bar" id="harianFilter">
+        <label>Tanggal</label>
+        <input type="date" id="hTgl"/>
+        <button class="btn btn-primary btn-sm" onclick="loadHarian()">🔍 Tampilkan</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCSV('harian')">📥 Export CSV</button>
+      </div>
     </div>
 
     <div class="stat-grid" id="hStatGrid">
@@ -420,12 +425,17 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
   <!-- ══ TAB BULANAN ══════════════════════════════════ -->
   <?php if (hasPermission('laporan.view_bulanan')): ?>
   <div id="tabBulanan" style="display:none">
-    <div class="filter-bar no-print">
-      <label>Bulan</label>
-      <input type="month" id="bBulan"/>
-      <button class="btn btn-primary btn-sm" onclick="loadBulanan()">🔍 Tampilkan</button>
-      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
-      <button class="btn btn-outline btn-sm" onclick="exportCSV('bulanan')">📥 Export CSV</button>
+    <div class="hl-filter-collapsible no-print">
+      <button class="hl-filter-toggle-btn" id="bulananFilterBtn" onclick="toggleFilter('bulananFilter')">
+        📅 Pilih Bulan <span class="hl-toggle-arrow">▼</span>
+      </button>
+      <div class="hl-filter-bar" id="bulananFilter">
+        <label>Bulan</label>
+        <input type="month" id="bBulan"/>
+        <button class="btn btn-primary btn-sm" onclick="loadBulanan()">🔍 Tampilkan</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCSV('bulanan')">📥 Export CSV</button>
+      </div>
     </div>
 
     <div class="stat-grid">
@@ -477,13 +487,18 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
   <!-- ══ TAB LABA RUGI ════════════════════════════════ -->
   <?php if (hasPermission('laporan.view_lr')): ?>
   <div id="tabLR" style="display:none">
-    <div class="filter-bar no-print">
-      <label>Dari</label>
-      <input type="date" id="lrDari"/>
-      <label>s/d</label>
-      <input type="date" id="lrSampai"/>
-      <button class="btn btn-primary btn-sm" onclick="loadLR()">🔍 Hitung L/R</button>
-      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+    <div class="hl-filter-collapsible no-print">
+      <button class="hl-filter-toggle-btn" id="lrFilterBtn" onclick="toggleFilter('lrFilter')">
+        📅 Pilih Periode <span class="hl-toggle-arrow">▼</span>
+      </button>
+      <div class="hl-filter-bar" id="lrFilter">
+        <label>Dari</label>
+        <input type="date" id="lrDari"/>
+        <label>s/d</label>
+        <input type="date" id="lrSampai"/>
+        <button class="btn btn-primary btn-sm" onclick="loadLR()">🔍 Hitung L/R</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Print</button>
+      </div>
     </div>
 
     <div id="lrContent"><div class="empty">Pilih periode lalu klik "Hitung L/R"</div></div>
@@ -566,6 +581,9 @@ function localMonthStr(d) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilter('harianFilter');
+  initFilter('bulananFilter');
+  initFilter('lrFilter');
   const today = localDateStr();
   const bulan = today.substring(0,7);
   document.getElementById('hTgl').value    = today;
