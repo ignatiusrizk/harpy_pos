@@ -207,8 +207,8 @@ if ($action) {
   --shadow-lg:0 8px 32px rgba(27,45,90,.14);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:15px}
-body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh;overflow-x:hidden}
+html{font-size:15px;overflow-x:hidden}
+body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh;overflow-x:hidden;max-width:100%}
 
 
 
@@ -228,7 +228,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start}
 
 /* CARD */
-.card{background:var(--white);border-radius:var(--r-lg);border:1px solid rgba(27,45,90,.07);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
+.card{background:var(--white);border-radius:var(--r-lg);border:1px solid rgba(27,45,90,.07);box-shadow:var(--shadow);overflow:visible;margin-bottom:20px}
 .card-header{padding:16px 20px;border-bottom:1px solid var(--light);display:flex;align-items:center;justify-content:space-between}
 .card-title{font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .card-body{padding:20px}
@@ -379,8 +379,8 @@ textarea{resize:vertical;min-height:64px}
   .layanan-btn{padding:7px 5px}
   .layanan-btn .l-nama{font-size:11px}
   .layanan-btn .l-harga{font-size:10px}
-  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px}
-  .items-table{min-width:480px}
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .items-table{min-width:420px;width:max-content}
   .summary-box{padding:14px}
   .sum-row{font-size:13px}
   .sum-value.big{font-size:1.2rem}
