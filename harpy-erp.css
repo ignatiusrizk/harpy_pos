@@ -440,15 +440,20 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 }
 .hl-nav-drawer-overlay.open { display: block; }
 .hl-nav-drawer {
-  position: fixed; top: 0; left: -280px;
+  position: fixed; top: 0; left: 0;
   width: 260px; height: 100vh;
   background: var(--navy-d);
   border-right: 1px solid rgba(53,232,213,.15);
   z-index: 999; overflow-y: auto;
-  transition: left .28s cubic-bezier(.4,0,.2,1);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform .28s cubic-bezier(.4,0,.2,1), visibility .28s;
   display: flex; flex-direction: column;
 }
-.hl-nav-drawer.open { left: 0; }
+.hl-nav-drawer.open {
+  transform: translateX(0);
+  visibility: visible;
+}
 .hl-nav-drawer-header {
   padding: 16px 18px;
   border-bottom: 1px solid rgba(255,255,255,.08);

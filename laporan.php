@@ -222,7 +222,7 @@ if ($action) {
 <head>
 <?php renderHead('Laporan'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="harpy-erp.css"/>
+
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
