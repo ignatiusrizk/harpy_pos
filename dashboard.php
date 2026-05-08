@@ -202,6 +202,29 @@ if ($action) {
 /* CHART */
 .chart-wrap { position: relative; height: 200px; }
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px) {
+  .dash-grid { grid-template-columns: repeat(2,1fr); }
+  .pipeline  { flex-wrap: wrap; }
+  .pipe-item { flex: 1 1 calc(33% - 8px); min-width: 80px; }
+}
+@media(max-width:680px) {
+  .dash-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .dash-card { padding: 14px; }
+  .dash-num  { font-size: 1.3rem; }
+  .dash-sub  { font-size: 10px; }
+  .pipeline  { gap: 6px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+  .pipe-item { flex: 0 0 auto; min-width: 70px; padding: 10px 10px; }
+  .pipe-num  { font-size: 1.2rem; }
+  .pipe-label{ font-size: 10px; }
+}
+@media(max-width:400px) {
+  .dash-grid { gap: 8px; }
+  .dash-card { padding: 12px; }
+  .dash-num  { font-size: 1.15rem; }
+  .dash-label{ font-size: 11px; }
+}
 </style>
 </head>
 <body>
