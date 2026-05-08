@@ -75,8 +75,52 @@ function renderTopbar(string $activePage = ''): void {
         return array_key_exists($activePage, $group['items']);
     }
     ?>
+    <!-- MOBILE DRAWER OVERLAY -->
+    <div class="hl-nav-drawer-overlay" id="navOverlay" onclick="closeDrawer()"></div>
+
+    <!-- MOBILE DRAWER -->
+    <div class="hl-nav-drawer" id="navDrawer">
+      <div class="hl-nav-drawer-header">
+        <span class="hl-nav-drawer-brand">Harpy <span>Laundry</span></span>
+        <button class="hl-nav-drawer-close" onclick="closeDrawer()">✕</button>
+      </div>
+      <div class="hl-nav-drawer-user">
+        <div class="hl-nav-drawer-user-info">
+          <div class="hl-nav-drawer-user-nama"><?= htmlspecialchars($user['nama']) ?></div>
+          <div class="hl-nav-drawer-user-role"><?= strtoupper($user['role_nama'] ?? $user['role']) ?></div>
+        </div>
+      </div>
+      <div class="hl-nav-drawer-body">
+        <?php
+        $drawerIcons = [
+          'dashboard' => '🏠', 'pos' => '🛒', 'orders' => '📋', 'kas' => '💰',
+          'laporan' => '📊', 'layanan' => '🧺', 'promo' => '🎟️', 'customer' => '👥',
+          'karyawan' => '👤', 'absensi' => '📅', 'settings' => '⚙️', 'audit' => '🔍',
+        ];
+        foreach ($navGroups as $groupKey => $group):
+          if (!groupVisible($group, $user['role'])) continue;
+          $visibleItems = array_filter($group['items'], fn($i) => in_array($user['role'], $i['roles']));
+          if (!$visibleItems) continue;
+        ?>
+        <div class="hl-nav-drawer-section"><?= $group['label'] ?></div>
+        <?php foreach ($visibleItems as $key => $item): ?>
+        <a href="<?= $item['url'] ?>"
+           class="hl-nav-drawer-item <?= $activePage === $key ? 'active' : '' ?>">
+          <?= $drawerIcons[$key] ?? '•' ?> <?= $item['label'] ?>
+        </a>
+        <?php endforeach; ?>
+        <?php endforeach; ?>
+      </div>
+      <div class="hl-nav-drawer-footer">
+        <a href="?logout=1" class="hl-nav-drawer-logout"
+           onclick="return confirm('Yakin logout?')">🚪 Logout</a>
+      </div>
+    </div>
+
+    <!-- TOPBAR -->
     <div class="hl-topbar">
       <div class="hl-topbar-left">
+        <button class="hl-nav-hamburger" onclick="openDrawer()">☰</button>
         <a href="pos.php" class="hl-brand">Harpy <span>Laundry</span></a>
         <nav class="hl-nav">
           <?php foreach ($navGroups as $groupKey => $group):
@@ -85,7 +129,6 @@ function renderTopbar(string $activePage = ''): void {
             $hasActive    = groupHasActive($group, $activePage);
             $isSingleItem = count(array_filter($items, fn($i) => in_array($user['role'], $i['roles']))) === 1;
 
-            // Kalau hanya 1 item visible dan itu link langsung (misal Laporan, Settings)
             if ($isSingleItem):
               foreach ($items as $key => $item):
                 if (!in_array($user['role'], $item['roles'])) continue;
@@ -123,19 +166,26 @@ function renderTopbar(string $activePage = ''): void {
       </div>
     </div>
     <script>
+    function openDrawer(){
+      document.getElementById('navDrawer').classList.add('open');
+      document.getElementById('navOverlay').classList.add('open');
+      document.body.style.overflow='hidden';
+    }
+    function closeDrawer(){
+      document.getElementById('navDrawer').classList.remove('open');
+      document.getElementById('navOverlay').classList.remove('open');
+      document.body.style.overflow='';
+    }
     (function() {
       var groups = document.querySelectorAll('.hl-nav-group');
       groups.forEach(function(group) {
         var btn      = group.querySelector('.hl-nav-group-btn');
         var dropdown = group.querySelector('.hl-nav-dropdown');
         if (!btn || !dropdown) return;
-
         btn.addEventListener('click', function(e) {
           e.stopPropagation();
           var isOpen = group.classList.contains('open');
-          // Tutup semua
           groups.forEach(function(g) { g.classList.remove('open'); });
-          // Toggle yang diklik
           if (!isOpen) {
             var rect = btn.getBoundingClientRect();
             dropdown.style.top  = (rect.bottom + 6) + 'px';
@@ -144,8 +194,6 @@ function renderTopbar(string $activePage = ''): void {
           }
         });
       });
-
-      // Tutup semua jika klik di luar
       document.addEventListener('click', function() {
         groups.forEach(function(g) { g.classList.remove('open'); });
       });

@@ -87,18 +87,24 @@ input:checked + .toggle-slider::before{transform:translateX(18px)}
     </div>
   </div>
 
-  <div class="hl-filter-bar">
-    <span class="hl-filter-label">Filter</span>
-    <select id="fKat" class="hl-input" style="width:auto" onchange="renderLayanan()">
-      <option value="">Semua Kategori</option>
-    </select>
-    <select id="fStatus" class="hl-input" style="width:auto" onchange="renderLayanan()">
-      <option value="">Semua Status</option>
-      <option value="1">Aktif</option>
-      <option value="0">Nonaktif</option>
-    </select>
-    <input type="text" id="fSearch" class="hl-input" placeholder="🔍 Cari layanan..." style="max-width:240px" oninput="renderLayanan()"/>
-    <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadLayanan()">↻</button>
+  <div class="hl-filter-collapsible">
+    <button class="hl-filter-toggle-btn" id="layananFilterBtn" onclick="toggleFilter('layananFilter')">
+      🔍 Filter &amp; Pencarian <span class="hl-filter-active-dot" id="layananFilterDot"></span>
+      <span class="hl-toggle-arrow">▼</span>
+    </button>
+    <div class="hl-filter-bar collapsed" id="layananFilter">
+      <span class="hl-filter-label">Filter</span>
+      <select id="fKat" class="hl-input" style="width:auto" onchange="renderLayanan()">
+        <option value="">Semua Kategori</option>
+      </select>
+      <select id="fStatus" class="hl-input" style="width:auto" onchange="renderLayanan()">
+        <option value="">Semua Status</option>
+        <option value="1">Aktif</option>
+        <option value="0">Nonaktif</option>
+      </select>
+      <input type="text" id="fSearch" class="hl-input" placeholder="🔍 Cari layanan..." style="max-width:240px" oninput="renderLayanan()"/>
+      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadLayanan()">↻</button>
+    </div>
   </div>
 
   <div class="layanan-grid" id="layananGrid">

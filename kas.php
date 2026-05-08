@@ -277,22 +277,28 @@ tfoot td.td-jumlah{font-family:var(--mono)}
   </div>
 
   <!-- DATE FILTER -->
-  <div class="date-filter">
-    <label>Dari</label>
-    <input type="date" id="fDari" onchange="loadKas()"/>
-    <label>s/d</label>
-    <input type="date" id="fSampai" onchange="loadKas()"/>
-    <select id="fTipe" onchange="loadKas()" style="width:auto">
-      <option value="">Semua Tipe</option>
-      <option value="masuk">Kas Masuk</option>
-      <option value="keluar">Kas Keluar</option>
-    </select>
-    <div class="shortcut-btns">
-      <button class="sc-btn" onclick="setRange('hari',this)">Hari Ini</button>
-      <button class="sc-btn active" onclick="setRange('bulan',this)">Bulan Ini</button>
-      <button class="sc-btn" onclick="setRange('minggu',this)">7 Hari</button>
+  <div class="hl-filter-collapsible">
+    <button class="hl-filter-toggle-btn" id="kasFilterBtn" onclick="toggleFilter('kasFilter')">
+      🔍 Filter Periode <span class="hl-filter-active-dot hl-filter-active-dot show" id="kasFilterDot"></span>
+      <span class="hl-toggle-arrow">▼</span>
+    </button>
+    <div class="hl-filter-bar date-filter" id="kasFilter">
+      <label>Dari</label>
+      <input type="date" id="fDari" onchange="loadKas()"/>
+      <label>s/d</label>
+      <input type="date" id="fSampai" onchange="loadKas()"/>
+      <select id="fTipe" onchange="loadKas()" style="width:auto">
+        <option value="">Semua Tipe</option>
+        <option value="masuk">Kas Masuk</option>
+        <option value="keluar">Kas Keluar</option>
+      </select>
+      <div class="shortcut-btns">
+        <button class="sc-btn" onclick="setRange('hari',this)">Hari Ini</button>
+        <button class="sc-btn active" onclick="setRange('bulan',this)">Bulan Ini</button>
+        <button class="sc-btn" onclick="setRange('minggu',this)">7 Hari</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="loadKas()" style="margin-left:auto">🔄</button>
     </div>
-    <button class="btn btn-outline btn-sm" onclick="loadKas()" style="margin-left:auto">🔄</button>
   </div>
 
   <div class="layout-2">
