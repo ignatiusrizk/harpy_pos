@@ -194,9 +194,6 @@ if ($action) {
 <html lang="id">
 <head>
 <?php renderHead('POS'); ?>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
   --teal:#35E8D5;--teal-d:#1CC4B2;--teal-bg:#E8FBF9;
@@ -211,7 +208,7 @@ if ($action) {
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:15px}
-body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh}
+body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh;overflow-x:hidden}
 
 
 
@@ -358,17 +355,56 @@ textarea{resize:vertical;min-height:64px}
 }
 
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* ── RESPONSIVE — TABLET (≤ 800px) ── */
 @media(max-width:800px){
+  .main{padding:16px 14px}
   .grid-2{grid-template-columns:1fr}
   .layanan-grid{grid-template-columns:repeat(2,1fr)}
   .form-row{grid-template-columns:1fr}
+  .form-row.cols3{grid-template-columns:1fr 1fr}
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .btn-actions{flex-wrap:wrap}
+}
+
+/* ── RESPONSIVE — MOBILE (≤ 680px) ── */
+@media(max-width:680px){
+  .main{padding:12px 10px 80px}
+  .card-header{padding:12px 14px;flex-wrap:wrap;gap:8px}
+  .card-title{font-size:13px}
+  .card-body{padding:14px}
+  .form-row{grid-template-columns:1fr;gap:8px;margin-bottom:8px}
+  .form-row.cols3{grid-template-columns:1fr 1fr}
+  .layanan-grid{grid-template-columns:repeat(2,1fr);gap:5px;max-height:180px}
+  .layanan-btn{padding:7px 5px}
+  .layanan-btn .l-nama{font-size:11px}
+  .layanan-btn .l-harga{font-size:10px}
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px}
+  .items-table{min-width:480px}
+  .summary-box{padding:14px}
+  .sum-row{font-size:13px}
+  .sum-value.big{font-size:1.2rem}
+  .btn-actions{flex-direction:column;gap:8px}
+  .btn-actions .btn{width:100%}
+  .btn-primary{padding:12px 20px;font-size:14px}
+  .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0}
+  .modal-overlay{align-items:flex-end;padding:0}
+}
+
+/* ── RESPONSIVE — SMALL MOBILE (≤ 400px) ── */
+@media(max-width:400px){
+  .main{padding:8px 8px 80px}
+  .card-body{padding:12px}
+  .card-header{padding:10px 12px}
+  .form-row.cols3{grid-template-columns:1fr}
+  .layanan-grid{grid-template-columns:1fr 1fr;gap:4px}
+  .summary-box{padding:12px}
 }
 </style>
 </head>
 <body>
 <?php renderTopbar('pos'); ?>
-
-<?php require_once 'components.php'; ?>
+<?php renderToast(); ?>
 
 <div class="main">
   <div class="grid-2">
@@ -435,7 +471,7 @@ textarea{resize:vertical;min-height:64px}
           </div>
 
           <!-- Table items -->
-          <div style="overflow-x:auto">
+          <div class="items-table-wrap" style="overflow-x:auto">
             <table class="items-table">
               <thead>
                 <tr>
