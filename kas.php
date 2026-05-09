@@ -164,6 +164,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 
 /* LAYOUT 2 COL */
 .layout-2{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+.layout-2 > div{min-width:0}
 
 /* CARD */
 .card{background:var(--white);border-radius:var(--r-lg);border:1px solid rgba(27,45,90,.07);box-shadow:var(--shadow);overflow:hidden;margin-bottom:0}
