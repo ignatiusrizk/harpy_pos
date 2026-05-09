@@ -262,6 +262,15 @@ tfoot td.td-jumlah{font-family:var(--mono)}
   .form-row{grid-template-columns:1fr}
   .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0}
   .modal-overlay{align-items:flex-end;padding:0}
+  .table-wrap{max-width:100%}
+  table{table-layout:fixed !important;width:100% !important}
+  thead th{white-space:normal !important;min-width:0 !important;font-size:10px !important;padding:7px 6px !important}
+  tbody td{font-size:12px !important;padding:8px 6px !important}
+  thead th:nth-child(3),tbody td:nth-child(3){display:none !important}
+  thead th:nth-child(5),tbody td:nth-child(5){display:none !important}
+  thead th:nth-child(1){width:72px !important}
+  thead th:nth-child(2){width:48px !important}
+  thead th:nth-child(6){width:88px !important}
 }
 @media(max-width:400px){
   .main{padding:8px 8px 80px}

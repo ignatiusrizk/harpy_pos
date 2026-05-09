@@ -347,6 +347,10 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
   .stat-grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .filter-bar{padding:12px 14px;gap:8px}
   .filter-bar input,.filter-bar select{font-size:13px}
+  .table-wrap{max-width:100%}
+  table{table-layout:fixed !important;width:100% !important}
+  thead th{white-space:normal !important;min-width:0 !important;font-size:10px !important;padding:7px 6px !important}
+  tbody td{font-size:12px !important;padding:8px 6px !important}
 }
 @media(max-width:400px){
   .main{padding:8px 8px 80px}

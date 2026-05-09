@@ -279,6 +279,18 @@ if ($action) {
   .jam-info{gap:10px}
   .tipe-izin-grid{grid-template-columns:1fr 1fr 1fr}
   #calStats{grid-template-columns:repeat(2,1fr) !important;gap:6px !important}
+  .hl-table{table-layout:fixed !important;width:100% !important}
+  .hl-table thead th{white-space:normal !important;min-width:0 !important;font-size:10px !important;padding:7px 6px !important}
+  .hl-table tbody td{font-size:12px !important;padding:8px 6px !important}
+  .hl-table thead th:nth-child(2),.hl-table tbody td:nth-child(2){display:none !important}
+  .hl-table thead th:nth-child(5),.hl-table tbody td:nth-child(5){display:none !important}
+  .hl-table thead th:nth-child(8),.hl-table tbody td:nth-child(8){display:none !important}
+  .hl-table thead th:nth-child(9),.hl-table tbody td:nth-child(9){display:none !important}
+  .hl-table thead th:nth-child(1){width:auto !important}
+  .hl-table thead th:nth-child(3){width:44px !important}
+  .hl-table thead th:nth-child(4){width:40px !important}
+  .hl-table thead th:nth-child(6){width:44px !important}
+  .hl-table thead th:nth-child(7){width:66px !important}
 }
 @media(max-width:400px){
   .clock-time{font-size:1.9rem}
