@@ -214,46 +214,46 @@ if ($action) {
 @media(max-width:680px) {
   /* Stat cards */
   .dash-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
-  .dash-card { padding: 14px; }
-  .dash-num  { font-size: 1.25rem; }
-  .dash-sub  { font-size: 10px; }
-  .dash-label{ font-size: 11px; }
-
-  /* Pipeline */
-  .pipeline  { gap: 6px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
-  .pipe-item { flex: 0 0 auto; min-width: 68px; padding: 10px 8px; }
-  .pipe-num  { font-size: 1.1rem; }
-  .pipe-label{ font-size: 10px; }
-
-  /* Alert rows */
-  .alert-row { padding: 10px 12px; gap: 8px; }
-  .alert-nama{ font-size: 13px; }
-  .alert-meta{ font-size: 11px; }
-  .alert-no  { font-size: 11px; }
-  .alert-wa  { padding: 4px 8px; font-size: 11px; }
-
-  /* Chart */
-  .chart-wrap{ height: 160px; }
-}
-
-/* ── RESPONSIVE — SMALL MOBILE (≤ 400px) ── */
-@media(max-width:400px) {
-  .dash-grid { gap: 8px; }
   .dash-card { padding: 12px; }
   .dash-num  { font-size: 1.1rem; }
+  .dash-label{ font-size: 11px; }
+  .dash-sub  { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+  /* Pipeline */
+  .pipeline  { gap: 5px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .pipe-item { flex: 0 0 auto; min-width: 62px; padding: 9px 7px; }
+  .pipe-num  { font-size: 1rem; }
+  .pipe-label{ font-size: 10px; }
+
+  /* Alert rows — tombol wrap ke bawah seperti pos/orders */
+  .alert-row        { padding: 9px 10px; gap: 6px; flex-wrap: wrap; }
+  .alert-row > div:first-child  { flex: 1 1 100% !important; min-width: 0; }
+  .alert-row > div:last-child   { width: 100%; display: flex !important; justify-content: flex-end; gap: 6px; }
+  .alert-nama{ font-size: 13px; }
+  .alert-meta{ font-size: 11px; word-break: break-word; }
+  .alert-no  { font-size: 11px; }
+  .alert-wa  { padding: 6px 12px; font-size: 12px; }
+
+  /* Chart */
+  .chart-wrap{ height: 150px; }
+}
+
+/* ── RESPONSIVE — SMALL MOBILE (≤ 420px) ── */
+@media(max-width:420px) {
+  .dash-grid { gap: 8px; }
+  .dash-card { padding: 10px; }
+  .dash-num  { font-size: 1rem; }
   .pipeline  { gap: 4px; }
-  .pipe-item { min-width: 60px; padding: 8px 6px; }
-  .alert-row { flex-wrap: wrap; }
-  .alert-row > div:last-child { width: 100%; justify-content: flex-end; }
+  .pipe-item { min-width: 56px; padding: 8px 5px; }
 }
 </style>
 </head>
 <body>
 <?php renderTopbar('dashboard'); ?>
-<div class="hl-main" style="max-width:1400px">
+<div class="hl-main" style="max-width:1400px;width:100%">
 
   <!-- GREETING + AI BRIEFING -->
-  <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+  <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;min-width:0">
     <div>
       <h1 style="font-size:1.3rem;font-weight:800;color:var(--navy)" id="greeting">Selamat pagi!</h1>
       <p style="font-size:13px;color:var(--gray)" id="dashDate">--</p>
