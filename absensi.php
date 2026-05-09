@@ -271,6 +271,21 @@ if ($action) {
 /* ── REKAP TABLE ── */
 .durasi-bar{background:var(--light);border-radius:100px;height:6px;margin-top:4px;overflow:hidden}
 .durasi-fill{height:100%;background:var(--teal);border-radius:100px;transition:width .5s}
+@media(max-width:680px){
+  .clock-widget{padding:22px 18px}
+  .clock-time{font-size:2.2rem}
+  .clock-date{font-size:12px;margin-bottom:16px}
+  .btn-clock-in,.btn-clock-out{padding:12px 24px;font-size:14px}
+  .jam-info{gap:10px}
+  .tipe-izin-grid{grid-template-columns:1fr 1fr 1fr}
+  #calStats{grid-template-columns:repeat(2,1fr) !important;gap:6px !important}
+}
+@media(max-width:400px){
+  .clock-time{font-size:1.9rem}
+  .clock-btns{gap:8px}
+  .btn-clock-in,.btn-clock-out{padding:10px 18px;font-size:13px}
+  #calStats{grid-template-columns:repeat(2,1fr) !important}
+}
 </style>
 </head>
 <body>

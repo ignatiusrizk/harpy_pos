@@ -195,6 +195,10 @@ if ($action) {
 .kartu-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .kartu-inactive{opacity:.5}
 .online-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px}
+@media(max-width:680px){
+  .kartu{padding:16px}
+  .kartu-nama{font-size:14px}
+}
 </style>
 </head>
 <body>

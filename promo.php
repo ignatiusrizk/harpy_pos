@@ -310,12 +310,32 @@ input:focus,select:focus,textarea:focus{border-color:var(--teal);background:var(
 .toast.show{transform:translateY(0);opacity:1}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
+@media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .promo-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+}
+@media(max-width:680px){
+  .main{padding:12px 10px 80px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat-card{padding:14px 16px}
+  .stat-num{font-size:1.2rem}
+  .promo-grid{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+  .form-row.cols3{grid-template-columns:1fr 1fr}
+  .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0}
+  .modal-overlay{align-items:flex-end;padding:0}
+}
+@media(max-width:400px){
+  .main{padding:8px 8px 80px}
+  .stats{gap:8px}
+  .stat-num{font-size:1.05rem}
+  .form-row.cols3{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 <?php renderTopbar('promo'); ?>
-
-<?php require_once 'components.php'; ?>
+<?php renderToast(); ?>
 
 <div class="main">
 

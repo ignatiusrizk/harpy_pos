@@ -246,13 +246,34 @@ tfoot td.td-jumlah{font-family:var(--mono)}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
 
-@media(max-width:860px){.layout-2{grid-template-columns:1fr}.summary-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:860px){
+  .layout-2{grid-template-columns:1fr}
+  .summary-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:680px){
+  .main{padding:12px 10px 80px}
+  .summary-grid{gap:10px}
+  .sum-card{padding:14px 16px}
+  .sum-num{font-size:1.2rem}
+  .shortcut-btns{flex-wrap:wrap}
+  .sc-btn{font-size:11px;padding:5px 10px}
+  .card-header{padding:12px 14px;flex-wrap:wrap;gap:6px}
+  .card-body{padding:14px}
+  .form-row{grid-template-columns:1fr}
+  .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0}
+  .modal-overlay{align-items:flex-end;padding:0}
+}
+@media(max-width:400px){
+  .main{padding:8px 8px 80px}
+  .summary-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .sum-card{padding:12px}
+  .sum-num{font-size:1.05rem}
+}
 </style>
 </head>
 <body>
 <?php renderTopbar('kas'); ?>
-
-<?php require_once 'components.php'; ?>
+<?php renderToast(); ?>
 
 <div class="main">
 

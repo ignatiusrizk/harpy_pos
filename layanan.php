@@ -72,6 +72,13 @@ if ($action) {
 .toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s}
 input:checked + .toggle-slider{background:var(--green)}
 input:checked + .toggle-slider::before{transform:translateX(18px)}
+@media(max-width:680px){
+  .layanan-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .layanan-harga{font-size:1.1rem}
+}
+@media(max-width:400px){
+  .layanan-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>

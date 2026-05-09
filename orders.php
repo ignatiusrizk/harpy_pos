@@ -659,14 +659,41 @@ textarea{resize:vertical;min-height:64px}
 .bukti-drop:hover{border-color:var(--teal);background:var(--teal-bg)}
 .bukti-drop p{font-size:13px;color:var(--gray);margin-top:6px}
 
-@media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}.modal{width:100%}}
+@media(max-width:900px){
+  .stats{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:680px){
+  .main{padding:12px 10px 80px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat-num{font-size:1.2rem}
+  .stat-label{font-size:10px}
+  .filter-bar input{min-width:0 !important;width:100%}
+  .filter-bar{gap:8px}
+  .card-header{padding:12px 14px;flex-wrap:wrap;gap:6px}
+  .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0;height:92vh}
+  .modal-overlay{align-items:flex-end;padding:0}
+  .items-table{table-layout:fixed !important;width:100% !important}
+  .items-table th{min-width:0 !important}
+  .items-table th:nth-child(1){width:auto !important}
+  .items-table th:nth-child(2){width:52px !important}
+  .items-table th:nth-child(3){width:52px !important}
+  .items-table th:nth-child(4){width:80px !important}
+  .items-table th:nth-child(5),.items-table td:nth-child(5){display:none !important}
+  .items-table th:nth-child(6){width:32px !important}
+  .items-table td input,.items-table td select{width:100% !important;min-width:0 !important}
+  .action-btns{flex-wrap:wrap}
+  .pay-opt{grid-template-columns:1fr 1fr}
+}
+@media(max-width:400px){
+  .main{padding:8px 8px 80px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:6px}
+  .stat-num{font-size:1.05rem}
+}
 </style>
 </head>
 <body>
 <?php renderTopbar('orders'); ?>
-
-<?php require_once 'components.php'; ?>
+<?php renderToast(); ?>
 
 <div class="main">
 

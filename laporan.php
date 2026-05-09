@@ -338,13 +338,26 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
 
-@media(max-width:900px){.stat-grid{grid-template-columns:repeat(2,1fr)}.grid-2,.grid-3{grid-template-columns:1fr}}
+@media(max-width:900px){
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+}
+@media(max-width:680px){
+  .main{padding:12px 10px 80px}
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .filter-bar{padding:12px 14px;gap:8px}
+  .filter-bar input,.filter-bar select{font-size:13px}
+}
+@media(max-width:400px){
+  .main{padding:8px 8px 80px}
+  .stat-grid{gap:8px}
+  .filter-bar{padding:10px 12px}
+}
 </style>
 </head>
 <body>
 <?php renderTopbar('laporan'); ?>
-
-<?php require_once 'components.php'; ?>
+<?php renderToast(); ?>
 
 <div class="main">
 

@@ -124,6 +124,14 @@ if ($action) {
 .view-toggle{display:flex;gap:4px;background:var(--light);border-radius:8px;padding:3px}
 .view-btn{padding:5px 10px;border-radius:6px;border:none;cursor:pointer;font-size:13px;background:transparent;transition:all .2s;color:var(--gray)}
 .view-btn.active{background:var(--white);color:var(--navy);box-shadow:0 1px 4px rgba(27,45,90,.1)}
+@media(max-width:680px){
+  .cust-list-stats{gap:12px}
+  .cust-list-stat strong{font-size:12px}
+  .cust-card{padding:14px}
+}
+@media(max-width:400px){
+  .cust-list-stats{display:none}
+}
 </style>
 </head>
 <body>
