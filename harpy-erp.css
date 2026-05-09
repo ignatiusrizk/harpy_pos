@@ -511,6 +511,11 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 
 /* ── RESPONSIVE — TABLET (≤ 900px) ─────────────────── */
 @media (max-width: 900px) {
+  /* Topbar — hamburger di semua tablet & HP (portrait maupun landscape) */
+  .hl-topbar { padding: 0 14px; }
+  .hl-nav, .hl-user-nama, .hl-user-role, .hl-btn-logout { display: none; }
+  .hl-nav-hamburger { display: flex; }
+
   .hl-stat-grid-4,
   .hl-stat-grid-6  { grid-template-columns: repeat(2,1fr); }
   .hl-grid-2,
@@ -523,10 +528,7 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 
 /* ── RESPONSIVE — MOBILE (≤ 680px) ─────────────────── */
 @media (max-width: 680px) {
-  /* Topbar */
-  .hl-topbar { padding: 0 14px; }
-  .hl-nav, .hl-user-nama, .hl-user-role, .hl-btn-logout { display: none; }
-  .hl-nav-hamburger { display: flex; }
+  /* Topbar (sudah di-handle di 900px) */
 
   /* Layout */
   .hl-main, .hl-main-lg { padding: 12px 12px 80px; }
