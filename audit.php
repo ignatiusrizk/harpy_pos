@@ -98,16 +98,9 @@ if ($action) {
 .log-time{font-family:var(--mono);font-size:11px;color:var(--gray);white-space:nowrap}
 .log-ket{font-size:12px;color:var(--gray);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:680px){
-  .hl-table{table-layout:fixed !important;width:100% !important}
-  .hl-table thead th{white-space:normal !important;min-width:0 !important;font-size:10px !important;padding:7px 6px !important}
-  .hl-table tbody td{font-size:12px !important;padding:8px 6px !important}
-  .hl-table thead th:nth-child(3),.hl-table tbody td:nth-child(3){display:none !important}
-  .hl-table thead th:nth-child(7),.hl-table tbody td:nth-child(7){display:none !important}
-  .hl-table thead th:nth-child(1){width:76px !important}
-  .hl-table thead th:nth-child(2){width:auto !important}
-  .hl-table thead th:nth-child(4){width:62px !important}
-  .hl-table thead th:nth-child(5){width:52px !important}
-  .hl-table thead th:nth-child(6){width:auto !important}
+  .hl-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .hl-table thead th{font-size:11px;padding:8px 8px}
+  .hl-table tbody td{font-size:12px;padding:8px 8px}
   .log-ket{max-width:none;white-space:normal !important}
 }
 </style>

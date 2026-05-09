@@ -200,17 +200,9 @@ if ($action) {
   .kartu-nama{font-size:14px}
 }
 @media(max-width:680px){
-  .hl-table{table-layout:fixed !important;width:100% !important}
-  .hl-table thead th{white-space:normal !important;min-width:0 !important;font-size:10px !important;padding:7px 6px !important}
-  .hl-table tbody td{font-size:12px !important;padding:8px 6px !important}
-  .hl-table thead th:nth-child(2),.hl-table tbody td:nth-child(2){display:none !important}
-  .hl-table thead th:nth-child(4),.hl-table tbody td:nth-child(4){display:none !important}
-  .hl-table thead th:nth-child(5),.hl-table tbody td:nth-child(5){display:none !important}
-  .hl-table thead th:nth-child(1){width:auto !important}
-  .hl-table thead th:nth-child(3){width:82px !important}
-  .hl-table thead th:nth-child(6){width:82px !important}
-  .hl-table thead th:nth-child(7){width:52px !important}
-  .hl-table thead th:nth-child(8){width:44px !important}
+  .hl-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .hl-table thead th{font-size:11px;padding:8px 8px}
+  .hl-table tbody td{font-size:12px;padding:8px 8px}
 }
 </style>
 </head>
