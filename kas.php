@@ -188,7 +188,7 @@ textarea{resize:vertical;min-height:64px}
 .tipe-btn:not(.active):hover{border-color:var(--teal)}
 
 /* TABLE */
-.table-wrap{overflow-x:auto}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 thead tr{background:var(--navy-d)}
 thead th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6);white-space:nowrap}
@@ -252,25 +252,27 @@ tfoot td.td-jumlah{font-family:var(--mono)}
 }
 @media(max-width:680px){
   .main{padding:12px 10px 80px}
-  .summary-grid{gap:10px}
+  .summary-grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .sum-card{padding:14px 16px}
   .sum-num{font-size:1.2rem}
+  .sum-label{font-size:11px}
   .shortcut-btns{flex-wrap:wrap}
   .sc-btn{font-size:11px;padding:5px 10px}
+  .date-filter input,.date-filter select{min-width:0 !important;font-size:13px}
   .card-header{padding:12px 14px;flex-wrap:wrap;gap:6px}
   .card-body{padding:14px}
   .form-row{grid-template-columns:1fr}
   .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0}
   .modal-overlay{align-items:flex-end;padding:0}
-  .table-wrap,div[style*="overflow-x"]{overflow-x:auto !important;-webkit-overflow-scrolling:touch}
-  thead th{font-size:11px;padding:8px 8px}
-  tbody td{font-size:12px;padding:8px 8px}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  thead th{font-size:11px;padding:8px 10px}
+  tbody td{font-size:12px;padding:8px 10px}
 }
 @media(max-width:400px){
   .main{padding:8px 8px 80px}
   .summary-grid{grid-template-columns:repeat(2,1fr);gap:8px}
   .sum-card{padding:12px}
-  .sum-num{font-size:1.05rem}
+  .sum-num{font-size:1rem}
 }
 </style>
 </head>
