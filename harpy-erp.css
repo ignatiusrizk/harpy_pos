@@ -413,6 +413,9 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 /* ── GRIDS ─────────────────────────────────────────── */
 .hl-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .hl-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+/* Grid items default min-width:auto → bisa bocor keluar viewport jika konten lebar */
+.hl-grid-2 > *, .hl-grid-3 > *,
+.hl-stat-grid-4 > *, .hl-stat-grid-6 > * { min-width: 0; }
 
 /* ── UTILS ─────────────────────────────────────────── */
 .hl-section-title {
