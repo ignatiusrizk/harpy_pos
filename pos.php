@@ -224,7 +224,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 
 
 /* LAYOUT */
-.main{max-width:1100px;margin:0 auto;padding:24px 20px}
+.main{max-width:1100px;width:100%;margin:0 auto;padding:24px 20px}
 .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start}
 
 /* CARD */
@@ -379,16 +379,17 @@ textarea{resize:vertical;min-height:64px}
   .layanan-btn{padding:7px 5px}
   .layanan-btn .l-nama{font-size:11px}
   .layanan-btn .l-harga{font-size:10px}
-  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;width:100%}
-  .items-table{table-layout:fixed;width:100%}
-  .items-table thead th:nth-child(1){width:auto;min-width:90px}
-  .items-table thead th:nth-child(2){width:52px}
-  .items-table thead th:nth-child(3){width:55px}
-  .items-table thead th:nth-child(4){width:80px}
-  .items-table thead th:nth-child(5){width:75px}
-  .items-table thead th:nth-child(6){width:0;padding:0;overflow:hidden;opacity:0}
-  .items-table tbody td:nth-child(6){width:0;padding:0;overflow:hidden;opacity:0}
-  .items-table thead th:nth-child(7){width:32px}
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .items-table{table-layout:fixed !important;width:100% !important}
+  .items-table th{min-width:0 !important}
+  .items-table th:nth-child(1){width:auto !important}
+  .items-table th:nth-child(2){width:56px !important}
+  .items-table th:nth-child(3){width:58px !important}
+  .items-table th:nth-child(4){width:82px !important}
+  .items-table th:nth-child(5),.items-table td:nth-child(5){display:none !important}
+  .items-table th:nth-child(6),.items-table td:nth-child(6){display:none !important}
+  .items-table th:nth-child(7){width:34px !important}
+  .items-table td input,.items-table td select{width:100% !important;min-width:0 !important}
   .summary-box{padding:14px}
   .sum-row{font-size:13px}
   .sum-value.big{font-size:1.2rem}
