@@ -207,8 +207,8 @@ if ($action) {
   --shadow-lg:0 8px 32px rgba(27,45,90,.14);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:15px;overflow-x:hidden}
-body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh;overflow-x:hidden;max-width:100%}
+html{font-size:15px}
+body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:100vh}
 
 
 
@@ -228,7 +228,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start}
 
 /* CARD */
-.card{background:var(--white);border-radius:var(--r-lg);border:1px solid rgba(27,45,90,.07);box-shadow:var(--shadow);overflow:visible;margin-bottom:20px}
+.card{background:var(--white);border-radius:var(--r-lg);border:1px solid rgba(27,45,90,.07);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
 .card-header{padding:16px 20px;border-bottom:1px solid var(--light);display:flex;align-items:center;justify-content:space-between}
 .card-title{font-size:14px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .card-body{padding:20px}
@@ -379,8 +379,16 @@ textarea{resize:vertical;min-height:64px}
   .layanan-btn{padding:7px 5px}
   .layanan-btn .l-nama{font-size:11px}
   .layanan-btn .l-harga{font-size:10px}
-  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .items-table{min-width:420px;width:max-content}
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;display:block;width:100%}
+  .items-table{table-layout:fixed;width:100%}
+  .items-table thead th:nth-child(1){width:auto;min-width:90px}
+  .items-table thead th:nth-child(2){width:52px}
+  .items-table thead th:nth-child(3){width:55px}
+  .items-table thead th:nth-child(4){width:80px}
+  .items-table thead th:nth-child(5){width:75px}
+  .items-table thead th:nth-child(6){width:0;padding:0;overflow:hidden;opacity:0}
+  .items-table tbody td:nth-child(6){width:0;padding:0;overflow:hidden;opacity:0}
+  .items-table thead th:nth-child(7){width:32px}
   .summary-box{padding:14px}
   .sum-row{font-size:13px}
   .sum-value.big{font-size:1.2rem}
