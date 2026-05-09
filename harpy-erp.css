@@ -156,8 +156,8 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 .hl-btn-logout:hover { color: var(--white); border-color: rgba(255,255,255,.3); }
 
 /* ── MAIN CONTAINER ────────────────────────────────── */
-.hl-main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
-.hl-main-lg { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+.hl-main { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 20px; }
+.hl-main-lg { max-width: 1400px; width: 100%; margin: 0 auto; padding: 24px 20px; }
 
 /* ── CARDS ─────────────────────────────────────────── */
 .hl-card {
