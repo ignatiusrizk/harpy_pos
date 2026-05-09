@@ -115,7 +115,7 @@ body {
   min-height: 100vh;
   padding: 20px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* BG pattern */
@@ -135,15 +135,15 @@ body::before {
   filter: blur(80px); pointer-events: none;
 }
 .orb1 {
-  width: 500px; height: 500px;
+  width: 400px; height: 400px;
   background: radial-gradient(circle, rgba(53,232,213,.18) 0%, transparent 70%);
-  top: -100px; right: -100px;
+  top: -80px; right: -80px;
   animation: float 10s ease-in-out infinite;
 }
 .orb2 {
-  width: 400px; height: 400px;
+  width: 320px; height: 320px;
   background: radial-gradient(circle, rgba(27,77,143,.3) 0%, transparent 70%);
-  bottom: -80px; left: -80px;
+  bottom: -60px; left: -60px;
   animation: float 13s ease-in-out infinite reverse;
 }
 @keyframes float {
@@ -162,6 +162,12 @@ body::before {
   width: 100%; max-width: 400px;
   box-shadow: 0 32px 80px rgba(0,0,0,.4);
   animation: slideUp .5s cubic-bezier(.4,0,.2,1);
+}
+@media(max-width:480px){
+  .login-card { padding: 32px 24px; border-radius: 16px; }
+  .login-logo { margin-bottom: 24px; }
+  .login-logo h1 { font-size: 18px; }
+  .divider { margin-bottom: 20px; }
 }
 @keyframes slideUp {
   from { opacity:0; transform: translateY(24px); }
