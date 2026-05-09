@@ -497,7 +497,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 
 
 
-.main{max-width:1300px;margin:0 auto;padding:24px 20px}
+.main{max-width:1300px;width:100%;margin:0 auto;padding:24px 20px}
 
 /* STATS */
 .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:24px}

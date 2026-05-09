@@ -241,7 +241,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 
 
 
-.main{max-width:1200px;margin:0 auto;padding:24px 20px}
+.main{max-width:1200px;width:100%;margin:0 auto;padding:24px 20px}
 
 /* TABS */
 .page-tabs{display:flex;gap:4px;background:var(--white);border-radius:var(--r-lg);padding:6px;box-shadow:var(--shadow);margin-bottom:24px;border:1px solid rgba(27,45,90,.07)}

@@ -214,7 +214,7 @@ body{font-family:var(--font);background:var(--off);color:var(--dark);min-height:
 
 
 
-.main{max-width:1200px;margin:0 auto;padding:24px 20px}
+.main{max-width:1200px;width:100%;margin:0 auto;padding:24px 20px}
 
 /* STATS */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
