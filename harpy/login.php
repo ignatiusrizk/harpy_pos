@@ -3,7 +3,7 @@
 // login.php — Harpy SaaS Login
 // ══════════════════════════════════════════════════════
 
-define('ROOT', __DIR__);
+if (!defined('ROOT')) define('ROOT', __DIR__);
 require_once ROOT . '/master/config/db.php';
 require_once ROOT . '/core/Database.php';
 require_once ROOT . '/core/TenantResolver.php';
