@@ -1,0 +1,20 @@
+# ── Credentials — JANGAN PERNAH COMMIT ──────────────
+master/config/db.php
+
+# ── Logs ─────────────────────────────────────────────
+logs/
+*.log
+
+# ── Migration scripts (hapus setelah dipakai) ────────
+scripts/migrate_johar.php
+
+# ── OS & Editor ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Temp & backup ────────────────────────────────────
+*.bak
+*.sql.bak
+*.tmp
