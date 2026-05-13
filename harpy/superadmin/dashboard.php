@@ -16,80 +16,77 @@ if ($action) {
     header('Content-Type: application/json');
     $db = Database::get();
 
+    try {
+
     if ($action === 'stats') {
         $month = date('n');
         $year  = date('Y');
 
         $totals = $db->query(
-            "SELECT
-               COUNT(*) as total,
+            "SELECT COUNT(*) as total,
                SUM(status='active') as aktif,
                SUM(status='trial') as trial,
                SUM(status='suspended') as suspended
              FROM tenants"
         )->fetch();
 
-        $revenue = $db->prepare(
-            "SELECT COALESCE(SUM(amount),0) as total
-             FROM payments
-             WHERE status='success' AND MONTH(paid_at)=? AND YEAR(paid_at)=?"
-        );
-        $revenue->execute([$month, $year]);
-        $revenueTotal = $revenue->fetchColumn();
+        // payments table mungkin belum ada — tangkap gracefully
+        try {
+            $rev = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='success' AND MONTH(paid_at)=? AND YEAR(paid_at)=?");
+            $rev->execute([$month, $year]);
+            $revenueTotal = (float)$rev->fetchColumn();
 
-        $coinSold = $db->prepare(
-            "SELECT COALESCE(SUM(coin_amount),0) as total
-             FROM payments
-             WHERE type='coin_topup' AND MONTH(paid_at)=? AND YEAR(paid_at)=? AND status='success'"
-        );
-        $coinSold->execute([$month, $year]);
-        $coinSoldTotal = $coinSold->fetchColumn();
+            $cs = $db->prepare("SELECT COALESCE(SUM(coin_amount),0) FROM payments WHERE type='coin_topup' AND MONTH(paid_at)=? AND YEAR(paid_at)=? AND status='success'");
+            $cs->execute([$month, $year]);
+            $coinSoldTotal = (int)$cs->fetchColumn();
+        } catch (Throwable) {
+            $revenueTotal  = 0;
+            $coinSoldTotal = 0;
+        }
 
-        $newTenants = $db->query(
+        $newTenants = (int)$db->query(
             "SELECT COUNT(*) FROM tenants WHERE provisioned_at >= NOW() - INTERVAL 30 DAY"
         )->fetchColumn();
 
-        $churnRisk = $db->query(
-            "SELECT COUNT(DISTINCT t.id) FROM tenants t
-             LEFT JOIN hl_users u ON u.tenant_id = t.id
-             WHERE t.status IN ('active','trial')
-             AND (
-               t.coin_balance < 5000
-               OR (t.status='trial' AND t.trial_ends_at < DATE_ADD(NOW(), INTERVAL 3 DAY))
-               OR (t.status='active' AND (
-                 SELECT MAX(u2.last_login) FROM hl_users u2 WHERE u2.tenant_id = t.id
-               ) < NOW() - INTERVAL 14 DAY
-               OR (SELECT MAX(u2.last_login) FROM hl_users u2 WHERE u2.tenant_id = t.id) IS NULL)
-             )"
-        )->fetchColumn();
+        // churnRisk — hl_users mungkin belum punya tenant_id
+        try {
+            $churnRisk = (int)$db->query(
+                "SELECT COUNT(DISTINCT t.id) FROM tenants t
+                 WHERE t.status IN ('active','trial')
+                 AND (
+                   t.coin_balance < 5000
+                   OR (t.status='trial' AND t.trial_ends_at < DATE_ADD(NOW(), INTERVAL 3 DAY))
+                 )"
+            )->fetchColumn();
+        } catch (Throwable) {
+            $churnRisk = 0;
+        }
 
-        $coinKritis = $db->query(
+        $coinKritis = (int)$db->query(
             "SELECT COUNT(*) FROM tenants WHERE coin_balance < 5000 AND status='active'"
         )->fetchColumn();
 
         echo json_encode([
-            'total'       => (int)$totals['total'],
-            'aktif'       => (int)$totals['aktif'],
-            'trial'       => (int)$totals['trial'],
-            'suspended'   => (int)$totals['suspended'],
-            'revenue'     => (float)$revenueTotal,
-            'coin_sold'   => (int)$coinSoldTotal,
-            'new_tenants' => (int)$newTenants,
-            'churn_risk'  => (int)$churnRisk,
-            'coin_kritis' => (int)$coinKritis,
+            'total'       => (int)($totals['total'] ?? 0),
+            'aktif'       => (int)($totals['aktif'] ?? 0),
+            'trial'       => (int)($totals['trial'] ?? 0),
+            'suspended'   => (int)($totals['suspended'] ?? 0),
+            'revenue'     => $revenueTotal,
+            'coin_sold'   => $coinSoldTotal,
+            'new_tenants' => $newTenants,
+            'churn_risk'  => $churnRisk,
+            'coin_kritis' => $coinKritis,
         ]);
         exit;
     }
 
     if ($action === 'alerts') {
-        // Coin kritis (< 10000)
         $coinAlert = $db->query(
             "SELECT id, nama_outlet, owner_name, owner_wa, coin_balance
              FROM tenants WHERE coin_balance < 10000 AND status='active'
              ORDER BY coin_balance ASC LIMIT 10"
         )->fetchAll();
 
-        // Trial < 3 hari
         $trialAlert = $db->query(
             "SELECT id, nama_outlet, owner_name, owner_wa, trial_ends_at,
                     DATEDIFF(trial_ends_at, NOW()) as days_left
@@ -98,18 +95,22 @@ if ($action) {
              ORDER BY trial_ends_at ASC LIMIT 10"
         )->fetchAll();
 
-        // Tidak login > 14 hari
-        $inactiveAlert = $db->query(
-            "SELECT t.id, t.nama_outlet, t.owner_name, t.owner_wa,
-                    MAX(u.last_login) as last_login,
-                    DATEDIFF(NOW(), MAX(u.last_login)) as days_inactive
-             FROM tenants t
-             LEFT JOIN hl_users u ON u.tenant_id = t.id
-             WHERE t.status = 'active'
-             GROUP BY t.id
-             HAVING last_login < NOW() - INTERVAL 14 DAY OR last_login IS NULL
-             ORDER BY last_login ASC LIMIT 10"
-        )->fetchAll();
+        // JOIN hl_users — aman walau tenant_id belum ada (LEFT JOIN)
+        try {
+            $inactiveAlert = $db->query(
+                "SELECT t.id, t.nama_outlet, t.owner_name, t.owner_wa,
+                        MAX(u.last_login) as last_login,
+                        DATEDIFF(NOW(), MAX(u.last_login)) as days_inactive
+                 FROM tenants t
+                 LEFT JOIN hl_users u ON u.tenant_id = t.id
+                 WHERE t.status = 'active'
+                 GROUP BY t.id
+                 HAVING last_login < NOW() - INTERVAL 14 DAY OR last_login IS NULL
+                 ORDER BY last_login ASC LIMIT 10"
+            )->fetchAll();
+        } catch (Throwable) {
+            $inactiveAlert = [];
+        }
 
         echo json_encode([
             'coin_kritis' => $coinAlert,
@@ -129,29 +130,36 @@ if ($action) {
              GROUP BY yr, mo, label
              ORDER BY yr ASC, mo ASC"
         )->fetchAll();
-
         echo json_encode($rows);
         exit;
     }
 
     if ($action === 'chart_coins') {
-        $rows = $db->query(
-            "SELECT DATE_FORMAT(paid_at,'%b %Y') as label,
-                    YEAR(paid_at) as yr, MONTH(paid_at) as mo,
-                    COALESCE(SUM(coin_amount),0) as total
-             FROM payments
-             WHERE type='coin_topup' AND status='success'
-               AND paid_at >= NOW() - INTERVAL 6 MONTH
-             GROUP BY yr, mo, label
-             ORDER BY yr ASC, mo ASC"
-        )->fetchAll();
-
+        try {
+            $rows = $db->query(
+                "SELECT DATE_FORMAT(paid_at,'%b %Y') as label,
+                        YEAR(paid_at) as yr, MONTH(paid_at) as mo,
+                        COALESCE(SUM(coin_amount),0) as total
+                 FROM payments
+                 WHERE type='coin_topup' AND status='success'
+                   AND paid_at >= NOW() - INTERVAL 6 MONTH
+                 GROUP BY yr, mo, label
+                 ORDER BY yr ASC, mo ASC"
+            )->fetchAll();
+        } catch (Throwable) {
+            $rows = [];
+        }
         echo json_encode($rows);
         exit;
     }
 
     echo json_encode(['error' => 'Action tidak dikenal.']);
     exit;
+
+    } catch (Throwable $e) {
+        echo json_encode(['error' => $e->getMessage()]);
+        exit;
+    }
 }
 ?>
 <!DOCTYPE html>
