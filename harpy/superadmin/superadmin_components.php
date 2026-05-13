@@ -403,7 +403,7 @@ function saRenderNav(string $activePage = '', string $pageTitle = ''): void {
 
       <div class="sa-sidebar-footer">
         <div class="sa-admin-info">
-          <strong><?= htmlspecialchars($admin['nama'] ?? 'Admin') ?></strong>
+          <strong><?= htmlspecialchars($admin['name'] ?? 'Admin') ?></strong>
           <?= htmlspecialchars($admin['username'] ?? '') ?>
         </div>
         <a href="/ERP/harpy/superadmin/logout.php" class="sa-logout-btn"
@@ -418,7 +418,7 @@ function saRenderNav(string $activePage = '', string $pageTitle = ''): void {
           <span class="sa-topbar-title"><?= htmlspecialchars($pageTitle) ?></span>
         </div>
         <div class="sa-topbar-right">
-          <span><?= htmlspecialchars($admin['nama'] ?? '') ?></span>
+          <span><?= htmlspecialchars($admin['name'] ?? '') ?></span>
           <a href="/ERP/harpy/superadmin/logout.php" style="color:#FCA5A5;font-size:12px;text-decoration:none;"
              onclick="return confirm('Yakin logout?')">Logout</a>
         </div>

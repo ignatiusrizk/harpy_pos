@@ -77,7 +77,7 @@ if ($action) {
         saVerifyCsrf();
         $id    = (int)($_POST['tenant_id'] ?? 0);
         $admin = saCurrentAdmin();
-        $note  = '✓ Follow up on ' . date('d M Y H:i') . ' by ' . ($admin['nama'] ?? 'Admin');
+        $note  = '✓ Follow up on ' . date('d M Y H:i') . ' by ' . ($admin['name'] ?? 'Admin');
         $db->prepare(
             "INSERT INTO tenant_notes (tenant_id, superadmin_id, note, is_pinned)
              VALUES (?, ?, ?, 0)"

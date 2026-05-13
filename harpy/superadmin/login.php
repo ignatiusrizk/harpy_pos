@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $stmt = Database::get()->prepare(
-                "SELECT * FROM superadmins WHERE username = ? AND is_active = 1 LIMIT 1"
+                "SELECT * FROM super_admins WHERE username = ? AND is_active = 1 LIMIT 1"
             );
             $stmt->execute([$username]);
             $admin = $stmt->fetch();
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($admin && password_verify($password, $admin['password'])) {
                 // Update last_login
                 Database::get()->prepare(
-                    "UPDATE superadmins SET last_login = NOW() WHERE id = ?"
+                    "UPDATE super_admins SET last_login = NOW() WHERE id = ?"
                 )->execute([$admin['id']]);
 
                 // Set session
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['sa_user'] = [
                     'id'       => $admin['id'],
                     'username' => $admin['username'],
-                    'nama'     => $admin['nama'],
+                    'name'     => $admin['name'],
                 ];
 
                 // Log login

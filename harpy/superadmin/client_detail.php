@@ -40,7 +40,7 @@ if ($action) {
         $id = (int)($_GET['id'] ?? 0);
         $rows = $db->prepare(
             "SELECT n.*, s.nama as sa_nama FROM tenant_notes n
-             LEFT JOIN superadmins s ON s.id = n.superadmin_id
+             LEFT JOIN super_admins s ON s.id = n.superadmin_id
              WHERE n.tenant_id = ? ORDER BY n.is_pinned DESC, n.created_at DESC"
         );
         $rows->execute([$id]);
@@ -77,7 +77,7 @@ if ($action) {
         $id = (int)($_GET['id'] ?? 0);
         $rows = $db->prepare(
             "SELECT s.*, sa.nama as sa_nama FROM support_tickets s
-             LEFT JOIN superadmins sa ON sa.id = s.superadmin_id
+             LEFT JOIN super_admins sa ON sa.id = s.superadmin_id
              WHERE s.tenant_id = ? ORDER BY s.created_at DESC LIMIT 50"
         );
         $rows->execute([$id]);
@@ -300,7 +300,7 @@ $users = $usrSt->fetchAll();
           <tbody>
           <?php foreach ($users as $u): ?>
           <tr>
-            <td><?= htmlspecialchars($u['nama']) ?></td>
+            <td><?= htmlspecialchars($u['name']) ?></td>
             <td style="font-family:var(--mono);font-size:11px;"><?= htmlspecialchars($u['username']) ?></td>
             <td><span class="sa-badge sa-badge-indigo" style="font-size:10px;"><?= htmlspecialchars($u['role']) ?></span></td>
             <td style="font-size:12px;color:rgba(255,255,255,.4);"><?= $u['last_login'] ? date('d M Y', strtotime($u['last_login'])) : 'Belum pernah' ?></td>
@@ -507,7 +507,7 @@ $users = $usrSt->fetchAll();
         <div style="display:flex;flex-direction:column;gap:10px;">
           <select id="resetUserId" style="padding:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-family:var(--font);">
             <?php foreach ($users as $u): ?>
-            <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['nama'] . ' (' . $u['username'] . ')') ?></option>
+            <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['name'] . ' (' . $u['username'] . ')') ?></option>
             <?php endforeach; ?>
           </select>
           <input type="text" id="newPassword" placeholder="Password baru (min 6 karakter)" style="padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-family:var(--font);"/>
