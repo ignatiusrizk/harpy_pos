@@ -115,6 +115,12 @@ function currentTenant(): array
     return TenantResolver::get();
 }
 
+// ── Info outlet saat ini ──────────────────────────────
+function currentOutlet(): array
+{
+    return TenantResolver::getOutlet();
+}
+
 // ── Coin balance (dari session, tanpa query DB) ────────
 function tenantCoinBalance(): int
 {

@@ -385,8 +385,11 @@ function saRenderNav(string $activePage = '', string $pageTitle = ''): void {
         </a>
 
         <div class="sa-nav-section">CS & Growth</div>
+        <a href="/ERP/harpy/superadmin/registrations.php" class="sa-nav-link <?= $activePage === 'registrations' ? 'active' : '' ?>">
+          <span class="icon">&#x1F4DD;</span> Registrasi
+        </a>
         <a href="/ERP/harpy/superadmin/onboarding.php" class="sa-nav-link <?= $activePage === 'onboarding' ? 'active' : '' ?>">
-          <span class="icon">🚀</span> Onboarding
+          <span class="icon">&#x1F680;</span> Onboarding
         </a>
         <a href="/ERP/harpy/superadmin/churn_risk.php" class="sa-nav-link <?= $activePage === 'churn_risk' ? 'active' : '' ?>">
           <span class="icon">⚠️</span> Churn Risk

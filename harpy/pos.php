@@ -12,10 +12,12 @@ if ($action) {
     $tid = TenantResolver::id();
 
     // GET layanan list
+    $oid = TenantResolver::outletId();
+
     if ($action === 'get_layanan') {
         $rows = TenantQuery::raw(
-            "SELECT * FROM hl_layanan WHERE tenant_id=? AND is_active=1 ORDER BY kategori,urutan",
-            [$tid]
+            "SELECT * FROM hl_layanan WHERE tenant_id=? AND outlet_id=? AND is_active=1 ORDER BY kategori,urutan",
+            [$tid, $oid]
         );
         echo json_encode($rows); exit;
     }
@@ -24,8 +26,8 @@ if ($action) {
     if ($action === 'search_pelanggan') {
         $q = '%' . trim($_GET['q'] ?? '') . '%';
         $rows = TenantQuery::raw(
-            "SELECT * FROM hl_pelanggan WHERE tenant_id=? AND (nama LIKE ? OR telepon LIKE ?) AND is_active=1 LIMIT 8",
-            [$tid, $q, $q]
+            "SELECT * FROM hl_pelanggan WHERE tenant_id=? AND outlet_id=? AND (nama LIKE ? OR telepon LIKE ?) AND is_active=1 LIMIT 8",
+            [$tid, $oid, $q, $q]
         );
         echo json_encode($rows); exit;
     }
@@ -59,10 +61,10 @@ if ($action) {
         $db = Database::get();
         $db->beginTransaction();
         try {
-            // Generate no order per tenant
+            // Generate no order per outlet
             $prefix = 'HL-' . date('Ymd') . '-';
-            $cnt    = $db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND no_order LIKE ?");
-            $cnt->execute([$tid, $prefix . '%']);
+            $cnt    = $db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND no_order LIKE ?");
+            $cnt->execute([$tid, $oid, $prefix . '%']);
             $no = $prefix . str_pad((int)$cnt->fetchColumn() + 1, 3, '0', STR_PAD_LEFT);
 
             // Hitung total
@@ -80,13 +82,13 @@ if ($action) {
             $pel_id = null;
             if ($nama_pel) {
                 $pelRow = TenantQuery::rawOne(
-                    "SELECT id FROM hl_pelanggan WHERE tenant_id=? AND nama=? AND telepon=?",
-                    [$tid, $nama_pel, $telepon]
+                    "SELECT id FROM hl_pelanggan WHERE tenant_id=? AND outlet_id=? AND nama=? AND telepon=?",
+                    [$tid, $oid, $nama_pel, $telepon]
                 );
                 if ($pelRow) {
                     $pel_id = $pelRow['id'];
-                    $db->prepare("UPDATE hl_pelanggan SET total_order=total_order+1 WHERE id=? AND tenant_id=?")
-                       ->execute([$pel_id, $tid]);
+                    $db->prepare("UPDATE hl_pelanggan SET total_order=total_order+1 WHERE id=? AND tenant_id=? AND outlet_id=?")
+                       ->execute([$pel_id, $tid, $oid]);
                 } else {
                     TenantQuery::insert('hl_pelanggan', [
                         'nama'        => $nama_pel,
@@ -101,13 +103,13 @@ if ($action) {
             // Insert transaksi header
             $stmt = $db->prepare(
                 "INSERT INTO hl_transaksi
-                 (tenant_id,no_order,tanggal,pelanggan_id,nama_pelanggan,telepon,
+                 (tenant_id,outlet_id,no_order,tanggal,pelanggan_id,nama_pelanggan,telepon,
                   subtotal,diskon,total,dp,sisa_bayar,metode_bayar,status_bayar,
                   status_proses,estimasi_selesai,catatan,created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
             $stmt->execute([
-                $tid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
+                $tid, $oid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
                 $subtotal, $diskon, $total, $dp, $sisa,
                 $data['metode_bayar'] ?? 'cash', $status_b,
                 'masuk', $estimasi, $catatan, $user['id']
@@ -117,13 +119,13 @@ if ($action) {
             // Insert items
             $istmt = $db->prepare(
                 "INSERT INTO hl_transaksi_item
-                 (tenant_id,transaksi_id,layanan_id,nama_layanan,satuan,jumlah,harga_satuan,subtotal,catatan_item)
-                 VALUES (?,?,?,?,?,?,?,?,?)"
+                 (tenant_id,outlet_id,transaksi_id,layanan_id,nama_layanan,satuan,jumlah,harga_satuan,subtotal,catatan_item)
+                 VALUES (?,?,?,?,?,?,?,?,?,?)"
             );
             foreach ($items as $item) {
                 $sub = floatval($item['jumlah']) * floatval($item['harga_satuan']);
                 $istmt->execute([
-                    $tid, $trx_id,
+                    $tid, $oid, $trx_id,
                     $item['layanan_id'] ?: null,
                     substr(trim(strip_tags($item['nama_layanan'])), 0, 100),
                     $item['satuan'] ?? 'kg',
@@ -134,7 +136,7 @@ if ($action) {
                 ]);
             }
 
-            // Log status masuk
+            // Log status masuk (hl_proses_log tidak punya outlet_id)
             $db->prepare(
                 "INSERT INTO hl_proses_log (tenant_id,transaksi_id,status_baru,oleh) VALUES (?,?,?,?)"
             )->execute([$tid, $trx_id, 'masuk', $user['nama']]);
@@ -173,12 +175,12 @@ if ($action) {
     if ($action === 'get_detail') {
         $id  = intval($_GET['id']);
         $t   = TenantQuery::rawOne(
-            "SELECT * FROM hl_transaksi WHERE tenant_id=? AND id=?", [$tid, $id]
+            "SELECT * FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $id]
         );
         if (!$t) { echo json_encode(['error'=>'Not found']); exit; }
         $t['items'] = TenantQuery::raw(
-            "SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND transaksi_id=? ORDER BY id",
-            [$tid, $id]
+            "SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND outlet_id=? AND transaksi_id=? ORDER BY id",
+            [$tid, $oid, $id]
         );
         echo json_encode($t); exit;
     }

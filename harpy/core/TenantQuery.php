@@ -1,10 +1,14 @@
 <?php
 // ══════════════════════════════════════════════════════
-// core/TenantQuery.php — Query wrapper dengan tenant_id otomatis
+// core/TenantQuery.php — Query wrapper dengan tenant_id + outlet_id otomatis
 //
 // ATURAN WAJIB:
 //   Semua query ke tabel operasional (hl_*) HARUS lewat class ini.
 //   Tidak boleh ada PDO query langsung tanpa filter tenant_id.
+//
+// OUTLET SCOPE:
+//   Tabel dalam $outletTables otomatis difilter juga dengan outlet_id.
+//   Tabel lain (hl_users, hl_roles, dll) hanya difilter tenant_id.
 //
 // CARA PAKAI:
 //   // SELECT
@@ -21,10 +25,24 @@
 //
 //   // DELETE
 //   TenantQuery::delete('hl_transaksi', 'id = ?', [42]);
+//
+//   // RAW (caller wajib filter tenant_id + outlet_id sendiri)
+//   TenantQuery::raw("SELECT * FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? ...", [$tid, $oid]);
 // ══════════════════════════════════════════════════════
 
 class TenantQuery
 {
+    // Tabel yang punya outlet_id dan perlu outlet filter
+    private static array $outletTables = [
+        'hl_transaksi', 'hl_transaksi_item', 'hl_pelanggan', 'hl_karyawan',
+        'hl_kas', 'hl_absensi', 'hl_layanan', 'hl_gaji', 'hl_izin', 'hl_promo', 'hl_audit_log'
+    ];
+
+    private static function hasOutletScope(string $table): bool
+    {
+        return in_array($table, self::$outletTables, true);
+    }
+
     // ── SELECT banyak row ─────────────────────────────
     public static function fetch(
         string $table,
@@ -32,10 +50,17 @@ class TenantQuery
         array  $params = [],
         string $extra  = ''     // ORDER BY, LIMIT, dll
     ): array {
-        $tid  = TenantResolver::id();
-        $sql  = "SELECT * FROM `{$table}` WHERE tenant_id = ? AND ({$where}) {$extra}";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute(array_merge([$tid], $params));
+        $tid = TenantResolver::id();
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "SELECT * FROM `{$table}` WHERE tenant_id = ? AND outlet_id = ? AND ({$where}) {$extra}";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid, $oid], $params));
+        } else {
+            $sql = "SELECT * FROM `{$table}` WHERE tenant_id = ? AND ({$where}) {$extra}";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid], $params));
+        }
         return $stmt->fetchAll();
     }
 
@@ -57,10 +82,17 @@ class TenantQuery
         array  $params = [],
         string $extra  = ''
     ): array {
-        $tid  = TenantResolver::id();
-        $sql  = "SELECT {$select} FROM `{$table}` WHERE tenant_id = ? AND ({$where}) {$extra}";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute(array_merge([$tid], $params));
+        $tid = TenantResolver::id();
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "SELECT {$select} FROM `{$table}` WHERE tenant_id = ? AND outlet_id = ? AND ({$where}) {$extra}";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid, $oid], $params));
+        } else {
+            $sql = "SELECT {$select} FROM `{$table}` WHERE tenant_id = ? AND ({$where}) {$extra}";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid], $params));
+        }
         return $stmt->fetchAll();
     }
 
@@ -70,11 +102,18 @@ class TenantQuery
         string $where  = '1',
         array  $params = []
     ): int {
-        $tid  = TenantResolver::id();
-        $sql  = "SELECT COUNT(*) AS total FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute(array_merge([$tid], $params));
-        return (int) $stmt->fetch()['total'];
+        $tid = TenantResolver::id();
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "SELECT COUNT(*) AS total FROM `{$table}` WHERE tenant_id = ? AND outlet_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid, $oid], $params));
+        } else {
+            $sql = "SELECT COUNT(*) AS total FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid], $params));
+        }
+        return (int)$stmt->fetch()['total'];
     }
 
     // ── SUM ───────────────────────────────────────────
@@ -84,19 +123,30 @@ class TenantQuery
         string $where  = '1',
         array  $params = []
     ): float {
-        $tid  = TenantResolver::id();
-        $sql  = "SELECT COALESCE(SUM(`{$column}`), 0) AS total
-                 FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute(array_merge([$tid], $params));
-        return (float) $stmt->fetch()['total'];
+        $tid = TenantResolver::id();
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total
+                    FROM `{$table}` WHERE tenant_id = ? AND outlet_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid, $oid], $params));
+        } else {
+            $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total
+                    FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid], $params));
+        }
+        return (float)$stmt->fetch()['total'];
     }
 
     // ── INSERT ────────────────────────────────────────
-    // tenant_id & created_at di-inject otomatis
+    // tenant_id (dan outlet_id jika relevan) di-inject otomatis
     public static function insert(string $table, array $data): int
     {
         $data['tenant_id'] = TenantResolver::id();
+        if (self::hasOutletScope($table) && !isset($data['outlet_id'])) {
+            $data['outlet_id'] = TenantResolver::outletId();
+        }
         if (!array_key_exists('created_at', $data)) {
             $data['created_at'] = date('Y-m-d H:i:s');
         }
@@ -105,36 +155,50 @@ class TenantQuery
         $ph   = implode(',', array_fill(0, count($data), '?'));
         $stmt = Database::get()->prepare("INSERT INTO `{$table}` ({$cols}) VALUES ({$ph})");
         $stmt->execute(array_values($data));
-        return (int) Database::get()->lastInsertId();
+        return (int)Database::get()->lastInsertId();
     }
 
     // ── UPDATE ────────────────────────────────────────
-    // tenant_id filter otomatis — tidak bisa update data tenant lain
+    // tenant_id (dan outlet_id jika relevan) filter otomatis
     public static function update(
         string $table,
         array  $data,
         string $where,
         array  $whereParams = []
     ): int {
-        $tid  = TenantResolver::id();
-        $set  = implode(',', array_map(fn($k) => "`{$k}` = ?", array_keys($data)));
-        $sql  = "UPDATE `{$table}` SET {$set} WHERE tenant_id = ? AND ({$where})";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute([...array_values($data), $tid, ...$whereParams]);
+        $tid = TenantResolver::id();
+        $set = implode(',', array_map(fn($k) => "`{$k}` = ?", array_keys($data)));
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "UPDATE `{$table}` SET {$set} WHERE tenant_id = ? AND outlet_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute([...array_values($data), $tid, $oid, ...$whereParams]);
+        } else {
+            $sql = "UPDATE `{$table}` SET {$set} WHERE tenant_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute([...array_values($data), $tid, ...$whereParams]);
+        }
         return $stmt->rowCount();
     }
 
     // ── DELETE ────────────────────────────────────────
-    // tenant_id filter otomatis — tidak bisa hapus data tenant lain
+    // tenant_id (dan outlet_id jika relevan) filter otomatis
     public static function delete(
         string $table,
         string $where,
         array  $params = []
     ): int {
-        $tid  = TenantResolver::id();
-        $sql  = "DELETE FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
-        $stmt = Database::get()->prepare($sql);
-        $stmt->execute(array_merge([$tid], $params));
+        $tid = TenantResolver::id();
+        if (self::hasOutletScope($table)) {
+            $oid = TenantResolver::outletId();
+            $sql = "DELETE FROM `{$table}` WHERE tenant_id = ? AND outlet_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid, $oid], $params));
+        } else {
+            $sql = "DELETE FROM `{$table}` WHERE tenant_id = ? AND ({$where})";
+            $stmt = Database::get()->prepare($sql);
+            $stmt->execute(array_merge([$tid], $params));
+        }
         return $stmt->rowCount();
     }
 
@@ -147,16 +211,18 @@ class TenantQuery
         return self::count($table, $where, $params) > 0;
     }
 
-    // ── Raw query dengan tenant_id manual ─────────────
-    // Pakai ini untuk JOIN antar tabel — tetap wajib filter tenant_id
+    // ── Raw query — caller bertanggung jawab WHERE lengkap ─
+    // Untuk JOIN antar tabel — tetap wajib filter tenant_id + outlet_id
     // Contoh:
+    //   $tid = TenantResolver::id();
+    //   $oid = TenantResolver::outletId();
     //   TenantQuery::raw(
     //     "SELECT t.*, p.nama AS nama_pelanggan
     //      FROM hl_transaksi t
     //      LEFT JOIN hl_pelanggan p ON p.id = t.pelanggan_id
-    //      WHERE t.tenant_id = ? AND t.status_proses = ?
+    //      WHERE t.tenant_id = ? AND t.outlet_id = ? AND t.status_proses = ?
     //      ORDER BY t.created_at DESC LIMIT 50",
-    //     [TenantResolver::id(), 'masuk']
+    //     [$tid, $oid, 'masuk']
     //   )
     public static function raw(string $sql, array $params = []): array
     {
@@ -165,7 +231,7 @@ class TenantQuery
         return $stmt->fetchAll();
     }
 
-    // ── Raw untuk non-SELECT (exec dengan tenant scope) ─
+    // ── Raw single row ────────────────────────────────
     public static function rawOne(string $sql, array $params = []): ?array
     {
         $stmt = Database::get()->prepare($sql);

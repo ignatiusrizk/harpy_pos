@@ -12,6 +12,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     // LIST orders
     if ($action === 'list') {
@@ -26,7 +27,7 @@ if ($action) {
         $limit   = 25;
         $offset  = ($page - 1) * $limit;
 
-        $where = ['t.tenant_id = ?']; $params = [$tid];
+        $where = ['t.tenant_id = ?', 't.outlet_id = ?']; $params = [$tid, $oid];
         if ($q) {
             $where[] = "(t.no_order LIKE ? OR t.nama_pelanggan LIKE ? OR t.telepon LIKE ?)";
             $like = "%$q%"; $params = array_merge($params, [$like, $like, $like]);
@@ -49,7 +50,7 @@ if ($action) {
         $whereStr = implode(' AND ', $where);
 
         $sql = "SELECT t.*,
-            (SELECT GROUP_CONCAT(nama_layanan SEPARATOR ', ') FROM hl_transaksi_item WHERE transaksi_id=t.id AND tenant_id=t.tenant_id) as layanan_list
+            (SELECT GROUP_CONCAT(nama_layanan SEPARATOR ', ') FROM hl_transaksi_item WHERE transaksi_id=t.id AND tenant_id=t.tenant_id AND outlet_id=t.outlet_id) as layanan_list
             FROM hl_transaksi t
             WHERE $whereStr
             ORDER BY $sortCol $dir
@@ -73,9 +74,9 @@ if ($action) {
     // GET detail 1 order
     if ($action === 'get') {
         $id = intval($_GET['id']);
-        $t  = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND id=?", [$tid, $id]);
+        $t  = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $id]);
         if (!$t) { echo json_encode(['error'=>'Not found']); exit; }
-        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND transaksi_id=? ORDER BY id", [$tid, $id]);
+        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND outlet_id=? AND transaksi_id=? ORDER BY id", [$tid, $oid, $id]);
         $t['logs']  = TenantQuery::raw("SELECT * FROM hl_proses_log WHERE transaksi_id=? ORDER BY created_at DESC LIMIT 10", [$id]);
         echo json_encode($t); exit;
     }
@@ -90,8 +91,8 @@ if ($action) {
         $db->beginTransaction();
         try {
             // Verify ownership
-            $oldRow = $db->prepare("SELECT status_proses,status_bayar,catatan,dp FROM hl_transaksi WHERE tenant_id=? AND id=?");
-            $oldRow->execute([$tid, $id]);
+            $oldRow = $db->prepare("SELECT status_proses,status_bayar,catatan,dp FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?");
+            $oldRow->execute([$tid, $oid, $id]);
             $oldRow = $oldRow->fetch();
             if (!$oldRow) { $db->rollBack(); echo json_encode(['error'=>'Order tidak ditemukan']); exit; }
 
@@ -116,7 +117,7 @@ if ($action) {
                 metode_bayar=?, dp=?, sisa_bayar=?,
                 diskon=?, total=?, subtotal=?,
                 estimasi_selesai=?
-                WHERE tenant_id=? AND id=?");
+                WHERE tenant_id=? AND outlet_id=? AND id=?");
             $stmt->execute([
                 $data['status_proses'],
                 $sbayar,
@@ -125,19 +126,19 @@ if ($action) {
                 $data['metode_bayar'] ?? 'cash',
                 $dp, $sisa, $diskon, $total, $subtotal > 0 ? $subtotal : null,
                 $data['estimasi'] ?: null,
-                $tid, $id
+                $tid, $oid, $id
             ]);
 
             // Update items jika ada
             if (!empty($data['items'])) {
-                $db->prepare("DELETE FROM hl_transaksi_item WHERE tenant_id=? AND transaksi_id=?")->execute([$tid, $id]);
+                $db->prepare("DELETE FROM hl_transaksi_item WHERE tenant_id=? AND outlet_id=? AND transaksi_id=?")->execute([$tid, $oid, $id]);
                 $istmt = $db->prepare("INSERT INTO hl_transaksi_item
-                    (tenant_id,transaksi_id,layanan_id,nama_layanan,satuan,jumlah,harga_satuan,subtotal,catatan_item)
-                    VALUES (?,?,?,?,?,?,?,?,?)");
+                    (tenant_id,outlet_id,transaksi_id,layanan_id,nama_layanan,satuan,jumlah,harga_satuan,subtotal,catatan_item)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)");
                 foreach ($data['items'] as $item) {
                     $sub = floatval($item['jumlah']) * floatval($item['harga_satuan']);
                     $istmt->execute([
-                        $tid, $id,
+                        $tid, $oid, $id,
                         $item['layanan_id'] ?: null,
                         $item['nama_layanan'],
                         $item['satuan'],
@@ -148,7 +149,7 @@ if ($action) {
                     ]);
                 }
                 // Update subtotal di header
-                $db->prepare("UPDATE hl_transaksi SET subtotal=? WHERE tenant_id=? AND id=?")->execute([$subtotal, $tid, $id]);
+                $db->prepare("UPDATE hl_transaksi SET subtotal=? WHERE tenant_id=? AND outlet_id=? AND id=?")->execute([$subtotal, $tid, $oid, $id]);
             }
 
             // ── LOG semua perubahan ──────────────────────────────
@@ -230,7 +231,7 @@ if ($action) {
         $jumlah = floatval($_POST['jumlah'] ?? 0);
 
         // Verify ownership & get current data
-        $row = TenantQuery::rawOne("SELECT total, dp, sisa_bayar FROM hl_transaksi WHERE tenant_id=? AND id=?", [$tid, $id]);
+        $row = TenantQuery::rawOne("SELECT total, dp, sisa_bayar FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $id]);
         if (!$row) { echo json_encode(['error'=>'Order tidak ditemukan']); exit; }
 
         $new_dp   = floatval($row['dp']) + $jumlah;
@@ -263,7 +264,7 @@ if ($action) {
             $upd    = "UPDATE hl_transaksi SET dp=?, sisa_bayar=?, status_bayar=?, metode_bayar=?";
             $params = [$new_dp, $new_sisa, $new_status, $_POST['metode'] ?? 'cash'];
             if ($bukti_path) { $upd .= ", bukti_bayar=?"; $params[] = $bukti_path; }
-            $upd .= " WHERE tenant_id=? AND id=?"; $params[] = $tid; $params[] = $id;
+            $upd .= " WHERE tenant_id=? AND outlet_id=? AND id=?"; $params[] = $tid; $params[] = $oid; $params[] = $id;
             $db->prepare($upd)->execute($params);
 
             // Log
@@ -276,8 +277,8 @@ if ($action) {
                ->execute([$id, $row['dp'] > 0 ? 'dp' : 'belum_bayar', $new_status, 'bayar', $ket, $user['nama']]);
 
             // Ambil no_order & nama_pelanggan
-            $trxData = $db->prepare("SELECT no_order, nama_pelanggan FROM hl_transaksi WHERE tenant_id=? AND id=?");
-            $trxData->execute([$tid, $id]);
+            $trxData = $db->prepare("SELECT no_order, nama_pelanggan FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?");
+            $trxData->execute([$tid, $oid, $id]);
             $trx = $trxData->fetch();
 
             $metodeLabel = ['cash'=>'Cash','transfer'=>'Transfer','qris'=>'QRIS'][$_POST['metode'] ?? 'cash'] ?? 'Cash';
@@ -326,16 +327,16 @@ if ($action) {
 
     // GET layanan
     if ($action === 'get_layanan') {
-        $rows = TenantQuery::raw("SELECT * FROM hl_layanan WHERE tenant_id=? AND is_active=1 ORDER BY kategori,urutan", [$tid]);
+        $rows = TenantQuery::raw("SELECT * FROM hl_layanan WHERE tenant_id=? AND outlet_id=? AND is_active=1 ORDER BY kategori,urutan", [$tid, $oid]);
         echo json_encode($rows); exit;
     }
 
     // GET STRUK DATA — untuk cetak ulang nota
     if ($action === 'get_struk') {
         $id = intval($_GET['id']);
-        $t  = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND id=?", [$tid, $id]);
+        $t  = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $id]);
         if (!$t) { echo json_encode(['error'=>'Not found']); exit; }
-        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND transaksi_id=? ORDER BY id", [$tid, $id]);
+        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND outlet_id=? AND transaksi_id=? ORDER BY id", [$tid, $oid, $id]);
         echo json_encode($t); exit;
     }
 
@@ -343,10 +344,10 @@ if ($action) {
     if ($action === 'wa_message') {
         $id   = intval($_GET['id']);
         $tipe = $_GET['tipe'] ?? 'reminder';
-        $t    = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND id=?", [$tid, $id]);
+        $t    = TenantQuery::rawOne("SELECT * FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $id]);
         if (!$t) { echo json_encode(['error'=>'Not found']); exit; }
 
-        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND transaksi_id=? ORDER BY id", [$tid, $id]);
+        $t['items'] = TenantQuery::raw("SELECT * FROM hl_transaksi_item WHERE tenant_id=? AND outlet_id=? AND transaksi_id=? ORDER BY id", [$tid, $oid, $id]);
 
         $itemList = '';
         foreach ($t['items'] as $item) {

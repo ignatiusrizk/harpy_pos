@@ -1,6 +1,6 @@
 <?php
 // ══════════════════════════════════════════════════════
-// core/CoinLedger.php — Kelola saldo coin tenant
+// core/CoinLedger.php — Kelola saldo coin tenant/outlet
 //
 // CARA PAKAI:
 //   // Sebelum pakai fitur berbayar
@@ -28,7 +28,7 @@ class CoinLedger
         'export_pdf'       => 500,
     ];
 
-    // ── Cek saldo (dari session, tanpa query DB) ───────
+    // ── Cek saldo (dari cache, tanpa query DB) ─────────
     public static function canAfford(string $feature): bool
     {
         $cost = self::COSTS[$feature] ?? 0;
@@ -37,6 +37,7 @@ class CoinLedger
     }
 
     // ── Potong coin (atomic dengan transaction) ────────
+    // Cek coin_mode: shared → potong tenants, per_outlet → potong outlets
     // Return true jika berhasil, false jika saldo tidak cukup
     public static function deduct(
         string  $feature,
@@ -46,34 +47,57 @@ class CoinLedger
         if ($cost === 0) return true;
 
         $tenantId = TenantResolver::id();
+        $outletId = TenantResolver::outletId();
+        $isShared = TenantResolver::isSharedCoin();
         $db       = Database::get();
 
         $db->beginTransaction();
         try {
-            // Lock row agar tidak race condition
-            $stmt = $db->prepare(
-                "SELECT coin_balance FROM tenants WHERE id = ? FOR UPDATE"
-            );
-            $stmt->execute([$tenantId]);
-            $current = (int) $stmt->fetch()['coin_balance'];
+            if ($isShared) {
+                // Lock dan potong dari tenants.coin_balance
+                $stmt = $db->prepare(
+                    "SELECT coin_balance FROM tenants WHERE id = ? FOR UPDATE"
+                );
+                $stmt->execute([$tenantId]);
+                $current = (int)$stmt->fetch()['coin_balance'];
 
-            if ($current < $cost) {
-                $db->rollBack();
-                return false;
+                if ($current < $cost) {
+                    $db->rollBack();
+                    return false;
+                }
+
+                $newBalance = $current - $cost;
+                $db->prepare(
+                    "UPDATE tenants SET coin_balance = ? WHERE id = ?"
+                )->execute([$newBalance, $tenantId]);
+
+            } else {
+                // Lock dan potong dari outlets.coin_balance
+                $stmt = $db->prepare(
+                    "SELECT coin_balance FROM outlets WHERE id = ? AND tenant_id = ? FOR UPDATE"
+                );
+                $stmt->execute([$outletId, $tenantId]);
+                $current = (int)$stmt->fetch()['coin_balance'];
+
+                if ($current < $cost) {
+                    $db->rollBack();
+                    return false;
+                }
+
+                $newBalance = $current - $cost;
+                $db->prepare(
+                    "UPDATE outlets SET coin_balance = ? WHERE id = ? AND tenant_id = ?"
+                )->execute([$newBalance, $outletId, $tenantId]);
             }
 
-            $newBalance = $current - $cost;
-
-            $db->prepare(
-                "UPDATE tenants SET coin_balance = ? WHERE id = ?"
-            )->execute([$newBalance, $tenantId]);
-
+            // Catat di ledger dengan tenant_id + outlet_id
             $db->prepare("
                 INSERT INTO coin_ledger
-                  (tenant_id, type, amount, feature_used, description, balance_after, ref_id)
-                VALUES (?, 'deduct', ?, ?, ?, ?, ?)
+                  (tenant_id, outlet_id, type, amount, feature_used, description, balance_after, ref_id)
+                VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?)
             ")->execute([
                 $tenantId,
+                $outletId,
                 $cost,
                 $feature,
                 'Penggunaan fitur: ' . $feature,
@@ -83,7 +107,7 @@ class CoinLedger
 
             $db->commit();
 
-            // Sinkronkan ke session & static cache
+            // Sinkronkan ke session & refresh cache
             $_SESSION['tenant_coin_balance'] = $newBalance;
             TenantResolver::refresh();
 
@@ -95,37 +119,63 @@ class CoinLedger
         }
     }
 
-    // ── Top-up coin (dipanggil setelah payment sukses) ─
+    // ── Top-up coin ────────────────────────────────────
+    // Dipanggil setelah payment sukses.
+    // Jika $outletId diberikan dan coin_mode=per_outlet → topup outlet,
+    // otherwise topup tenant (shared).
     public static function topup(
         int    $tenantId,
         int    $amount,
         string $gatewayRef = '',
-        string $description = ''
+        string $description = '',
+        int    $outletId = 0
     ): int {
         $db = Database::get();
+
+        // Cek coin_mode
+        $tenantRow = $db->prepare("SELECT coin_mode FROM tenants WHERE id = ? LIMIT 1");
+        $tenantRow->execute([$tenantId]);
+        $coinMode = $tenantRow->fetch()['coin_mode'] ?? 'shared';
+
         $db->beginTransaction();
         try {
-            $stmt = $db->prepare(
-                "SELECT coin_balance FROM tenants WHERE id = ? FOR UPDATE"
-            );
-            $stmt->execute([$tenantId]);
-            $current    = (int) $stmt->fetch()['coin_balance'];
-            $newBalance = $current + $amount;
+            if ($coinMode === 'per_outlet' && $outletId > 0) {
+                $stmt = $db->prepare(
+                    "SELECT coin_balance FROM outlets WHERE id = ? AND tenant_id = ? FOR UPDATE"
+                );
+                $stmt->execute([$outletId, $tenantId]);
+                $current    = (int)$stmt->fetch()['coin_balance'];
+                $newBalance = $current + $amount;
 
-            $db->prepare(
-                "UPDATE tenants SET coin_balance = ? WHERE id = ?"
-            )->execute([$newBalance, $tenantId]);
+                $db->prepare(
+                    "UPDATE outlets SET coin_balance = ? WHERE id = ? AND tenant_id = ?"
+                )->execute([$newBalance, $outletId, $tenantId]);
+
+            } else {
+                $stmt = $db->prepare(
+                    "SELECT coin_balance FROM tenants WHERE id = ? FOR UPDATE"
+                );
+                $stmt->execute([$tenantId]);
+                $current    = (int)$stmt->fetch()['coin_balance'];
+                $newBalance = $current + $amount;
+
+                $db->prepare(
+                    "UPDATE tenants SET coin_balance = ? WHERE id = ?"
+                )->execute([$newBalance, $tenantId]);
+                $outletId = 0; // simpan 0 di ledger untuk topup shared
+            }
 
             $db->prepare("
                 INSERT INTO coin_ledger
-                  (tenant_id, type, amount, feature_used, description, balance_after, ref_id)
-                VALUES (?, 'topup', ?, 'topup', ?, ?, ?)
+                  (tenant_id, outlet_id, type, amount, feature_used, description, balance_after, ref_id)
+                VALUES (?, ?, 'topup', ?, 'topup', ?, ?, ?)
             ")->execute([
                 $tenantId,
+                $outletId ?: null,
                 $amount,
                 $description ?: 'Top-up coin',
                 $newBalance,
-                $gatewayRef,
+                $gatewayRef ?: null,
             ]);
 
             $db->commit();
@@ -144,19 +194,37 @@ class CoinLedger
             "SELECT coin_balance FROM tenants WHERE id = ? LIMIT 1"
         );
         $stmt->execute([$tenantId]);
-        return (int) ($stmt->fetch()['coin_balance'] ?? 0);
+        return (int)($stmt->fetch()['coin_balance'] ?? 0);
+    }
+
+    // ── Ambil balance outlet dari DB ───────────────────
+    public static function outletBalance(int $outletId): int
+    {
+        $stmt = Database::get()->prepare(
+            "SELECT coin_balance FROM outlets WHERE id = ? LIMIT 1"
+        );
+        $stmt->execute([$outletId]);
+        return (int)($stmt->fetch()['coin_balance'] ?? 0);
+    }
+
+    // ── Saldo saat ini (berdasarkan context TenantResolver) ─
+    public static function getBalance(): int
+    {
+        return TenantResolver::coinBalance();
     }
 
     // ── Riwayat transaksi coin ─────────────────────────
     public static function history(int $limit = 50): array
     {
+        $tid = TenantResolver::id();
+        $oid = TenantResolver::outletId();
         $stmt = Database::get()->prepare(
             "SELECT * FROM coin_ledger
-             WHERE tenant_id = ?
+             WHERE tenant_id = ? AND (outlet_id = ? OR outlet_id IS NULL)
              ORDER BY created_at DESC
              LIMIT ?"
         );
-        $stmt->execute([TenantResolver::id(), $limit]);
+        $stmt->execute([$tid, $oid, $limit]);
         return $stmt->fetchAll();
     }
 

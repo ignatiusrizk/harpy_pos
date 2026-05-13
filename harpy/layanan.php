@@ -10,11 +10,12 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     if ($action === 'list') {
         $rows = TenantQuery::raw(
-            "SELECT * FROM hl_layanan WHERE tenant_id=? ORDER BY kategori,urutan,nama",
-            [$tid]
+            "SELECT * FROM hl_layanan WHERE tenant_id=? AND outlet_id=? ORDER BY kategori,urutan,nama",
+            [$tid, $oid]
         );
         echo json_encode($rows); exit;
     }

@@ -10,6 +10,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     if ($action === 'list') {
         $q     = $_GET['q'] ?? '';
@@ -18,7 +19,7 @@ if ($action) {
         $limit = 24;
         $offset= ($page - 1) * $limit;
 
-        $where = ['tenant_id = ?']; $params = [$tid];
+        $where = ['p.tenant_id = ?', 'p.outlet_id = ?']; $params = [$tid, $oid];
         if ($q) { $where[] = '(p.nama LIKE ? OR p.telepon LIKE ? OR p.alamat LIKE ?)'; $like="%$q%"; $params=array_merge($params,[$like,$like,$like]); }
         if ($tipe) { $where[] = 'p.tipe=?'; $params[] = $tipe; }
 
@@ -34,7 +35,7 @@ if ($action) {
                 COALESCE(SUM(t.total),0) as total_omset,
                 MAX(t.tanggal) as last_order
                 FROM hl_pelanggan p
-                LEFT JOIN hl_transaksi t ON t.pelanggan_id = p.id AND t.tenant_id = p.tenant_id
+                LEFT JOIN hl_transaksi t ON t.pelanggan_id = p.id AND t.tenant_id = p.tenant_id AND t.outlet_id = p.outlet_id
                 WHERE $whereStr
                 GROUP BY p.id
                 ORDER BY p.nama
@@ -102,10 +103,10 @@ if ($action) {
             "SELECT t.no_order,t.tanggal,t.total,t.status_proses,t.status_bayar,
                 GROUP_CONCAT(i.nama_layanan SEPARATOR ', ') as layanan
                 FROM hl_transaksi t
-                LEFT JOIN hl_transaksi_item i ON i.transaksi_id=t.id AND i.tenant_id=t.tenant_id
-                WHERE t.tenant_id = ? AND t.pelanggan_id = ?
+                LEFT JOIN hl_transaksi_item i ON i.transaksi_id=t.id AND i.tenant_id=t.tenant_id AND i.outlet_id=t.outlet_id
+                WHERE t.tenant_id = ? AND t.outlet_id = ? AND t.pelanggan_id = ?
                 GROUP BY t.id ORDER BY t.tanggal DESC LIMIT 20",
-            [$tid, $id]
+            [$tid, $oid, $id]
         );
         echo json_encode($rows); exit;
     }

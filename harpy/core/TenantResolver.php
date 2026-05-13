@@ -1,15 +1,16 @@
 <?php
 // ══════════════════════════════════════════════════════
-// core/TenantResolver.php — Identifikasi & validasi tenant
-// Single-database approach: tenant diidentifikasi via
-// tenant_id yang disimpan di $_SESSION setelah login
+// core/TenantResolver.php — Identifikasi & validasi tenant + outlet
+// Single-database multi-tenant: setiap request harus punya
+// tenant_id DAN outlet_id di session.
 // ══════════════════════════════════════════════════════
 
 class TenantResolver
 {
-    private static ?array $current = null;
+    private static ?array $tenant = null;
+    private static ?array $outlet = null;
 
-    // ── Resolve tenant dari session ───────────────────
+    // ── Resolve tenant & outlet dari session ──────────
     // Dipanggil oleh tenant_guard.php di setiap request
     public static function resolve(): void
     {
@@ -18,9 +19,21 @@ class TenantResolver
             die(self::errorPage('Tenant tidak teridentifikasi. Silakan login kembali.'));
         }
 
-        // Hindari query ulang jika sudah di-resolve di request ini
-        if (self::$current !== null) return;
+        if (!isset($_SESSION['outlet_id'])) {
+            // Redirect ke halaman pilih outlet
+            if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'Outlet belum dipilih.', 'redirect' => '/ERP/harpy/select-outlet.php']);
+                exit;
+            }
+            header('Location: /ERP/harpy/select-outlet.php');
+            exit;
+        }
 
+        // Hindari query ulang jika sudah di-resolve di request ini
+        if (self::$tenant !== null && self::$outlet !== null) return;
+
+        // Load tenant
         $stmt = Database::get()->prepare(
             "SELECT * FROM tenants WHERE id = ? LIMIT 1"
         );
@@ -29,7 +42,7 @@ class TenantResolver
 
         if (!$tenant) {
             session_destroy();
-            header('Location: /login?error=tenant_not_found');
+            header('Location: /ERP/harpy/login.php?error=tenant_not_found');
             exit;
         }
 
@@ -48,67 +61,134 @@ class TenantResolver
             exit;
         }
 
-        self::$current = $tenant;
+        // Load outlet dan verifikasi milik tenant ini
+        $oStmt = Database::get()->prepare(
+            "SELECT * FROM outlets WHERE id = ? AND tenant_id = ? LIMIT 1"
+        );
+        $oStmt->execute([$_SESSION['outlet_id'], $tenant['id']]);
+        $outlet = $oStmt->fetch();
 
-        // Sinkronkan coin balance ke session
-        $_SESSION['tenant_coin_balance'] = $tenant['coin_balance'];
+        if (!$outlet) {
+            // Outlet tidak valid — minta pilih ulang
+            unset($_SESSION['outlet_id']);
+            if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'Outlet tidak valid.', 'redirect' => '/ERP/harpy/select-outlet.php']);
+                exit;
+            }
+            header('Location: /ERP/harpy/select-outlet.php');
+            exit;
+        }
+
+        if ($outlet['status'] === 'suspended') {
+            self::showSuspendedPage($tenant, $outlet);
+            exit;
+        }
+
+        self::$tenant = $tenant;
+        self::$outlet = $outlet;
+
+        // Sinkronkan coin balance ke session (sesuai coin_mode)
+        if (self::isSharedCoin()) {
+            $_SESSION['tenant_coin_balance'] = (int)$tenant['coin_balance'];
+        } else {
+            $_SESSION['tenant_coin_balance'] = (int)$outlet['coin_balance'];
+        }
     }
 
     // ── Refresh data dari DB (setelah update coin dll) ─
     public static function refresh(): void
     {
-        self::$current = null;
+        self::$tenant = null;
+        self::$outlet = null;
         self::resolve();
-    }
-
-    // ── Getters ───────────────────────────────────────
-    public static function id(): int
-    {
-        return (int)(self::$current['id'] ?? $_SESSION['tenant_id'] ?? 0);
-    }
-
-    public static function get(): array
-    {
-        return self::$current ?? [];
-    }
-
-    public static function slug(): string
-    {
-        return self::$current['slug'] ?? '';
-    }
-
-    public static function namaOutlet(): string
-    {
-        return self::$current['nama_outlet'] ?? '';
-    }
-
-    public static function coinBalance(): int
-    {
-        return (int)(self::$current['coin_balance'] ?? 0);
-    }
-
-    public static function status(): string
-    {
-        return self::$current['status'] ?? '';
-    }
-
-    // ── Set session saat login ────────────────────────
-    // Dipanggil dari login handler setelah auth berhasil
-    public static function setSession(array $tenant): void
-    {
-        $_SESSION['tenant_id']   = $tenant['id'];
-        $_SESSION['tenant_slug'] = $tenant['slug'];
     }
 
     // ── Reset (untuk testing / CLI) ───────────────────
     public static function reset(): void
     {
-        self::$current = null;
+        self::$tenant = null;
+        self::$outlet = null;
+    }
+
+    // ── Getters ───────────────────────────────────────
+
+    /** Backward compat alias untuk tenantId() */
+    public static function id(): int
+    {
+        return (int)(self::$tenant['id'] ?? $_SESSION['tenant_id'] ?? 0);
+    }
+
+    public static function tenantId(): int
+    {
+        return self::id();
+    }
+
+    public static function outletId(): int
+    {
+        return (int)(self::$outlet['id'] ?? $_SESSION['outlet_id'] ?? 0);
+    }
+
+    /** Backward compat */
+    public static function get(): array
+    {
+        return self::$tenant ?? [];
+    }
+
+    public static function getTenant(): array
+    {
+        return self::$tenant ?? [];
+    }
+
+    public static function getOutlet(): array
+    {
+        return self::$outlet ?? [];
+    }
+
+    public static function slug(): string
+    {
+        return self::$outlet['slug'] ?? self::$tenant['slug'] ?? '';
+    }
+
+    /** Mengembalikan nama OUTLET (bukan tenant) */
+    public static function namaOutlet(): string
+    {
+        return self::$outlet['nama_outlet'] ?? self::$tenant['nama_outlet'] ?? '';
+    }
+
+    public static function status(): string
+    {
+        return self::$tenant['status'] ?? '';
+    }
+
+    public static function isSharedCoin(): bool
+    {
+        return (self::$tenant['coin_mode'] ?? 'shared') === 'shared';
+    }
+
+    public static function coinBalance(): int
+    {
+        if (!self::$tenant) return (int)($_SESSION['tenant_coin_balance'] ?? 0);
+        return self::isSharedCoin()
+            ? (int)(self::$tenant['coin_balance'] ?? 0)
+            : (int)(self::$outlet['coin_balance'] ?? 0);
+    }
+
+    // ── Set session saat login ────────────────────────
+    // Dipanggil dari login handler setelah auth berhasil
+    public static function setSession(array $tenant, int $outletId = 0): void
+    {
+        $_SESSION['tenant_id']   = $tenant['id'];
+        $_SESSION['tenant_slug'] = $tenant['slug'] ?? '';
+        if ($outletId > 0) {
+            $_SESSION['outlet_id'] = $outletId;
+        }
     }
 
     // ── Halaman suspended ─────────────────────────────
-    private static function showSuspendedPage(array $tenant): void
+    private static function showSuspendedPage(array $tenant, ?array $outlet = null): void
     {
+        $name = $outlet['nama_outlet'] ?? $tenant['nama_outlet'] ?? 'Outlet';
         http_response_code(402);
         echo '<!DOCTYPE html><html lang="id"><head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -123,9 +203,9 @@ class TenantResolver
             padding:10px 24px;border-radius:8px}
         </style></head><body>
         <div class="box">
-          <div style="font-size:3rem;margin-bottom:16px">🔒</div>
+          <div style="font-size:3rem;margin-bottom:16px">&#x1F512;</div>
           <h1>Akun Ditangguhkan</h1>
-          <p>Outlet <strong>' . htmlspecialchars($tenant['nama_outlet']) . '</strong>
+          <p>Outlet <strong>' . htmlspecialchars($name) . '</strong>
           sementara tidak bisa diakses.<br>
           Hubungi tim Harpy untuk informasi lebih lanjut.</p>
           <a href="https://wa.me/6281234567890">Hubungi Support</a>
@@ -136,7 +216,7 @@ class TenantResolver
     {
         return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Error — Harpy</title></head>
         <body style="font-family:sans-serif;text-align:center;padding:60px;background:#0F1C3A;color:#fff">
-        <h2>⚠️ ' . htmlspecialchars($msg) . '</h2>
-        <a href="/login" style="color:#35E8D5">Kembali ke Login</a></body></html>';
+        <h2>' . htmlspecialchars($msg) . '</h2>
+        <a href="/ERP/harpy/login.php" style="color:#35E8D5">Kembali ke Login</a></body></html>';
     }
 }

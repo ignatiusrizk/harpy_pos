@@ -10,6 +10,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     // LIST KAS
     if ($action === 'list') {
@@ -18,8 +19,8 @@ if ($action) {
         $tipe   = $_GET['tipe']   ?? '';
         $kat    = $_GET['kat']    ?? '';
 
-        $where  = ['tenant_id = ?', 'tanggal BETWEEN ? AND ?'];
-        $params = [$tid, $dari, $sampai];
+        $where  = ['tenant_id = ?', 'outlet_id = ?', 'tanggal BETWEEN ? AND ?'];
+        $params = [$tid, $oid, $dari, $sampai];
         if ($tipe) { $where[] = 'tipe=?';     $params[] = $tipe; }
         if ($kat)  { $where[] = 'kategori=?'; $params[] = $kat; }
         $whereStr = implode(' AND ', $where);

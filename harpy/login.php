@@ -176,13 +176,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 session_regenerate_id(true);
 
+                // Tentukan outlet — auto-select jika hanya ada 1
+                $outletCount = Database::get()->prepare(
+                    "SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status='active'"
+                );
+                $outletCount->execute([$user['tenant_id']]);
+                $oCount = (int)$outletCount->fetchColumn();
+
+                if ($oCount === 1) {
+                    $outletRow = Database::get()->prepare(
+                        "SELECT id FROM outlets WHERE tenant_id=? AND status='active' LIMIT 1"
+                    );
+                    $outletRow->execute([$user['tenant_id']]);
+                    $_SESSION['outlet_id'] = (int)$outletRow->fetchColumn();
+                } elseif ($oCount === 0) {
+                    // Edge case: belum ada outlet
+                    $_SESSION['outlet_id'] = 0;
+                }
+                // Jika $oCount > 1 → jangan set outlet_id, biarkan select-outlet menangani
+
                 // Audit log
                 try {
-                    TenantResolver::resolve();
+                    if (isset($_SESSION['outlet_id']) && $_SESSION['outlet_id'] > 0) {
+                        TenantResolver::resolve();
+                    }
                     logAuditLogin($user, 'login', 'auth', 'Login berhasil');
                 } catch (Throwable $e) {}
 
-                header('Location: dashboard.php');
+                if ($oCount > 1) {
+                    header('Location: select-outlet.php');
+                } else {
+                    header('Location: dashboard.php');
+                }
                 exit;
             }
         } else {

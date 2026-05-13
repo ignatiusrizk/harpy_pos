@@ -10,6 +10,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     if ($action === 'get_roles') {
         $rows = TenantQuery::raw(
@@ -23,14 +24,14 @@ if ($action) {
         $rows = TenantQuery::raw(
             "SELECT u.*,
                 COALESCE(r.nama, u.role) as role_nama,
-                (SELECT COUNT(*) FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id
+                (SELECT COUNT(*) FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
                     AND MONTH(tanggal)=MONTH(CURDATE()) AND status='hadir') as hadir_bulan_ini,
-                (SELECT jam_masuk FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id
+                (SELECT jam_masuk FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
                     AND tanggal=CURDATE() LIMIT 1) as jam_masuk_hari_ini
              FROM hl_users u
              LEFT JOIN hl_roles r ON r.id=u.role_id AND r.tenant_id=u.tenant_id
              WHERE u.tenant_id=? ORDER BY u.nama",
-            [$tid]
+            [$oid, $oid, $tid]
         );
         echo json_encode($rows); exit;
     }
@@ -98,8 +99,8 @@ if ($action) {
             "SELECT g.*, u.nama, u.jabatan, u.gaji_pokok as gaji_default
              FROM hl_gaji g
              JOIN hl_users u ON u.id=g.user_id AND u.tenant_id=g.tenant_id
-             WHERE g.tenant_id=? AND g.bulan=? ORDER BY u.nama",
-            [$tid, $bulan]
+             WHERE g.tenant_id=? AND g.outlet_id=? AND g.bulan=? ORDER BY u.nama",
+            [$tid, $oid, $bulan]
         );
         echo json_encode($rows); exit;
     }
@@ -112,12 +113,12 @@ if ($action) {
         $users = TenantQuery::raw("SELECT * FROM hl_users WHERE tenant_id=? AND is_active=1", [$tid]);
         $db    = Database::get();
         $stmt  = $db->prepare(
-            "INSERT IGNORE INTO hl_gaji (tenant_id,user_id,bulan,gaji_pokok,total,created_by,created_at)
-             VALUES (?,?,?,?,?,?,NOW())"
+            "INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,created_by,created_at)
+             VALUES (?,?,?,?,?,?,?,NOW())"
         );
         foreach ($users as $u) {
             $gp = floatval($u['gaji_pokok'] ?? 0);
-            $stmt->execute([$tid, $u['id'], $bulan, $gp, $gp, $user['id']]);
+            $stmt->execute([$tid, $oid, $u['id'], $bulan, $gp, $gp, $user['id']]);
         }
         logAudit('generate_gaji','karyawan','Generate gaji bulan: '.$bulan);
         echo json_encode(['success'=>true]); exit;
@@ -148,8 +149,8 @@ if ($action) {
         // Auto-insert ke kas keluar
         $g = TenantQuery::rawOne(
             "SELECT g.*, u.nama FROM hl_gaji g JOIN hl_users u ON u.id=g.user_id AND u.tenant_id=g.tenant_id
-             WHERE g.id=? AND g.tenant_id=?",
-            [$gId, $tid]
+             WHERE g.id=? AND g.tenant_id=? AND g.outlet_id=?",
+            [$gId, $tid, $oid]
         );
         if ($g) {
             TenantQuery::insert('hl_kas', [
@@ -169,8 +170,8 @@ if ($action) {
         $total      = TenantQuery::count('hl_users', 'is_active=1');
         $hadir      = TenantQuery::count('hl_absensi', "tanggal=CURDATE() AND status='hadir'");
         $totalGaji  = TenantQuery::raw(
-            "SELECT COALESCE(SUM(total),0) as c FROM hl_gaji WHERE tenant_id=? AND bulan=? AND status='pending'",
-            [$tid, date('Y-m')]
+            "SELECT COALESCE(SUM(total),0) as c FROM hl_gaji WHERE tenant_id=? AND outlet_id=? AND bulan=? AND status='pending'",
+            [$tid, $oid, date('Y-m')]
         );
         echo json_encode(['total'=>$total,'hadir'=>$hadir,'total_gaji'=>$totalGaji[0]['c']??0]); exit;
     }

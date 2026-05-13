@@ -10,6 +10,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     // CLOCK IN
     if ($action === 'clock_in' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,8 +20,8 @@ if ($action) {
         $jam = date('H:i:s');
 
         $row = TenantQuery::rawOne(
-            "SELECT * FROM hl_absensi WHERE tenant_id=? AND user_id=? AND tanggal=?",
-            [$tid, $user['id'], $tgl]
+            "SELECT * FROM hl_absensi WHERE tenant_id=? AND outlet_id=? AND user_id=? AND tanggal=?",
+            [$tid, $oid, $user['id'], $tgl]
         );
 
         if ($row) {
@@ -53,8 +54,8 @@ if ($action) {
         $jam = date('H:i:s');
 
         $row = TenantQuery::rawOne(
-            "SELECT * FROM hl_absensi WHERE tenant_id=? AND user_id=? AND tanggal=?",
-            [$tid, $user['id'], $tgl]
+            "SELECT * FROM hl_absensi WHERE tenant_id=? AND outlet_id=? AND user_id=? AND tanggal=?",
+            [$tid, $oid, $user['id'], $tgl]
         );
 
         if (!$row) {
@@ -85,8 +86,8 @@ if ($action) {
     if ($action === 'status_hari_ini') {
         $tgl = date('Y-m-d');
         $row = TenantQuery::rawOne(
-            "SELECT * FROM hl_absensi WHERE tenant_id=? AND user_id=? AND tanggal=?",
-            [$tid, $user['id'], $tgl]
+            "SELECT * FROM hl_absensi WHERE tenant_id=? AND outlet_id=? AND user_id=? AND tanggal=?",
+            [$tid, $oid, $user['id'], $tgl]
         );
         echo json_encode($row ?: ['status'=>'belum']);
         exit;
@@ -105,9 +106,9 @@ if ($action) {
         $data = TenantQuery::raw(
             "SELECT a.*, u.nama FROM hl_absensi a
              JOIN hl_users u ON u.id=a.user_id AND u.tenant_id=a.tenant_id
-             WHERE a.tenant_id=? AND a.user_id=? AND a.tanggal BETWEEN ? AND ?
+             WHERE a.tenant_id=? AND a.outlet_id=? AND a.user_id=? AND a.tanggal BETWEEN ? AND ?
              ORDER BY a.tanggal",
-            [$tid, $uid, $dari, $sampai]
+            [$tid, $oid, $uid, $dari, $sampai]
         );
 
         $hadir  = count(array_filter($data, fn($r) => $r['status']==='hadir'));
@@ -142,11 +143,11 @@ if ($action) {
              COALESCE(SUM(a.durasi_menit),0) as total_menit,
              MAX(a.tanggal) as last_absen
              FROM hl_users u
-             LEFT JOIN hl_absensi a ON a.user_id=u.id AND a.tenant_id=u.tenant_id
+             LEFT JOIN hl_absensi a ON a.user_id=u.id AND a.tenant_id=u.tenant_id AND a.outlet_id=?
                 AND a.tanggal BETWEEN ? AND ?
              WHERE u.tenant_id=? AND u.is_active=1
              GROUP BY u.id ORDER BY u.nama",
-            [$dari, $sampai, $tid]
+            [$oid, $dari, $sampai, $tid]
         );
         echo json_encode(['data'=>$rows, 'periode'=>['bulan'=>$bulan,'dari'=>$dari,'sampai'=>$sampai]]);
         exit;
@@ -172,13 +173,13 @@ if ($action) {
         // INSERT IGNORE untuk range tanggal ke hl_absensi
         $db   = Database::get();
         $stmt = $db->prepare(
-            "INSERT IGNORE INTO hl_absensi (tenant_id,user_id,tanggal,status,catatan)
-             VALUES (?,?,?,?,?)"
+            "INSERT IGNORE INTO hl_absensi (tenant_id,outlet_id,user_id,tanggal,status,catatan)
+             VALUES (?,?,?,?,?,?)"
         );
         $cur = strtotime($dari);
         $end = strtotime($samp);
         while ($cur <= $end) {
-            $stmt->execute([$tid, $user['id'], date('Y-m-d',$cur), $tipe, $alas]);
+            $stmt->execute([$tid, $oid, $user['id'], date('Y-m-d',$cur), $tipe, $alas]);
             $cur = strtotime('+1 day', $cur);
         }
 

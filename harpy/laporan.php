@@ -11,6 +11,7 @@ $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
+    $oid = TenantResolver::outletId();
 
     // ── LAPORAN HARIAN ────────────────────────────────
     if ($action === 'harian') {
@@ -25,8 +26,8 @@ if ($action) {
              SUM(CASE WHEN status_bayar='lunas' THEN 1 ELSE 0 END) as lunas,
              SUM(CASE WHEN status_bayar='dp' THEN 1 ELSE 0 END) as dp_count,
              SUM(CASE WHEN status_bayar='belum_bayar' THEN 1 ELSE 0 END) as belum_bayar
-             FROM hl_transaksi WHERE tenant_id=? AND DATE(tanggal)=?",
-            [$tid, $tgl]
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?",
+            [$tid, $oid, $tgl]
         );
 
         $layananData = TenantQuery::raw(
@@ -35,17 +36,17 @@ if ($action) {
              COUNT(*) as total_order,
              SUM(i.subtotal) as total_omset
              FROM hl_transaksi_item i
-             JOIN hl_transaksi t ON t.id=i.transaksi_id AND t.tenant_id=i.tenant_id
-             WHERE i.tenant_id=? AND DATE(t.tanggal)=?
+             JOIN hl_transaksi t ON t.id=i.transaksi_id AND t.tenant_id=i.tenant_id AND t.outlet_id=i.outlet_id
+             WHERE i.tenant_id=? AND i.outlet_id=? AND DATE(t.tanggal)=?
              GROUP BY i.nama_layanan ORDER BY total_omset DESC LIMIT 10",
-            [$tid, $tgl]
+            [$tid, $oid, $tgl]
         );
 
         $kasData = TenantQuery::rawOne(
             "SELECT COALESCE(SUM(CASE WHEN tipe='masuk'  THEN jumlah END),0) as kas_masuk,
              COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah END),0) as kas_keluar
-             FROM hl_kas WHERE tenant_id=? AND tanggal=?",
-            [$tid, $tgl]
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tanggal=?",
+            [$tid, $oid, $tgl]
         );
 
         $orderList = TenantQuery::raw(
@@ -53,10 +54,10 @@ if ($action) {
              t.status_proses,t.status_bayar,t.metode_bayar,
              GROUP_CONCAT(i.nama_layanan SEPARATOR ', ') as layanan_list
              FROM hl_transaksi t
-             LEFT JOIN hl_transaksi_item i ON i.transaksi_id=t.id AND i.tenant_id=t.tenant_id
-             WHERE t.tenant_id=? AND DATE(t.tanggal)=?
+             LEFT JOIN hl_transaksi_item i ON i.transaksi_id=t.id AND i.tenant_id=t.tenant_id AND i.outlet_id=t.outlet_id
+             WHERE t.tenant_id=? AND t.outlet_id=? AND DATE(t.tanggal)=?
              GROUP BY t.id ORDER BY t.created_at DESC",
-            [$tid, $tgl]
+            [$tid, $oid, $tgl]
         );
 
         echo json_encode([
@@ -80,9 +81,9 @@ if ($action) {
              COUNT(*) as total_order,
              COALESCE(SUM(total),0) as omset,
              COALESCE(SUM(dp),0) as terkumpul
-             FROM hl_transaksi WHERE tenant_id=? AND tanggal BETWEEN ? AND ?
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND tanggal BETWEEN ? AND ?
              GROUP BY DATE(tanggal) ORDER BY tgl",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
 
         $sumData = TenantQuery::rawOne(
@@ -93,8 +94,8 @@ if ($action) {
              COALESCE(SUM(sisa_bayar),0) as total_piutang,
              SUM(CASE WHEN status_bayar='lunas' THEN 1 ELSE 0 END) as lunas,
              SUM(CASE WHEN status_proses='diambil' THEN 1 ELSE 0 END) as selesai
-             FROM hl_transaksi WHERE tenant_id=? AND tanggal BETWEEN ? AND ?",
-            [$tid, $dari, $sampai]
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND tanggal BETWEEN ? AND ?",
+            [$tid, $oid, $dari, $sampai]
         );
 
         $topLayananData = TenantQuery::raw(
@@ -103,31 +104,31 @@ if ($action) {
              COUNT(DISTINCT t.id) as total_order,
              SUM(i.subtotal) as total_omset
              FROM hl_transaksi_item i
-             JOIN hl_transaksi t ON t.id=i.transaksi_id AND t.tenant_id=i.tenant_id
-             WHERE i.tenant_id=? AND t.tanggal BETWEEN ? AND ?
+             JOIN hl_transaksi t ON t.id=i.transaksi_id AND t.tenant_id=i.tenant_id AND t.outlet_id=i.outlet_id
+             WHERE i.tenant_id=? AND i.outlet_id=? AND t.tanggal BETWEEN ? AND ?
              GROUP BY i.nama_layanan ORDER BY total_omset DESC LIMIT 10",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
 
         $kasData = TenantQuery::rawOne(
             "SELECT COALESCE(SUM(CASE WHEN tipe='masuk'  THEN jumlah END),0) as kas_masuk,
              COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah END),0) as kas_keluar
-             FROM hl_kas WHERE tenant_id=? AND tanggal BETWEEN ? AND ?",
-            [$tid, $dari, $sampai]
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tanggal BETWEEN ? AND ?",
+            [$tid, $oid, $dari, $sampai]
         );
 
         $pengeluaranData = TenantQuery::raw(
             "SELECT kategori, SUM(jumlah) as total, COUNT(*) as count
-             FROM hl_kas WHERE tenant_id=? AND tipe='keluar' AND tanggal BETWEEN ? AND ?
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tipe='keluar' AND tanggal BETWEEN ? AND ?
              GROUP BY kategori ORDER BY total DESC",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
 
         $pemasukanData = TenantQuery::raw(
             "SELECT kategori, SUM(jumlah) as total, COUNT(*) as count
-             FROM hl_kas WHERE tenant_id=? AND tipe='masuk' AND tanggal BETWEEN ? AND ?
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tipe='masuk' AND tanggal BETWEEN ? AND ?
              GROUP BY kategori ORDER BY total DESC",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
 
         echo json_encode([
@@ -152,23 +153,23 @@ if ($action) {
              COALESCE(SUM(total),0) as pendapatan_total,
              COALESCE(SUM(diskon),0) as total_diskon,
              COUNT(*) as total_order
-             FROM hl_transaksi WHERE tenant_id=? AND tanggal BETWEEN ? AND ?",
-            [$tid, $dari, $sampai]
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND tanggal BETWEEN ? AND ?",
+            [$tid, $oid, $dari, $sampai]
         );
 
         $kasMasukData = TenantQuery::raw(
             "SELECT kategori, SUM(jumlah) as total
-             FROM hl_kas WHERE tenant_id=? AND tipe='masuk' AND tanggal BETWEEN ? AND ?
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tipe='masuk' AND tanggal BETWEEN ? AND ?
              GROUP BY kategori ORDER BY total DESC",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
         $totalKasMasuk = array_sum(array_column($kasMasukData, 'total'));
 
         $bebanData = TenantQuery::raw(
             "SELECT kategori, SUM(jumlah) as total, COUNT(*) as count
-             FROM hl_kas WHERE tenant_id=? AND tipe='keluar' AND tanggal BETWEEN ? AND ?
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tipe='keluar' AND tanggal BETWEEN ? AND ?
              GROUP BY kategori ORDER BY total DESC",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
         $totalBeban = array_sum(array_column($bebanData, 'total'));
 
@@ -180,9 +181,9 @@ if ($action) {
              COUNT(*) as total_order,
              COALESCE(SUM(total),0) as omset,
              COALESCE(SUM(dp),0) as terkumpul
-             FROM hl_transaksi WHERE tenant_id=? AND tanggal BETWEEN ? AND ?
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND tanggal BETWEEN ? AND ?
              GROUP BY DATE_FORMAT(tanggal,'%Y-%m') ORDER BY bulan",
-            [$tid, $dari, $sampai]
+            [$tid, $oid, $dari, $sampai]
         );
 
         echo json_encode([
