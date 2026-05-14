@@ -105,10 +105,10 @@ if ($action) {
         }
 
         $db = Database::get();
-        $db->prepare("DELETE FROM hl_role_permissions WHERE role_id=?")->execute([$roleId]);
-        $stmt = $db->prepare("INSERT INTO hl_role_permissions (role_id,permission_id,filter_data) VALUES (?,?,?)");
+        $db->prepare("DELETE FROM hl_role_permissions WHERE role_id=? AND tenant_id=?")->execute([$roleId, $tid]);
+        $stmt = $db->prepare("INSERT INTO hl_role_permissions (tenant_id,role_id,permission_id,filter_data) VALUES (?,?,?,?)");
         foreach ($perms as $permId => $filter) {
-            if ($filter) $stmt->execute([$roleId, intval($permId), $filter]);
+            if ($filter) $stmt->execute([$tid, $roleId, intval($permId), $filter]);
         }
 
         logAudit('update_permission', 'settings', 'Update permission role ID: ' . $roleId);
@@ -156,10 +156,10 @@ if ($action) {
 
         // Copy permissions
         $db    = Database::get();
-        $perms = $db->prepare("SELECT permission_id,filter_data FROM hl_role_permissions WHERE role_id=?");
-        $perms->execute([$rid]);
-        $stmt  = $db->prepare("INSERT INTO hl_role_permissions (role_id,permission_id,filter_data) VALUES (?,?,?)");
-        foreach ($perms->fetchAll() as $p) $stmt->execute([$newId, $p['permission_id'], $p['filter_data']]);
+        $perms = $db->prepare("SELECT permission_id,filter_data FROM hl_role_permissions WHERE role_id=? AND tenant_id=?");
+        $perms->execute([$rid, $tid]);
+        $stmt  = $db->prepare("INSERT INTO hl_role_permissions (tenant_id,role_id,permission_id,filter_data) VALUES (?,?,?,?)");
+        foreach ($perms->fetchAll() as $p) $stmt->execute([$tid, $newId, $p['permission_id'], $p['filter_data']]);
 
         logAudit('create', 'settings', 'Duplikat role: ' . $src['nama']);
         echo json_encode(['success'=>true, 'id'=>$newId]); exit;

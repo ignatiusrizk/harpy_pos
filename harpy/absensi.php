@@ -210,15 +210,15 @@ if ($action) {
             $rows = TenantQuery::raw(
                 "SELECT i.*,u.nama FROM hl_izin i
                  JOIN hl_users u ON u.id=i.user_id AND u.tenant_id=i.tenant_id
-                 WHERE i.tenant_id=? ORDER BY i.created_at DESC LIMIT 50",
-                [$tid]
+                 WHERE i.tenant_id=? AND i.outlet_id=? ORDER BY i.created_at DESC LIMIT 50",
+                [$tid, $oid]
             );
         } else {
             $rows = TenantQuery::raw(
                 "SELECT i.*,u.nama FROM hl_izin i
                  JOIN hl_users u ON u.id=i.user_id AND u.tenant_id=i.tenant_id
-                 WHERE i.tenant_id=? AND i.user_id=? ORDER BY i.created_at DESC LIMIT 20",
-                [$tid, $user['id']]
+                 WHERE i.tenant_id=? AND i.outlet_id=? AND i.user_id=? ORDER BY i.created_at DESC LIMIT 20",
+                [$tid, $oid, $user['id']]
             );
         }
         echo json_encode($rows); exit;

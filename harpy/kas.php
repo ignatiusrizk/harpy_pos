@@ -80,22 +80,22 @@ if ($action) {
         $kasData  = TenantQuery::raw(
             "SELECT COALESCE(SUM(CASE WHEN tipe='masuk' THEN jumlah END),0) as kas_masuk,
                     COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah END),0) as kas_keluar
-             FROM hl_kas WHERE tenant_id=? AND tanggal=?",
-            [$tid, $tgl]
+             FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND tanggal=?",
+            [$tid, $oid, $tgl]
         );
         $orderData = TenantQuery::raw(
             "SELECT COUNT(*) as total_order,
                     COALESCE(SUM(total),0) as omset,
                     COALESCE(SUM(dp),0) as terkumpul
-             FROM hl_transaksi WHERE tenant_id=? AND DATE(tanggal)=?",
-            [$tid, $tgl]
+             FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?",
+            [$tid, $oid, $tgl]
         );
         echo json_encode(array_merge($kasData[0] ?? [], $orderData[0] ?? [])); exit;
     }
 
     // KATEGORI LIST
     if ($action === 'kategori') {
-        $rows = TenantQuery::raw("SELECT DISTINCT kategori FROM hl_kas WHERE tenant_id=? ORDER BY kategori", [$tid]);
+        $rows = TenantQuery::raw("SELECT DISTINCT kategori FROM hl_kas WHERE tenant_id=? AND outlet_id=? ORDER BY kategori", [$tid, $oid]);
         echo json_encode(array_column($rows, 'kategori')); exit;
     }
 

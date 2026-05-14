@@ -19,6 +19,7 @@ if (isset($_GET['logout'])) {
 $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
+    $oid = TenantResolver::outletId();
 
     // ── STATS HARIAN ─────────────────────────────────
     if ($action === 'stats') {
@@ -32,8 +33,8 @@ if ($action) {
                         SUM(CASE WHEN status_bayar != 'lunas' THEN 1 ELSE 0 END) as belum_lunas,
                         SUM(CASE WHEN status_proses = 'siap' THEN 1 ELSE 0 END) as siap_diambil
                  FROM hl_transaksi
-                 WHERE tenant_id = ? AND DATE(tanggal) = ? AND created_by = ?",
-                [$tid, $today, $user['id']]
+                 WHERE tenant_id = ? AND outlet_id = ? AND DATE(tanggal) = ? AND created_by = ?",
+                [$tid, $oid, $today, $user['id']]
             );
         } else {
             $orderData = TenantQuery::rawOne(
@@ -43,8 +44,8 @@ if ($action) {
                         SUM(CASE WHEN status_bayar != 'lunas' THEN 1 ELSE 0 END) as belum_lunas,
                         SUM(CASE WHEN status_proses = 'siap' THEN 1 ELSE 0 END) as siap_diambil
                  FROM hl_transaksi
-                 WHERE tenant_id = ? AND DATE(tanggal) = ?",
-                [$tid, $today]
+                 WHERE tenant_id = ? AND outlet_id = ? AND DATE(tanggal) = ?",
+                [$tid, $oid, $today]
             );
         }
 
@@ -53,8 +54,8 @@ if ($action) {
             $kasData = TenantQuery::rawOne(
                 "SELECT COALESCE(SUM(CASE WHEN tipe='masuk' THEN jumlah END),0) as masuk,
                         COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah END),0) as keluar
-                 FROM hl_kas WHERE tenant_id = ? AND tanggal = ?",
-                [$tid, $today]
+                 FROM hl_kas WHERE tenant_id = ? AND outlet_id = ? AND tanggal = ?",
+                [$tid, $oid, $today]
             ) ?: ['masuk' => 0, 'keluar' => 0];
         }
 
@@ -62,8 +63,8 @@ if ($action) {
 
         if ($isStaff) {
             $absensi = TenantQuery::rawOne(
-                "SELECT jam_masuk FROM hl_absensi WHERE tenant_id = ? AND user_id = ? AND tanggal = ?",
-                [$tid, $user['id'], $today]
+                "SELECT jam_masuk FROM hl_absensi WHERE tenant_id = ? AND outlet_id = ? AND user_id = ? AND tanggal = ?",
+                [$tid, $oid, $user['id'], $today]
             );
             $hadir = ($absensi && $absensi['jam_masuk']) ? 1 : 0;
         } else {
@@ -90,19 +91,19 @@ if ($action) {
             "SELECT no_order, nama_pelanggan, telepon, estimasi_selesai,
                     total, sisa_bayar, status_bayar, updated_at
              FROM hl_transaksi
-             WHERE tenant_id = ? AND status_proses = 'siap'
+             WHERE tenant_id = ? AND outlet_id = ? AND status_proses = 'siap'
              ORDER BY updated_at DESC LIMIT 20",
-            [$tid]
+            [$tid, $oid]
         );
 
         $mepet = TenantQuery::raw(
             "SELECT no_order, nama_pelanggan, telepon, estimasi_selesai,
                     total, sisa_bayar, status_bayar, status_proses
              FROM hl_transaksi
-             WHERE tenant_id = ? AND estimasi_selesai <= ?
+             WHERE tenant_id = ? AND outlet_id = ? AND estimasi_selesai <= ?
                AND status_proses NOT IN ('siap','diambil')
              ORDER BY estimasi_selesai ASC LIMIT 20",
-            [$tid, $tomorrow]
+            [$tid, $oid, $tomorrow]
         );
 
         $piutang = TenantQuery::raw(
@@ -110,14 +111,16 @@ if ($action) {
                     t.total, t.sisa_bayar, t.status_proses,
                     DATEDIFF(CURDATE(), t.tanggal) as hari_lalu
              FROM hl_transaksi t
-             LEFT JOIN hl_pelanggan p ON p.id = t.pelanggan_id AND p.tenant_id = t.tenant_id
-             WHERE t.tenant_id = ?
+             LEFT JOIN hl_pelanggan p ON p.id = t.pelanggan_id
+                                      AND p.tenant_id = t.tenant_id
+                                      AND p.outlet_id = t.outlet_id
+             WHERE t.tenant_id = ? AND t.outlet_id = ?
                AND t.status_bayar != 'lunas'
                AND t.tanggal <= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
                AND t.status_proses != 'diambil'
                AND (p.metode_bayar IS NULL OR p.metode_bayar = 'langsung')
              ORDER BY t.tanggal ASC LIMIT 20",
-            [$tid]
+            [$tid, $oid]
         );
 
         echo json_encode(['siap' => $siap, 'mepet' => $mepet, 'piutang' => $piutang]);
@@ -129,9 +132,9 @@ if ($action) {
         $rows = TenantQuery::raw(
             "SELECT status_proses, COUNT(*) as count
              FROM hl_transaksi
-             WHERE tenant_id = ? AND status_proses != 'diambil'
+             WHERE tenant_id = ? AND outlet_id = ? AND status_proses != 'diambil'
              GROUP BY status_proses",
-            [$tid]
+            [$tid, $oid]
         );
         $map = [];
         foreach ($rows as $r) $map[$r['status_proses']] = $r['count'];
@@ -146,9 +149,9 @@ if ($action) {
                     COALESCE(SUM(total),0) as omset,
                     COUNT(*) as order_count
              FROM hl_transaksi
-             WHERE tenant_id = ? AND tanggal >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+             WHERE tenant_id = ? AND outlet_id = ? AND tanggal >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
              GROUP BY DATE(tanggal) ORDER BY tgl",
-            [$tid]
+            [$tid, $oid]
         );
         echo json_encode($rows);
         exit;

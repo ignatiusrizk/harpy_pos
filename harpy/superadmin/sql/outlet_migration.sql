@@ -1,100 +1,289 @@
 -- ══════════════════════════════════════════════════════
--- outlet_migration.sql
--- Jalankan SEKALI di phpMyAdmin sebagai super admin.
--- Menambahkan lapisan Outlet antara Tenant dan data operasional.
+-- outlet_migration.sql — Harpy Multi-Tenant Migration
+-- Jalankan SEKALI di phpMyAdmin.
+-- Aman dijalankan ulang (IF NOT EXISTS / IF EXISTS).
 -- ══════════════════════════════════════════════════════
 
--- 1. Add coin_mode and total_outlets to tenants
-ALTER TABLE tenants
-  ADD COLUMN IF NOT EXISTS coin_mode ENUM('shared','per_outlet') DEFAULT 'shared' AFTER coin_balance,
-  ADD COLUMN IF NOT EXISTS total_outlets INT DEFAULT 0 AFTER coin_mode;
+SET FOREIGN_KEY_CHECKS = 0;
 
--- 2. Create outlets table
+-- ════════════════════════════════════════
+-- BAGIAN 1 — Master tables (super admin)
+-- ════════════════════════════════════════
+
+-- Super admin users (nama kolom: name bukan nama)
+CREATE TABLE IF NOT EXISTS super_admins (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  username   VARCHAR(50)  NOT NULL UNIQUE,
+  password   VARCHAR(255) NOT NULL,
+  name       VARCHAR(100) NOT NULL,
+  is_active  TINYINT(1)   DEFAULT 1,
+  last_login TIMESTAMP    NULL,
+  created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Superadmin action log
+CREATE TABLE IF NOT EXISTS superadmin_logs (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  superadmin_id    INT         NOT NULL,
+  action           VARCHAR(100),
+  target_tenant_id INT         NULL,
+  description      TEXT,
+  ip_address       VARCHAR(45),
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_date (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Support tickets per tenant
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     INT NOT NULL,
+  superadmin_id INT NOT NULL,
+  channel       ENUM('wa','email','call','system') DEFAULT 'wa',
+  subject       VARCHAR(200),
+  message       TEXT,
+  type          ENUM('onboarding','billing','support','churn_risk','info') DEFAULT 'support',
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id),
+  INDEX idx_date (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Catatan internal per tenant
+CREATE TABLE IF NOT EXISTS tenant_notes (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     INT NOT NULL,
+  superadmin_id INT NOT NULL,
+  note          TEXT NOT NULL,
+  is_pinned     TINYINT DEFAULT 0,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ════════════════════════════════════════
+-- BAGIAN 2 — tenants table
+-- ════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  slug           VARCHAR(50)  UNIQUE NOT NULL,
+  db_name        VARCHAR(100) NOT NULL DEFAULT 'u269895997_harpy_master',
+  nama_outlet    VARCHAR(100) NOT NULL,
+  owner_name     VARCHAR(100) DEFAULT NULL,
+  owner_wa       VARCHAR(20)  DEFAULT NULL,
+  status         ENUM('trial','active','suspended') DEFAULT 'trial',
+  coin_balance   INT          DEFAULT 50000,
+  coin_mode      ENUM('shared','per_outlet') DEFAULT 'shared',
+  total_outlets  INT          DEFAULT 0,
+  trial_ends_at  DATETIME     DEFAULT NULL,
+  provisioned_at DATETIME     DEFAULT NULL,
+  created_at     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_slug   (slug),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Tambah kolom baru ke tenants jika belum ada
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS coin_mode ENUM('shared','per_outlet') DEFAULT 'shared';
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS total_outlets INT DEFAULT 0;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS db_name VARCHAR(100) NOT NULL DEFAULT 'u269895997_harpy_master';
+
+-- ════════════════════════════════════════
+-- BAGIAN 3 — outlets table
+-- ════════════════════════════════════════
+
 CREATE TABLE IF NOT EXISTS outlets (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  nama_outlet VARCHAR(100) NOT NULL,
-  slug VARCHAR(80) UNIQUE NOT NULL,
-  alamat TEXT NULL,
-  kota VARCHAR(100) NULL,
-  telepon VARCHAR(20) NULL,
-  status ENUM('active','inactive','suspended') DEFAULT 'active',
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT NOT NULL,
+  nama_outlet  VARCHAR(100) NOT NULL,
+  slug         VARCHAR(80) UNIQUE NOT NULL,
+  alamat       TEXT NULL,
+  kota         VARCHAR(100) NULL,
+  telepon      VARCHAR(20) NULL,
+  status       ENUM('active','inactive','suspended') DEFAULT 'active',
   coin_balance INT DEFAULT 0,
-  is_main TINYINT DEFAULT 0,
-  setup_done TINYINT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_main      TINYINT DEFAULT 0,
+  setup_done   TINYINT DEFAULT 0,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_tenant (tenant_id),
   INDEX idx_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 3. Create outlet for existing Harpy Johar tenant (tenant_id=1)
+-- Harpy Johar → outlet pertama (tenant_id=1)
 INSERT IGNORE INTO outlets (id, tenant_id, nama_outlet, slug, status, coin_balance, is_main, setup_done)
-VALUES (1, 1, 'Harpy Laundry Johar', 'harpy_johar', 'active', 0, 1, 1);
+VALUES (1, 1, 'Harpy Laundry Johar', 'harpy_johar_outlet1', 'active', 0, 1, 1);
 
--- Update tenant total_outlets
-UPDATE tenants SET total_outlets = 1 WHERE id = 1;
+UPDATE tenants SET total_outlets = 1, coin_mode = 'shared' WHERE id = 1;
 
--- 4. Add outlet_id to operational tables
-ALTER TABLE hl_transaksi ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_transaksi ADD INDEX IF NOT EXISTS idx_outlet (outlet_id);
-ALTER TABLE hl_transaksi_item ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_pelanggan ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_karyawan ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_kas ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_absensi ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_layanan ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_gaji ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_izin ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_promo ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1 AFTER tenant_id;
-ALTER TABLE hl_audit_log ADD COLUMN IF NOT EXISTS outlet_id INT NULL AFTER tenant_id;
+-- ════════════════════════════════════════
+-- BAGIAN 4 — payments table
+-- ════════════════════════════════════════
 
--- Add outlet_id to coin_ledger
+CREATE TABLE IF NOT EXISTS payments (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id   INT NOT NULL,
+  outlet_id   INT NULL,
+  type        ENUM('setup_fee','coin_topup','subscription') NOT NULL,
+  amount      INT NOT NULL,
+  coin_amount INT DEFAULT 0,
+  gateway_ref VARCHAR(100) DEFAULT NULL,
+  notes       TEXT DEFAULT NULL,
+  status      ENUM('pending','success','failed') DEFAULT 'pending',
+  paid_at     DATETIME DEFAULT NULL,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id),
+  INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS outlet_id INT NULL AFTER tenant_id;
+
+-- ════════════════════════════════════════
+-- BAGIAN 5 — tambah tenant_id ke hl_* tables
+-- (untuk single-DB multi-tenant)
+-- ════════════════════════════════════════
+
+ALTER TABLE hl_users            ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_users            ADD COLUMN IF NOT EXISTS role_id   INT DEFAULT NULL;
+ALTER TABLE hl_roles            ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_permissions      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_role_permissions ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_pelanggan        ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_layanan          ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_transaksi        ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_transaksi_item   ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_kas              ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_absensi          ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_izin             ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_gaji             ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_promo            ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_voucher          ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_audit_log        ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+
+-- Index tenant_id
+ALTER TABLE hl_users       ADD INDEX IF NOT EXISTS idx_tenant (tenant_id);
+ALTER TABLE hl_transaksi   ADD INDEX IF NOT EXISTS idx_tenant (tenant_id);
+ALTER TABLE hl_pelanggan   ADD INDEX IF NOT EXISTS idx_tenant (tenant_id);
+
+-- ════════════════════════════════════════
+-- BAGIAN 6 — tambah outlet_id ke hl_* tables
+-- ════════════════════════════════════════
+
+ALTER TABLE hl_transaksi      ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_transaksi      ADD INDEX  IF NOT EXISTS idx_outlet (outlet_id);
+ALTER TABLE hl_transaksi_item ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_pelanggan      ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_karyawan       ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_kas            ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_absensi        ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_layanan        ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_gaji           ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_izin           ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_promo          ADD COLUMN IF NOT EXISTS outlet_id INT NOT NULL DEFAULT 1;
+ALTER TABLE hl_audit_log      ADD COLUMN IF NOT EXISTS outlet_id INT NULL;
+ALTER TABLE coin_ledger       ADD COLUMN IF NOT EXISTS outlet_id INT NULL;
+
+-- ════════════════════════════════════════
+-- BAGIAN 7 — login attempts & rate limits
+-- ════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS hl_login_attempts (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  identifier   VARCHAR(100) NOT NULL,
+  ip_address   VARCHAR(45)  NOT NULL,
+  attempted_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_identifier (identifier),
+  INDEX idx_ip         (ip_address),
+  INDEX idx_time       (attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ════════════════════════════════════════
+-- BAGIAN 8 — coin_ledger
+-- ════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS coin_ledger (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT NOT NULL,
+  outlet_id    INT NULL,
+  type         ENUM('topup','deduct') NOT NULL,
+  amount       INT NOT NULL,
+  feature_used VARCHAR(50) DEFAULT NULL,
+  description  TEXT DEFAULT NULL,
+  balance_after INT NOT NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_tenant  (tenant_id),
+  INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 ALTER TABLE coin_ledger ADD COLUMN IF NOT EXISTS outlet_id INT NULL AFTER tenant_id;
 
--- 5. Update existing data to outlet_id = 1
-UPDATE hl_transaksi SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_transaksi_item SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_pelanggan SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_karyawan SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_kas SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_absensi SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_layanan SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_gaji SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_izin SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
-UPDATE hl_promo SET outlet_id = 1 WHERE outlet_id = 0 OR outlet_id IS NULL;
+-- ════════════════════════════════════════
+-- BAGIAN 9 — registration & onboarding
+-- ════════════════════════════════════════
 
--- 6. New tables
 CREATE TABLE IF NOT EXISTS registration_requests (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  source ENUM('self_service','assisted') DEFAULT 'assisted',
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  source          ENUM('self_service','assisted') DEFAULT 'assisted',
   nama_perusahaan VARCHAR(100) NULL,
-  nama_outlet VARCHAR(100) NOT NULL,
-  owner_name VARCHAR(100) NOT NULL,
-  owner_wa VARCHAR(20) NOT NULL,
-  kota VARCHAR(100) NULL,
-  status ENUM('pending','payment_pending','provisioning','completed','failed','cancelled') DEFAULT 'pending',
-  payment_id INT NULL,
-  payment_status ENUM('pending','paid','failed') DEFAULT 'pending',
-  setup_fee INT DEFAULT 300000,
-  coin_awal INT DEFAULT 50000,
-  trial_days INT DEFAULT 30,
-  coin_mode ENUM('shared','per_outlet') DEFAULT 'shared',
-  tenant_id INT NULL,
-  outlet_id INT NULL,
-  handled_by INT NULL,
-  notes TEXT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  nama_outlet     VARCHAR(100) NOT NULL,
+  owner_name      VARCHAR(100) NOT NULL,
+  owner_wa        VARCHAR(20)  NOT NULL,
+  kota            VARCHAR(100) NULL,
+  status          ENUM('pending','payment_pending','provisioning','completed','failed','cancelled') DEFAULT 'pending',
+  payment_id      INT NULL,
+  payment_status  ENUM('pending','paid','failed') DEFAULT 'pending',
+  setup_fee       INT DEFAULT 300000,
+  coin_awal       INT DEFAULT 50000,
+  trial_days      INT DEFAULT 30,
+  coin_mode       ENUM('shared','per_outlet') DEFAULT 'shared',
+  tenant_id       INT NULL,
+  outlet_id       INT NULL,
+  handled_by      INT NULL,
+  notes           TEXT NULL,
+  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_status (status),
-  INDEX idx_wa (owner_wa)
+  INDEX idx_wa     (owner_wa)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS onboarding_progress (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id INT NOT NULL,
-  outlet_id INT NOT NULL,
-  step VARCHAR(50) NOT NULL,
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT NOT NULL,
+  outlet_id    INT NOT NULL,
+  step         VARCHAR(50) NOT NULL,
   completed_at DATETIME NULL,
   UNIQUE KEY uk_outlet_step (outlet_id, step),
   INDEX idx_outlet (outlet_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ════════════════════════════════════════
+-- BAGIAN 10 — backfill data existing
+-- Set tenant_id=1, outlet_id=1 untuk semua data lama
+-- ════════════════════════════════════════
+
+UPDATE hl_users            SET tenant_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_roles            SET tenant_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_permissions      SET tenant_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_role_permissions SET tenant_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_pelanggan        SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_layanan          SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_transaksi        SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_transaksi_item   SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_kas              SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_absensi          SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_izin             SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_gaji             SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_promo            SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+UPDATE hl_audit_log        SET tenant_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+
+-- Backfill hl_karyawan jika ada
+UPDATE hl_karyawan SET tenant_id = 1, outlet_id = 1 WHERE tenant_id = 0 OR tenant_id IS NULL;
+
+-- Pastikan Harpy Johar tenant_id=1 di hl_users sudah benar
+-- (update semua user yang ada ke tenant 1 jika tenant_id masih 0)
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ════════════════════════════════════════
+-- SELESAI
+-- Selanjutnya:
+-- 1. Cek super_admins → pastikan ada minimal 1 user aktif
+-- 2. Test login di /ERP/harpy/login.php
+-- 3. Test super admin di /ERP/harpy/superadmin/login.php
+-- ════════════════════════════════════════
