@@ -243,7 +243,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
             } catch (Throwable $e) {
                 $db->rollBack();
                 error_log('[register.php] Error: ' . $e->getMessage());
-                $error = 'Terjadi kesalahan teknis. Silakan coba lagi atau hubungi support.';
+                // TODO: ganti ke pesan generic sebelum production
+                $error = '[DEBUG] ' . $e->getMessage();
             }
         }
     }
