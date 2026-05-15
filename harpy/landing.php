@@ -379,6 +379,177 @@ img { max-width: 100%; }
 }
 
 /* ══════════════════════════════════════════════════════
+   AI Hero Section
+══════════════════════════════════════════════════════ */
+.ai-section {
+  position: relative; z-index: 1;
+  padding: 0 24px 80px;
+}
+.ai-inner {
+  max-width: 1100px; margin: 0 auto;
+}
+.ai-badge-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin-bottom: 20px;
+}
+.ai-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(139,92,246,.18), rgba(99,102,241,.12));
+  border: 1px solid rgba(139,92,246,.35);
+  border-radius: 100px;
+  padding: 5px 14px; font-size: 11px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: #C4B5FD;
+  font-family: var(--mono);
+}
+.ai-badge .pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #8B5CF6;
+  box-shadow: 0 0 6px rgba(139,92,246,.8);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .5; transform: scale(.75); }
+}
+.ai-hero-card {
+  background: linear-gradient(135deg,
+    rgba(139,92,246,.1) 0%,
+    rgba(99,102,241,.08) 40%,
+    rgba(27,45,90,.3) 100%);
+  border: 1.5px solid rgba(139,92,246,.25);
+  border-radius: 24px;
+  padding: 56px 48px;
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 48px; align-items: center;
+}
+.ai-hero-card::before {
+  content: '';
+  position: absolute; top: -80px; right: -80px;
+  width: 360px; height: 360px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(139,92,246,.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ai-hero-card::after {
+  content: '';
+  position: absolute; bottom: -60px; left: -60px;
+  width: 260px; height: 260px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ai-hero-text { position: relative; z-index: 1; }
+.ai-hero-text h2 {
+  font-size: clamp(24px, 3.5vw, 38px);
+  font-weight: 800; letter-spacing: -.02em;
+  line-height: 1.2; margin-bottom: 16px;
+}
+.ai-hero-text h2 em {
+  font-style: normal;
+  background: linear-gradient(135deg, #C4B5FD, #8B5CF6);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.ai-hero-text p {
+  font-size: 15px; color: rgba(255,255,255,.55);
+  line-height: 1.7; margin-bottom: 28px;
+}
+.ai-features-list {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.ai-feat-item {
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.ai-feat-icon {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  background: rgba(139,92,246,.15);
+  border: 1px solid rgba(139,92,246,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.ai-feat-text strong { font-size: 13.5px; font-weight: 700; display: block; margin-bottom: 2px; }
+.ai-feat-text span   { font-size: 12px; color: rgba(255,255,255,.4); line-height: 1.4; }
+
+/* AI mockup chat */
+.ai-mockup {
+  position: relative; z-index: 1;
+  background: rgba(15,28,58,.7);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+}
+.ai-mockup-header {
+  padding: 12px 16px;
+  background: rgba(139,92,246,.12);
+  border-bottom: 1px solid rgba(139,92,246,.2);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; color: #C4B5FD;
+}
+.ai-mockup-header .ai-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #8B5CF6;
+  box-shadow: 0 0 8px rgba(139,92,246,.8);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.ai-chat-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ai-msg {
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.ai-msg.user { flex-direction: row-reverse; }
+.ai-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(139,92,246,.2);
+  border: 1px solid rgba(139,92,246,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+}
+.ai-msg.user .ai-avatar { background: rgba(53,232,213,.15); border-color: rgba(53,232,213,.3); }
+.ai-bubble {
+  max-width: 82%;
+  padding: 9px 13px; border-radius: 12px;
+  font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.85);
+  background: rgba(139,92,246,.12);
+  border: 1px solid rgba(139,92,246,.18);
+}
+.ai-msg.user .ai-bubble {
+  background: rgba(53,232,213,.08);
+  border-color: rgba(53,232,213,.2);
+}
+.ai-bubble strong { color: #C4B5FD; }
+.ai-bubble .teal  { color: var(--teal); font-weight: 600; }
+.ai-typing {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 13px; border-radius: 12px;
+  background: rgba(139,92,246,.08);
+  border: 1px solid rgba(139,92,246,.15);
+  width: fit-content;
+}
+.typing-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(139,92,246,.6);
+  animation: typingBounce .8s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: .15s; }
+.typing-dot:nth-child(3) { animation-delay: .30s; }
+@keyframes typingBounce {
+  0%,100% { transform: translateY(0); opacity: .4; }
+  50%      { transform: translateY(-4px); opacity: 1; }
+}
+.ai-stats-row {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 8px; padding: 0 16px 16px;
+}
+.ai-stat-chip {
+  background: rgba(139,92,246,.08);
+  border: 1px solid rgba(139,92,246,.15);
+  border-radius: 9px; padding: 9px 10px; text-align: center;
+}
+.ai-stat-chip .val { font-size: 15px; font-weight: 800; color: #C4B5FD; font-family: var(--mono); }
+.ai-stat-chip .lbl { font-size: 10px; color: rgba(255,255,255,.35); margin-top: 2px; }
+
+@media (max-width: 768px) {
+  .ai-hero-card { grid-template-columns: 1fr; gap: 32px; padding: 36px 24px; }
+}
+
+/* ══════════════════════════════════════════════════════
    Features Grid
 ══════════════════════════════════════════════════════ */
 .features-grid {
@@ -664,6 +835,7 @@ img { max-width: 100%; }
     LAMASY
   </a>
   <ul class="nav-links">
+    <li><a href="#ai" style="color:#C4B5FD;font-weight:700;">✦ AI</a></li>
     <li><a href="#fitur">Fitur</a></li>
     <li><a href="#cara-kerja">Cara Kerja</a></li>
     <li><a href="#harga">Harga</a></li>
@@ -699,8 +871,8 @@ img { max-width: 100%; }
     Platform Laundry #1 di Indonesia
   </div>
 
-  <h1>ERP Laundry Modern untuk <span class="accent">Bisnis yang Lebih Rapi</span></h1>
-  <p class="hero-sub">Kelola order, karyawan, keuangan, dan notifikasi WhatsApp dalam satu platform terintegrasi. Setup dalam hitungan menit.</p>
+  <h1>ERP Laundry Modern dengan <span class="accent">Kecerdasan AI</span> Terintegrasi</h1>
+  <p class="hero-sub">Kelola order, karyawan, dan keuangan — sekarang diperkuat AI yang menganalisis data bisnis Anda otomatis setiap hari. Setup dalam hitungan menit.</p>
 
   <div class="hero-btns">
     <a href="register.php" class="btn-primary">&#128640; Coba Gratis 30 Hari</a>
@@ -787,6 +959,107 @@ img { max-width: 100%; }
       <div class="stat-num">3 Jam</div>
       <div class="stat-label">Hemat per Hari</div>
     </div>
+    <div class="stat-item">
+      <div class="stat-num" style="color:#C4B5FD;">AI</div>
+      <div class="stat-label">Briefing Harian Otomatis</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI SECTION ─────────────────────────────────── -->
+<div class="ai-section" id="ai">
+  <div class="ai-inner">
+    <div class="ai-badge-row">
+      <div class="ai-badge"><span class="pulse"></span> Powered by AI</div>
+    </div>
+    <div class="ai-hero-card">
+      <!-- Left: text -->
+      <div class="ai-hero-text">
+        <h2>Bukan Sekadar Software —<br><em>LAMASY Punya Otak AI</em></h2>
+        <p>Teknologi kecerdasan buatan terintegrasi langsung di dalam sistem. LAMASY menganalisis data bisnis Anda secara otomatis dan memberikan insight yang actionable — setiap hari.</p>
+        <div class="ai-features-list">
+          <div class="ai-feat-item">
+            <div class="ai-feat-icon">📋</div>
+            <div class="ai-feat-text">
+              <strong>Briefing Harian Otomatis</strong>
+              <span>Setiap pagi, AI merangkum performa outlet Anda — pendapatan, order pending, karyawan hadir, dan rekomendasi prioritas hari ini.</span>
+            </div>
+          </div>
+          <div class="ai-feat-item">
+            <div class="ai-feat-icon">📈</div>
+            <div class="ai-feat-text">
+              <strong>Analisis Tren & Prediksi</strong>
+              <span>AI mendeteksi pola pendapatan, jam puncak order, dan memperingatkan potensi penurunan sebelum terjadi.</span>
+            </div>
+          </div>
+          <div class="ai-feat-item">
+            <div class="ai-feat-icon">💡</div>
+            <div class="ai-feat-text">
+              <strong>Rekomendasi Bisnis Cerdas</strong>
+              <span>Saran konkret berbasis data: kapan waktu terbaik promosi, layanan mana yang paling profitable, dan lebih banyak lagi.</span>
+            </div>
+          </div>
+          <div class="ai-feat-item">
+            <div class="ai-feat-icon">🔔</div>
+            <div class="ai-feat-text">
+              <strong>Notifikasi WA dengan AI</strong>
+              <span>Pesan WhatsApp ke pelanggan dibuat otomatis oleh AI — personal, tepat waktu, dan natural. Bukan template kaku.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Right: AI chat mockup -->
+      <div>
+        <div class="ai-mockup">
+          <div class="ai-mockup-header">
+            <div class="ai-dot"></div>
+            LAMASY AI Assistant
+          </div>
+          <div class="ai-chat-body">
+            <div class="ai-msg user">
+              <div class="ai-avatar">👤</div>
+              <div class="ai-bubble">Gimana performa outlet hari ini?</div>
+            </div>
+            <div class="ai-msg">
+              <div class="ai-avatar">🤖</div>
+              <div class="ai-bubble">
+                Halo! Berikut ringkasan hari ini (Kamis, 15 Mei):<br><br>
+                <strong>📦 Order masuk:</strong> <span class="teal">47 order</span> (+12% vs kemarin)<br>
+                <strong>💰 Pendapatan:</strong> <span class="teal">Rp 2,4 Juta</span><br>
+                <strong>⚠️ Perhatian:</strong> 8 order sudah 2 hari belum diambil — perlu WA reminder.<br><br>
+                <strong>💡 Rekomendasi:</strong> Aktifkan promo "Cuci Kilat" di jam 14.00–17.00, biasanya sepi tapi demand ada.
+              </div>
+            </div>
+            <div class="ai-msg user">
+              <div class="ai-avatar">👤</div>
+              <div class="ai-bubble">Kirim WA reminder ke yang belum ambil dong</div>
+            </div>
+            <div class="ai-msg">
+              <div class="ai-avatar">🤖</div>
+              <div class="ai-typing">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+              </div>
+            </div>
+          </div>
+          <div class="ai-stats-row">
+            <div class="ai-stat-chip">
+              <div class="val">47</div>
+              <div class="lbl">Order Hari Ini</div>
+            </div>
+            <div class="ai-stat-chip">
+              <div class="val">2.4 Jt</div>
+              <div class="lbl">Pendapatan</div>
+            </div>
+            <div class="ai-stat-chip">
+              <div class="val">+12%</div>
+              <div class="lbl">vs Kemarin</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -826,7 +1099,7 @@ img { max-width: 100%; }
     <div class="feature-card">
       <span class="feature-icon">🔔</span>
       <h3>Notifikasi WhatsApp</h3>
-      <p>Sistem coin untuk kirim notifikasi WA otomatis ke pelanggan saat cucian siap. Hemat waktu, pelanggan lebih puas.</p>
+      <p>Kirim notifikasi WA otomatis ke pelanggan saat cucian siap. Teks dibuat AI — personal dan natural, bukan template kaku.</p>
     </div>
   </div>
 </section>
@@ -879,6 +1152,8 @@ img { max-width: 100%; }
         <li>50.000 coin notifikasi WA</li>
         <li>1 outlet, unlimited order</li>
         <li>Manajemen karyawan</li>
+        <li style="color:#C4B5FD;">✦ AI Briefing Harian</li>
+        <li style="color:#C4B5FD;">✦ AI Analisis Tren</li>
         <li>Support via WhatsApp</li>
       </ul>
       <a href="register.php" class="btn-pricing btn-pricing-outline">Mulai Trial Gratis</a>
@@ -894,10 +1169,11 @@ img { max-width: 100%; }
         <li>Semua fitur trial +</li>
         <li>Multi outlet support</li>
         <li>100.000 coin topup awal</li>
+        <li style="color:#C4B5FD;">✦ AI Briefing & Analisis Tren</li>
+        <li style="color:#C4B5FD;">✦ AI Rekomendasi Bisnis</li>
+        <li style="color:#C4B5FD;">✦ WA Notifikasi berbasis AI</li>
         <li>Priority support 24/7</li>
-        <li>Custom branding outlet</li>
         <li>Training & onboarding</li>
-        <li>Akses fitur terbaru lebih awal</li>
       </ul>
       <a href="register.php" class="btn-pricing btn-pricing-primary">Daftar Sekarang</a>
     </div>
@@ -943,6 +1219,17 @@ img { max-width: 100%; }
           <div>
             <div class="testi-name">Budi Prasetiyo</div>
             <div class="testi-role">Direktur Bersinar Laundry Group, Jakarta</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card" style="border-color:rgba(139,92,246,.25);background:rgba(139,92,246,.05);">
+        <div class="testi-stars" style="color:#C4B5FD;">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <div class="testi-text">"Fitur AI Briefing-nya yang paling bikin saya takjub. Setiap pagi ada ringkasan otomatis — berapa order kemarin, mana yang belum dibayar, karyawan siapa yang sering telat. Saya jadi lebih cepat ambil keputusan tanpa harus buka banyak laporan."</div>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:rgba(139,92,246,.2);border-color:rgba(139,92,246,.3);">&#x1F464;</div>
+          <div>
+            <div class="testi-name">Dewi Kusuma</div>
+            <div class="testi-role" style="color:#C4B5FD;">Owner Kilat Bersih Laundry, Bandung — <em>pengguna fitur AI</em></div>
           </div>
         </div>
       </div>
