@@ -18,6 +18,55 @@ if (isset($_GET['logout'])) {
 // ── Early: tangani AJAX saat belum ada outlet ─────────
 $hasOutlet = TenantResolver::hasOutlet();
 
+// ── POST handlers (no-outlet state) — HARUS sebelum output HTML ──
+$pwError = '';
+
+if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
+    $ownerWa  = preg_replace('/\D/', '', $_POST['owner_wa'] ?? '');
+    if (substr($ownerWa, 0, 2) === '08') $ownerWa = '628' . substr($ownerWa, 2);
+    if (substr($ownerWa, 0, 1) === '8')  $ownerWa = '62' . $ownerWa;
+    $namaOutlet = trim(strip_tags($_POST['nama_outlet'] ?? ''));
+    $kota       = trim(strip_tags($_POST['kota'] ?? ''));
+
+    try {
+        $db = Database::get();
+        $db->prepare("UPDATE tenants SET nama_outlet=?, owner_wa=?, kota=? WHERE id=?")
+           ->execute([$namaOutlet ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
+        TenantResolver::reset();
+        header('Location: dashboard.php?profile_saved=1');
+        exit;
+    } catch (Throwable $e) {
+        error_log('[dashboard save_profile] ' . $e->getMessage());
+        header('Location: dashboard.php?profile_error=' . urlencode($e->getMessage()));
+        exit;
+    }
+}
+
+if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $db        = Database::get();
+    $currentPw = $_POST['current_password'] ?? '';
+    $newPw     = $_POST['new_password']     ?? '';
+    $confPw    = $_POST['confirm_password'] ?? '';
+
+    $row = $db->prepare("SELECT password FROM hl_users WHERE id=?");
+    $row->execute([$user['id']]);
+    $stored = $row->fetchColumn();
+
+    if (!password_verify($currentPw, $stored)) {
+        $pwError = 'Password lama tidak sesuai.';
+    } elseif (strlen($newPw) < 8) {
+        $pwError = 'Password baru minimal 8 karakter.';
+    } elseif ($newPw !== $confPw) {
+        $pwError = 'Konfirmasi password tidak cocok.';
+    } else {
+        $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 11]);
+        $db->prepare("UPDATE hl_users SET password=? WHERE id=?")->execute([$hash, $user['id']]);
+        $db->prepare("UPDATE tenants SET password_hash=? WHERE id=?")->execute([$hash, $tid]);
+        header('Location: dashboard.php?pw_changed=1');
+        exit;
+    }
+}
+
 // ── AJAX ACTIONS ──────────────────────────────────────
 $action = $_GET['action'] ?? '';
 if ($action) {
@@ -246,57 +295,6 @@ if ($action) {
 </style>
 </head>
 <body>
-<?php
-// ── Profile save handler (no-outlet state) ────────────
-if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
-    $ownerWa  = preg_replace('/\D/', '', $_POST['owner_wa'] ?? '');
-    if (substr($ownerWa, 0, 2) === '08') $ownerWa = '628' . substr($ownerWa, 2);
-    if (substr($ownerWa, 0, 1) === '8')  $ownerWa = '62' . $ownerWa;
-    $namaOutlet = trim(strip_tags($_POST['nama_outlet'] ?? ''));
-    $kota       = trim(strip_tags($_POST['kota'] ?? ''));
-
-    try {
-        $db = Database::get();
-        $db->prepare("UPDATE tenants SET nama_outlet=?, owner_wa=?, kota=? WHERE id=?")
-           ->execute([$namaOutlet ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
-
-        TenantResolver::reset();
-        header('Location: dashboard.php?profile_saved=1');
-        exit;
-    } catch (Throwable $e) {
-        error_log('[dashboard save_profile] ' . $e->getMessage());
-        header('Location: dashboard.php?profile_error=' . urlencode($e->getMessage()));
-        exit;
-    }
-}
-
-// ── Password change handler ────────────────────────────
-if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
-    $db        = Database::get();
-    $currentPw = $_POST['current_password'] ?? '';
-    $newPw     = $_POST['new_password']     ?? '';
-    $confPw    = $_POST['confirm_password'] ?? '';
-    $pwError   = $pwSuccess = '';
-
-    $row = $db->prepare("SELECT password FROM hl_users WHERE id=?");
-    $row->execute([$user['id']]);
-    $stored = $row->fetchColumn();
-
-    if (!password_verify($currentPw, $stored)) {
-        $pwError = 'Password lama tidak sesuai.';
-    } elseif (strlen($newPw) < 8) {
-        $pwError = 'Password baru minimal 8 karakter.';
-    } elseif ($newPw !== $confPw) {
-        $pwError = 'Konfirmasi password tidak cocok.';
-    } else {
-        $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 11]);
-        $db->prepare("UPDATE hl_users SET password=? WHERE id=?")->execute([$hash, $user['id']]);
-        $db->prepare("UPDATE tenants SET password_hash=? WHERE id=?")->execute([$hash, $tid]);
-        header('Location: dashboard.php?pw_changed=1');
-        exit;
-    }
-}
-?>
 <?php renderTopbar('dashboard', !$hasOutlet); ?>
 
 <?php if (!$hasOutlet):
