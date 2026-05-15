@@ -129,12 +129,13 @@ class EmailVerification
             UPDATE email_verifications SET used_at = NOW() WHERE id = ?
         ")->execute([$row['id']]);
 
-        // Update tenant: tandai verified
+        // Update tenant: tandai verified (status → active, bukan trial)
+        // Trial adalah konsep outlet, bukan tenant
         $db->prepare("
             UPDATE tenants
             SET verified_at = NOW(),
                 status = CASE
-                    WHEN status = 'pending_verification' THEN 'trial'
+                    WHEN status = 'pending_verification' THEN 'active'
                     ELSE status
                 END
             WHERE id = ? AND email = ?
