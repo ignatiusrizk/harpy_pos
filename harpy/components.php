@@ -26,43 +26,43 @@ function renderTopbar(string $activePage = ''): void {
         'dashboard' => [
             'label' => 'Dashboard',
             'items' => [
-                'dashboard' => ['label'=>'Dashboard', 'url'=>'dashboard.php', 'roles'=>['superadmin','admin','staff']],
+                'dashboard' => ['label'=>'Dashboard', 'url'=>'dashboard.php', 'roles'=>['owner','superadmin','admin','staff']],
             ],
         ],
         'operasional' => [
             'label' => 'Operasional',
             'items' => [
-                'pos'    => ['label'=>'POS',   'url'=>'pos.php',    'roles'=>['superadmin','admin','staff']],
-                'orders' => ['label'=>'Order', 'url'=>'orders.php', 'roles'=>['superadmin','admin','staff']],
-                'kas'    => ['label'=>'Kas',   'url'=>'kas.php',    'roles'=>['superadmin','admin']],
+                'pos'    => ['label'=>'POS',   'url'=>'pos.php',    'roles'=>['owner','superadmin','admin','staff']],
+                'orders' => ['label'=>'Order', 'url'=>'orders.php', 'roles'=>['owner','superadmin','admin','staff']],
+                'kas'    => ['label'=>'Kas',   'url'=>'kas.php',    'roles'=>['owner','superadmin','admin']],
             ],
         ],
         'keuangan' => [
             'label' => 'Keuangan',
             'items' => [
-                'laporan' => ['label'=>'Laporan', 'url'=>'laporan.php', 'roles'=>['superadmin','admin']],
+                'laporan' => ['label'=>'Laporan', 'url'=>'laporan.php', 'roles'=>['owner','superadmin','admin']],
             ],
         ],
         'master' => [
             'label' => 'Master',
             'items' => [
-                'layanan'  => ['label'=>'Layanan',  'url'=>'layanan.php',  'roles'=>['superadmin','admin']],
-                'promo'    => ['label'=>'Promo',    'url'=>'promo.php',    'roles'=>['superadmin','admin']],
-                'customer' => ['label'=>'Customer', 'url'=>'customer.php', 'roles'=>['superadmin','admin','staff']],
+                'layanan'  => ['label'=>'Layanan',  'url'=>'layanan.php',  'roles'=>['owner','superadmin','admin']],
+                'promo'    => ['label'=>'Promo',    'url'=>'promo.php',    'roles'=>['owner','superadmin','admin']],
+                'customer' => ['label'=>'Customer', 'url'=>'customer.php', 'roles'=>['owner','superadmin','admin','staff']],
             ],
         ],
         'hr' => [
             'label' => 'HR',
             'items' => [
-                'karyawan' => ['label'=>'Karyawan', 'url'=>'karyawan.php', 'roles'=>['superadmin','admin']],
-                'absensi'  => ['label'=>'Absensi',  'url'=>'absensi.php',  'roles'=>['superadmin','admin','staff']],
+                'karyawan' => ['label'=>'Karyawan', 'url'=>'karyawan.php', 'roles'=>['owner','superadmin','admin']],
+                'absensi'  => ['label'=>'Absensi',  'url'=>'absensi.php',  'roles'=>['owner','superadmin','admin','staff']],
             ],
         ],
         'settings' => [
             'label' => 'Settings',
             'items' => [
                 'settings' => ['label'=>'Role & Permission', 'url'=>'settings.php', 'roles'=>['superadmin']],
-                'audit'    => ['label'=>'Audit Log',         'url'=>'audit.php',    'roles'=>['superadmin','admin']],
+                'audit'    => ['label'=>'Audit Log',         'url'=>'audit.php',    'roles'=>['owner','superadmin','admin']],
             ],
         ],
     ];
