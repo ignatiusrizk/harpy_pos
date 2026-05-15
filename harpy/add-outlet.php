@@ -1,9 +1,4 @@
 <?php
-// TODO: hapus error display sebelum production
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
 // ══════════════════════════════════════════════════════
 // add-outlet.php — Wizard tambah outlet
 // Outlet 1: trial 7 hari gratis, 1000 coin
@@ -273,7 +268,12 @@ require_once __DIR__ . '/components.php';
 </style>
 </head>
 <body>
-<?php renderTopbar('add-outlet'); ?>
+<?php
+// Halaman ini selalu dalam konteks no-outlet (atau menambah outlet baru).
+// Sembunyikan nav jika tenant belum punya outlet aktif.
+$hasOutlet = TenantResolver::hasOutlet();
+renderTopbar('add-outlet', !$hasOutlet);
+?>
 <div class="ao-wrap">
 
   <?php if ($success): ?>
