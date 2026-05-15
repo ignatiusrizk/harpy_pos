@@ -17,13 +17,15 @@ define('ROOT', __DIR__);
 require_once ROOT . '/master/config/db.php';
 require_once ROOT . '/core/Mailer.php';
 
-$toEmail = $_GET['to'] ?? '';
-$result  = null;
+$toEmail   = $_GET['to'] ?? '';
+$result    = null;
+$smtpError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $toEmail = trim($_POST['to'] ?? '');
     if (filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
-        $result = Mailer::sendTest($toEmail);
+        $result    = Mailer::sendTest($toEmail);
+        $smtpError = Mailer::getLastError();
     }
 }
 
@@ -41,7 +43,7 @@ $smtpPass = defined('SMTP_PASS') ? (SMTP_PASS ? '●●●●●●' : '(kosong!
 <style>
   body { font-family: 'Segoe UI', sans-serif; background: #0F1C3A; color: #fff;
          display: flex; flex-direction: column; align-items: center; padding: 40px 16px; }
-  .card { background: #1a2d52; border-radius: 12px; padding: 32px; max-width: 520px; width: 100%; }
+  .card { background: #1a2d52; border-radius: 12px; padding: 32px; max-width: 560px; width: 100%; }
   h1 { color: #35E8D5; font-size: 1.3rem; margin: 0 0 20px; }
   table { width: 100%; font-size: 13px; margin-bottom: 24px; }
   td { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
@@ -56,6 +58,11 @@ $smtpPass = defined('SMTP_PASS') ? (SMTP_PASS ? '●●●●●●' : '(kosong!
   .result { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
   .result.ok  { background: rgba(52,211,153,.1); color: #34d399; border: 1px solid rgba(52,211,153,.2); }
   .result.err { background: rgba(239,68,68,.1);  color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+  .error-detail { background: rgba(0,0,0,.3); border: 1px solid rgba(248,113,113,.3);
+    border-radius: 6px; padding: 10px 14px; margin-top: 8px; font-family: monospace;
+    font-size: 12px; color: #fca5a5; word-break: break-all; line-height: 1.6; }
+  .error-detail .label { color: rgba(255,255,255,.4); font-size: 11px; display: block;
+    margin-bottom: 4px; font-family: 'Segoe UI', sans-serif; }
   .warn-box { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.2);
     padding: 12px; border-radius: 8px; font-size: 12px; color: #fbbf24; margin-top: 20px; }
 </style>
@@ -82,7 +89,15 @@ $smtpPass = defined('SMTP_PASS') ? (SMTP_PASS ? '●●●●●●' : '(kosong!
   <?php if ($result === true): ?>
     <div class="result ok">✅ Email berhasil dikirim ke <strong><?= htmlspecialchars($toEmail) ?></strong>! Cek inbox (dan folder spam).</div>
   <?php elseif ($result === false): ?>
-    <div class="result err">❌ Email gagal dikirim. Cek error_log di Hostinger untuk detail.</div>
+    <div class="result err">
+      ❌ Email gagal dikirim.
+      <?php if ($smtpError): ?>
+        <div class="error-detail">
+          <span class="label">Detail error:</span>
+          <?= htmlspecialchars($smtpError) ?>
+        </div>
+      <?php endif; ?>
+    </div>
   <?php endif; ?>
 
   <form method="POST">

@@ -27,6 +27,19 @@ class Mailer
     const BRAND_COLOR        = '#35E8D5';
     const BRAND_DARK         = '#0F1C3A';
 
+    /** Pesan error terakhir dari sendSmtp() — untuk debugging */
+    private static string $lastError = '';
+
+    /** Ambil pesan error terakhir setelah send() mengembalikan false */
+    public static function getLastError(): string { return self::$lastError; }
+
+    private static function setError(string $msg): false
+    {
+        self::$lastError = $msg;
+        error_log("[Mailer] $msg");
+        return false;
+    }
+
     private static function fromEmail(): string { return defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : self::DEFAULT_FROM_EMAIL; }
     private static function fromName():  string { return defined('SMTP_FROM_NAME')  ? SMTP_FROM_NAME  : self::DEFAULT_FROM_NAME; }
     private static function appUrl():    string { return defined('APP_URL')          ? APP_URL          : self::DEFAULT_APP_URL; }
@@ -78,19 +91,18 @@ class Mailer
         $user       = defined('SMTP_USER')       ? SMTP_USER       : '';
         $pass       = defined('SMTP_PASS')       ? SMTP_PASS       : '';
 
+        self::$lastError = '';
+
         if (empty($user) || empty($pass)) {
-            error_log("[Mailer] SMTP credentials belum diset di config.");
-            // Fallback ke PHP mail()
-            return self::sendNativeMail($toEmail, $toName, $subject, $htmlBody, $textBody);
+            return self::setError("SMTP credentials belum diset (SMTP_USER / SMTP_PASS kosong di config).");
         }
 
         $socketHost = ($encryption === 'ssl') ? "ssl://$host" : $host;
-        $errno = $errstr = null;
+        $errno = 0; $errstr = '';
 
         $socket = @fsockopen($socketHost, $port, $errno, $errstr, 10);
         if (!$socket) {
-            error_log("[Mailer] SMTP connect gagal ($errno): $errstr — fallback ke mail()");
-            return self::sendNativeMail($toEmail, $toName, $subject, $htmlBody, $textBody);
+            return self::setError("Gagal konek ke $socketHost:$port — ($errno) $errstr");
         }
 
         try {
@@ -120,16 +132,14 @@ class Mailer
             // ── 1. Baca banner server (jangan kirim apa-apa dulu) ──
             $banner = $read();
             if (strpos($banner, '220') === false) {
-                error_log("[Mailer] SMTP banner tidak valid: $banner");
                 fclose($socket);
-                return self::sendNativeMail($toEmail, $toName, $subject, $htmlBody, $textBody);
+                return self::setError("Banner SMTP tidak valid (bukan 220): " . trim($banner));
             }
 
             // ── 2. EHLO ───────────────────────────────────
             $ehlo = $cmd("EHLO " . gethostname());
             if (strpos($ehlo, '250') === false) {
-                // Coba HELO sebagai fallback
-                $ehlo = $cmd("HELO " . gethostname());
+                $ehlo = $cmd("HELO " . gethostname()); // fallback
             }
 
             // ── 3. STARTTLS jika diperlukan ───────────────
@@ -142,37 +152,37 @@ class Mailer
             // ── 4. AUTH LOGIN ─────────────────────────────
             $authChallenge = $cmd("AUTH LOGIN");
             if (strpos($authChallenge, '334') === false) {
-                error_log("[Mailer] SMTP AUTH LOGIN tidak didukung: $authChallenge");
                 fclose($socket);
-                return false;
+                return self::setError("AUTH LOGIN tidak didukung server: " . trim($authChallenge));
             }
-            $cmd(base64_encode($user));          // kirim username
+            $cmd(base64_encode($user));             // kirim username
             $authResp = $cmd(base64_encode($pass)); // kirim password
 
             if (strpos($authResp, '235') === false) {
-                error_log("[Mailer] SMTP auth gagal: " . trim($authResp));
                 fclose($socket);
-                return false;
+                return self::setError("Autentikasi SMTP gagal (user/pass salah?): " . trim($authResp));
             }
 
             // ── 5. MAIL FROM ──────────────────────────────
             $fromResp = $cmd("MAIL FROM:<$fromEmail>");
             if (strpos($fromResp, '250') === false) {
-                error_log("[Mailer] SMTP MAIL FROM gagal: $fromResp");
                 fclose($socket);
-                return false;
+                return self::setError("MAIL FROM ditolak server: " . trim($fromResp));
             }
 
             // ── 6. RCPT TO ────────────────────────────────
             $rcptResp = $cmd("RCPT TO:<$toEmail>");
             if (strpos($rcptResp, '250') === false && strpos($rcptResp, '251') === false) {
-                error_log("[Mailer] SMTP RCPT TO gagal: $rcptResp");
                 fclose($socket);
-                return false;
+                return self::setError("RCPT TO ditolak server: " . trim($rcptResp));
             }
 
             // ── 7. DATA ───────────────────────────────────
-            $cmd("DATA"); // server balas 354
+            $dataStart = $cmd("DATA"); // server balas 354
+            if (strpos($dataStart, '354') === false) {
+                fclose($socket);
+                return self::setError("DATA tidak diterima server: " . trim($dataStart));
+            }
 
             // Build MIME body
             $mime  = "MIME-Version: 1.0\r\n";
@@ -200,18 +210,18 @@ class Mailer
             $headers .= "X-Mailer: LAMASY/1.0\r\n";
 
             fwrite($socket, $headers . $mime . "\r\n.\r\n");
-            $dataResp = fgets($socket, 512);
-            $send("QUIT");
+            $dataResp = $read(); // baca konfirmasi 250 setelah "."
+            $cmd("QUIT");
             fclose($socket);
 
-            $ok = strpos($dataResp, '250') !== false;
-            if (!$ok) error_log("[Mailer] SMTP DATA resp: $dataResp");
-            return $ok;
+            if (strpos($dataResp, '250') === false) {
+                return self::setError("Email ditolak server setelah DATA: " . trim($dataResp));
+            }
+            return true;
 
         } catch (Throwable $e) {
-            error_log("[Mailer] SMTP exception: " . $e->getMessage());
             if (is_resource($socket)) fclose($socket);
-            return false;
+            return self::setError("Exception: " . $e->getMessage());
         }
     }
 
