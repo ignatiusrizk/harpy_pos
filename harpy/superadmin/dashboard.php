@@ -22,10 +22,11 @@ if ($action) {
         $month = date('n');
         $year  = date('Y');
 
+        // Trial dihitung dari OUTLET, bukan tenant
         $totals = $db->query(
             "SELECT COUNT(*) as total,
                SUM(status='active') as aktif,
-               SUM(status='trial') as trial,
+               (SELECT COUNT(DISTINCT tenant_id) FROM outlets WHERE status='trial') as trial,
                SUM(status='suspended') as suspended
              FROM tenants"
         )->fetch();
@@ -48,14 +49,15 @@ if ($action) {
             "SELECT COUNT(*) FROM tenants WHERE provisioned_at >= NOW() - INTERVAL 30 DAY"
         )->fetchColumn();
 
-        // churnRisk — hl_users mungkin belum punya tenant_id
+        // churnRisk: tenant active + outlet trial mau habis ATAU coin tipis
         try {
             $churnRisk = (int)$db->query(
                 "SELECT COUNT(DISTINCT t.id) FROM tenants t
-                 WHERE t.status IN ('active','trial')
+                 LEFT JOIN outlets o ON o.tenant_id = t.id
+                 WHERE t.status = 'active'
                  AND (
                    t.coin_balance < 5000
-                   OR (t.status='trial' AND t.trial_ends_at < DATE_ADD(NOW(), INTERVAL 3 DAY))
+                   OR (o.status = 'trial' AND o.trial_ends_at < DATE_ADD(NOW(), INTERVAL 3 DAY))
                  )"
             )->fetchColumn();
         } catch (Throwable) {
@@ -87,12 +89,16 @@ if ($action) {
              ORDER BY coin_balance ASC LIMIT 10"
         )->fetchAll();
 
+        // Trial alert: outlet (bukan tenant) yang trial-nya hampir habis
         $trialAlert = $db->query(
-            "SELECT id, nama_outlet, owner_name, owner_wa, trial_ends_at,
-                    DATEDIFF(trial_ends_at, NOW()) as days_left
-             FROM tenants
-             WHERE status='trial' AND trial_ends_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)
-             ORDER BY trial_ends_at ASC LIMIT 10"
+            "SELECT t.id, t.nama_outlet, t.owner_name, t.owner_wa,
+                    o.trial_ends_at,
+                    DATEDIFF(o.trial_ends_at, NOW()) as days_left
+             FROM tenants t
+             JOIN outlets o ON o.tenant_id = t.id
+             WHERE o.status='trial'
+               AND o.trial_ends_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)
+             ORDER BY o.trial_ends_at ASC LIMIT 10"
         )->fetchAll();
 
         // JOIN hl_users — aman walau tenant_id belum ada (LEFT JOIN)

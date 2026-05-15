@@ -16,15 +16,20 @@ if ($action) {
     $db = Database::get();
 
     if ($action === 'list') {
+        // Trial diambil dari outlet (MIN trial_ends_at = outlet trial pertama yang habis)
         $tenants = $db->query(
             "SELECT t.id, t.nama_outlet, t.owner_name, t.owner_wa, t.status,
-                    t.coin_balance, t.trial_ends_at, t.provisioned_at,
+                    t.coin_balance, t.provisioned_at,
+                    (SELECT MIN(o.trial_ends_at) FROM outlets o
+                       WHERE o.tenant_id = t.id AND o.status = 'trial') as trial_ends_at,
+                    (SELECT COUNT(*) FROM outlets o
+                       WHERE o.tenant_id = t.id AND o.status = 'trial') as trial_outlets,
                     (SELECT MAX(u.last_login) FROM hl_users u WHERE u.tenant_id = t.id) as last_login,
                     (SELECT COUNT(*) FROM payments p WHERE p.tenant_id = t.id) as payment_count,
                     (SELECT COUNT(*) FROM hl_transaksi tx WHERE tx.tenant_id = t.id AND tx.tanggal >= NOW() - INTERVAL 7 DAY) as orders_this_week,
                     (SELECT COUNT(*) FROM hl_transaksi tx WHERE tx.tenant_id = t.id AND tx.tanggal >= NOW() - INTERVAL 30 DAY AND tx.tanggal < NOW() - INTERVAL 7 DAY) as orders_last_month_approx
              FROM tenants t
-             WHERE t.status IN ('active','trial')
+             WHERE t.status = 'active'
              ORDER BY t.nama_outlet"
         )->fetchAll();
 
@@ -42,8 +47,8 @@ if ($action) {
                 $risks[] = 'coin_kritis';
             }
 
-            // Risk 3: Trial habis dalam 3 hari
-            if ($t['status'] === 'trial' && $t['trial_ends_at'] && strtotime($t['trial_ends_at']) < strtotime('+3 days')) {
+            // Risk 3: Ada outlet dengan trial habis dalam 3 hari
+            if ((int)$t['trial_outlets'] > 0 && $t['trial_ends_at'] && strtotime($t['trial_ends_at']) < strtotime('+3 days')) {
                 $risks[] = 'trial_habis';
             }
 

@@ -234,8 +234,8 @@ $users = $usrSt->fetchAll();
     <a href="clients.php" style="font-size:12.5px;color:rgba(255,255,255,.4);text-decoration:none;margin-bottom:6px;display:block;">← Kembali ke Clients</a>
     <h1><?= htmlspecialchars($tenant['nama_outlet']) ?></h1>
     <p>
-      <span class="sa-badge sa-badge-<?= $tenant['status'] === 'active' ? 'active' : ($tenant['status'] === 'trial' ? 'trial' : 'suspended') ?>">
-        <?= ucfirst($tenant['status']) ?>
+      <span class="sa-badge sa-badge-<?= $tenant['status'] === 'active' ? 'active' : ($tenant['status'] === 'pending_verification' ? 'trial' : 'suspended') ?>">
+        <?= ucfirst(str_replace('_',' ',$tenant['status'])) ?>
       </span>
       <span style="color:rgba(255,255,255,.35);margin-left:10px;font-family:var(--mono);font-size:12px;"><?= htmlspecialchars($tenant['slug']) ?></span>
     </p>
