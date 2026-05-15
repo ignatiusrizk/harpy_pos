@@ -1,0 +1,148 @@
+<?php
+// ══════════════════════════════════════════════════════
+// cron/trial_lifecycle.php — Outlet lifecycle management
+//
+// Jalankan setiap hari via Hostinger Cron Jobs:
+//   0 2 * * * php /path/to/harpy/cron/trial_lifecycle.php
+//
+// Yang dilakukan:
+//   1. trial   → grace  : jika trial_ends_at < NOW()
+//   2. grace   → suspended: jika grace_ends_at < NOW()
+//   3. suspended → purge: jika purge_at < NOW() (hapus data)
+//   4. Cleanup email_verifications expired
+//   5. Cleanup registration_attempts lama
+// ══════════════════════════════════════════════════════
+
+// Proteksi: hanya boleh dijalankan dari CLI
+if (php_sapi_name() !== 'cli' && !defined('ALLOW_CRON_WEB')) {
+    http_response_code(403);
+    die('CLI only.');
+}
+
+define('ROOT', dirname(__DIR__));
+require_once ROOT . '/master/config/db.php';
+require_once ROOT . '/core/Database.php';
+require_once ROOT . '/core/EmailVerification.php';
+require_once ROOT . '/core/RateLimiter.php';
+
+$db  = Database::get();
+$now = date('Y-m-d H:i:s');
+$log = [];
+
+function clog(string $msg): void {
+    global $log;
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg;
+    echo $line . PHP_EOL;
+    $log[] = $line;
+}
+
+clog('=== trial_lifecycle.php START ===');
+
+// ── 1. trial → grace ─────────────────────────────────
+$trialExpired = $db->prepare("
+    SELECT id, tenant_id, nama_outlet FROM outlets
+    WHERE status = 'trial'
+      AND trial_ends_at IS NOT NULL
+      AND trial_ends_at < ?
+");
+$trialExpired->execute([$now]);
+$trialRows = $trialExpired->fetchAll();
+
+foreach ($trialRows as $outlet) {
+    $graceEndsAt = date('Y-m-d H:i:s', time() + 7 * 86400);
+    $purgeAt     = date('Y-m-d H:i:s', time() + 37 * 86400);
+
+    $db->prepare("
+        UPDATE outlets
+        SET status = 'grace', grace_ends_at = ?, purge_at = ?
+        WHERE id = ?
+    ")->execute([$graceEndsAt, $purgeAt, $outlet['id']]);
+
+    clog("trial→grace: outlet_id={$outlet['id']} ({$outlet['nama_outlet']}) tenant_id={$outlet['tenant_id']}");
+}
+clog(count($trialRows) . ' outlets moved trial→grace');
+
+// ── 2. grace → suspended ─────────────────────────────
+$graceExpired = $db->prepare("
+    SELECT id, tenant_id, nama_outlet FROM outlets
+    WHERE status = 'grace'
+      AND grace_ends_at IS NOT NULL
+      AND grace_ends_at < ?
+");
+$graceExpired->execute([$now]);
+$graceRows = $graceExpired->fetchAll();
+
+foreach ($graceRows as $outlet) {
+    $db->prepare("
+        UPDATE outlets SET status = 'suspended' WHERE id = ?
+    ")->execute([$outlet['id']]);
+
+    clog("grace→suspended: outlet_id={$outlet['id']} ({$outlet['nama_outlet']})");
+}
+clog(count($graceRows) . ' outlets moved grace→suspended');
+
+// ── 3. suspended → purge ─────────────────────────────
+$purgeReady = $db->prepare("
+    SELECT id, tenant_id, nama_outlet FROM outlets
+    WHERE status = 'suspended'
+      AND purge_at IS NOT NULL
+      AND purge_at < ?
+");
+$purgeReady->execute([$now]);
+$purgeRows = $purgeReady->fetchAll();
+
+foreach ($purgeRows as $outlet) {
+    $oid = $outlet['id'];
+    $tid = $outlet['tenant_id'];
+
+    // Hapus data operasional outlet
+    $tables = [
+        'hl_transaksi_item', 'hl_transaksi', 'hl_pelanggan',
+        'hl_layanan', 'hl_kas', 'hl_absensi', 'hl_izin',
+        'hl_gaji', 'hl_promo', 'hl_voucher', 'hl_audit_log',
+    ];
+    foreach ($tables as $table) {
+        try {
+            $db->prepare("DELETE FROM $table WHERE tenant_id=? AND outlet_id=?")->execute([$tid, $oid]);
+        } catch (Throwable $e) {
+            clog("  WARN: gagal hapus $table untuk outlet $oid: " . $e->getMessage());
+        }
+    }
+
+    // Hapus coin ledger outlet
+    $db->prepare("DELETE FROM coin_ledger WHERE tenant_id=? AND outlet_id=?")->execute([$tid, $oid]);
+
+    // Hapus users outlet
+    $db->prepare("DELETE FROM hl_users WHERE tenant_id=? AND outlet_id=?")->execute([$tid, $oid]);
+
+    // Tandai outlet sebagai closed
+    $db->prepare("UPDATE outlets SET status='closed' WHERE id=?")->execute([$oid]);
+
+    // Update total_outlets di tenant
+    $db->prepare("
+        UPDATE tenants
+        SET total_outlets = (SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status!='closed')
+        WHERE id=?
+    ")->execute([$tid, $tid]);
+
+    clog("PURGED: outlet_id=$oid ({$outlet['nama_outlet']}) tenant_id=$tid");
+}
+clog(count($purgeRows) . ' outlets purged');
+
+// ── 4. Cleanup email verifications ───────────────────
+EmailVerification::cleanup();
+clog('email_verifications cleanup done');
+
+// ── 5. Cleanup registration_attempts ─────────────────
+RateLimiter::cleanup();
+clog('registration_attempts cleanup done');
+
+// ── 6. Reset trial_coin_balance ke 0 jika outlet sudah tidak trial ──
+$db->prepare("
+    UPDATE outlets
+    SET trial_coin_balance = 0
+    WHERE status != 'trial' AND trial_coin_balance > 0
+")->execute();
+
+clog('trial_coin_balance reset for non-trial outlets');
+clog('=== trial_lifecycle.php DONE ===');

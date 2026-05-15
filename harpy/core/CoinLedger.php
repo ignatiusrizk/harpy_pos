@@ -37,7 +37,9 @@ class CoinLedger
     }
 
     // ── Potong coin (atomic dengan transaction) ────────
-    // Cek coin_mode: shared → potong tenants, per_outlet → potong outlets
+    // Prioritas pemotongan:
+    //   1. Jika outlet dalam status 'trial' → potong trial_coin_balance dulu
+    //   2. Jika trial habis / outlet active → potong coin_balance (shared/per_outlet)
     // Return true jika berhasil, false jika saldo tidak cukup
     public static function deduct(
         string  $feature,
@@ -46,13 +48,58 @@ class CoinLedger
         $cost = self::COSTS[$feature] ?? 0;
         if ($cost === 0) return true;
 
-        $tenantId = TenantResolver::id();
-        $outletId = TenantResolver::outletId();
-        $isShared = TenantResolver::isSharedCoin();
-        $db       = Database::get();
+        $tenantId  = TenantResolver::id();
+        $outletId  = TenantResolver::outletId();
+        $isShared  = TenantResolver::isSharedCoin();
+        $outlet    = TenantResolver::getOutlet();
+        $db        = Database::get();
 
         $db->beginTransaction();
         try {
+            // ── Coba potong dari trial_coin_balance dulu ──
+            if (
+                !empty($outlet) &&
+                ($outlet['status'] ?? '') === 'trial' &&
+                ($outlet['trial_coin_balance'] ?? 0) > 0
+            ) {
+                $stmt = $db->prepare(
+                    "SELECT trial_coin_balance FROM outlets WHERE id = ? AND tenant_id = ? FOR UPDATE"
+                );
+                $stmt->execute([$outletId, $tenantId]);
+                $trialBalance = (int)($stmt->fetch()['trial_coin_balance'] ?? 0);
+
+                if ($trialBalance >= $cost) {
+                    $newTrialBalance = $trialBalance - $cost;
+                    $db->prepare(
+                        "UPDATE outlets SET trial_coin_balance = ? WHERE id = ? AND tenant_id = ?"
+                    )->execute([$newTrialBalance, $outletId, $tenantId]);
+
+                    // Catat di ledger sebagai trial deduction
+                    $db->prepare("
+                        INSERT INTO coin_ledger
+                          (tenant_id, outlet_id, type, amount, feature_used, description, balance_after, ref_id)
+                        VALUES (?, ?, 'deduct', ?, ?, ?, ?, ?)
+                    ")->execute([
+                        $tenantId,
+                        $outletId,
+                        $cost,
+                        $feature,
+                        '[TRIAL] Penggunaan fitur: ' . $feature,
+                        $newTrialBalance,
+                        $refId,
+                    ]);
+
+                    $db->commit();
+                    $_SESSION['tenant_coin_balance'] = $newTrialBalance;
+                    TenantResolver::refresh();
+                    return true;
+                }
+                // trial_coin_balance tidak cukup → lanjut potong dari regular balance
+            }
+
+            // ── Potong dari regular coin_balance ──────────
+            $newBalance = 0;
+
             if ($isShared) {
                 // Lock dan potong dari tenants.coin_balance
                 $stmt = $db->prepare(

@@ -128,15 +128,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isLoginLocked($username, $clientIp)) {
         $error = '🔒 Terlalu banyak percobaan login. Coba lagi 15 menit lagi.';
     } else {
-        // Cari user + tenant sekaligus
+        // Cari user by email ATAU username (email = self-registered owner, username = staff)
+        $isEmail = filter_var($username, FILTER_VALIDATE_EMAIL);
         $stmt = Database::get()->prepare(
             "SELECT u.*, t.slug AS tenant_slug, t.nama_outlet,
                     t.status AS tenant_status, t.coin_balance,
+                    t.verified_at,
                     COALESCE(r.nama, u.role) AS role_nama
              FROM hl_users u
              JOIN tenants t ON t.id = u.tenant_id
              LEFT JOIN hl_roles r ON r.id = u.role_id AND r.tenant_id = u.tenant_id
-             WHERE u.username = ? AND u.is_active = 1
+             WHERE (" . ($isEmail ? "u.email = ?" : "u.username = ?") . ")
+               AND u.is_active = 1
              LIMIT 1"
         );
         $stmt->execute([$username]);
@@ -144,8 +147,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password'])) {
             // Cek status tenant
-            if ($user['tenant_status'] === 'suspended') {
-                $error = '🔒 Akun outlet Anda sedang ditangguhkan. Hubungi tim Harpy.';
+            $tenantStatus = $user['tenant_status'];
+            if (in_array($tenantStatus, ['suspended', 'closed'])) {
+                $error = '🔒 Akun ditangguhkan. Hubungi tim LAMASY untuk informasi lebih lanjut.';
+            } elseif ($tenantStatus === 'pending_verification') {
+                // Redirect ke pending-verify (set session minimal dulu)
+                session_regenerate_id(true);
+                $_SESSION['tenant_id']      = $user['tenant_id'];
+                $_SESSION['pending_verify'] = true;
+                header('Location: pending-verify.php');
+                exit;
             } else {
                 clearLoginAttempts($username, $clientIp);
 
@@ -164,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['hl_user']              = [
                     'id'         => $user['id'],
                     'username'   => $user['username'],
-                    'nama'       => $user['nama'],
+                    'nama'       => $user['name'] ?? $user['nama'] ?? '',
                     'role'       => $user['role'],
                     'role_id'    => $user['role_id'],
                     'role_nama'  => $user['role_nama'],
@@ -176,24 +187,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 session_regenerate_id(true);
 
-                // Tentukan outlet — auto-select jika hanya ada 1
+                // Tentukan outlet — include trial & grace sebagai valid
                 $outletCount = Database::get()->prepare(
-                    "SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status='active'"
+                    "SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active')"
                 );
                 $outletCount->execute([$user['tenant_id']]);
                 $oCount = (int)$outletCount->fetchColumn();
 
                 if ($oCount === 1) {
                     $outletRow = Database::get()->prepare(
-                        "SELECT id FROM outlets WHERE tenant_id=? AND status='active' LIMIT 1"
+                        "SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') LIMIT 1"
                     );
                     $outletRow->execute([$user['tenant_id']]);
                     $_SESSION['outlet_id'] = (int)$outletRow->fetchColumn();
                 } elseif ($oCount === 0) {
-                    // Edge case: belum ada outlet
+                    // Belum ada outlet → arahkan ke add-outlet
                     $_SESSION['outlet_id'] = 0;
                 }
-                // Jika $oCount > 1 → jangan set outlet_id, biarkan select-outlet menangani
+                // $oCount > 1 → select-outlet menangani
 
                 // Audit log
                 try {
@@ -203,7 +214,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     logAuditLogin($user, 'login', 'auth', 'Login berhasil');
                 } catch (Throwable $e) {}
 
-                if ($oCount > 1) {
+                if ($oCount === 0) {
+                    header('Location: add-outlet.php');
+                } elseif ($oCount > 1) {
                     header('Location: select-outlet.php');
                 } else {
                     header('Location: dashboard.php');
