@@ -185,26 +185,28 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
         ?>
         <div class="hl-outlet-switch" style="position:relative">
           <button class="hl-outlet-btn" type="button"
-                  onclick="<?= $hasMulti ? 'this.nextElementSibling.classList.toggle(\'open\')' : 'event.preventDefault()' ?>"
+                  onclick="this.nextElementSibling.classList.toggle('open')"
                   style="background:rgba(53,232,213,.1);border:1px solid rgba(53,232,213,.25);
                          color:#35E8D5;font-size:13px;font-weight:600;padding:6px 12px;
-                         border-radius:8px;cursor:<?= $hasMulti ? 'pointer' : 'default' ?>;
+                         border-radius:8px;cursor:pointer;
                          display:flex;align-items:center;gap:6px;font-family:inherit">
             <span>📍</span>
             <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
               <?= htmlspecialchars($currentOutletNm) ?>
             </span>
-            <?php if ($hasMulti): ?>
-              <span style="font-size:10px;opacity:.7">▼</span>
-            <?php endif; ?>
+            <span style="font-size:10px;opacity:.7">▼</span>
           </button>
-          <?php if ($hasMulti): ?>
           <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);
                        right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;
-                       box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:1000;
-                       padding:6px;max-height:340px;overflow-y:auto">
+                       box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:260px;z-index:1000;
+                       padding:6px;max-height:380px;overflow-y:auto">
+            <?php if ($hasMulti): ?>
             <div style="font-size:11px;color:#9CA3AF;font-weight:600;padding:8px 12px 4px;
                         text-transform:uppercase;letter-spacing:.05em">Pilih Outlet</div>
+            <?php else: ?>
+            <div style="font-size:11px;color:#9CA3AF;font-weight:600;padding:8px 12px 4px;
+                        text-transform:uppercase;letter-spacing:.05em">Outlet Aktif</div>
+            <?php endif; ?>
             <?php foreach ($allOutlets as $o):
               $isActive  = (int)$o['id'] === $currentOutletId;
               $statusBg  = $o['status'] === 'active' ? '#D1FAE5' : ($o['status'] === 'trial' ? '#DBEAFE' : '#FEF3C7');
@@ -216,8 +218,9 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                       background:<?= $isActive ? '#F0FDFB' : 'transparent' ?>;
                       color:<?= $isActive ? '#0F1C3A' : '#374151' ?>;font-size:13px;
                       <?= $isActive ? 'font-weight:700' : '' ?>"
-               onmouseover="if('<?= $isActive ?>'!=='1')this.style.background='#F9FAFB'"
-               onmouseout ="if('<?= $isActive ?>'!=='1')this.style.background='transparent'">
+               onmouseover="if(this.dataset.active!=='1')this.style.background='#F9FAFB'"
+               onmouseout ="if(this.dataset.active!=='1')this.style.background='transparent'"
+               data-active="<?= $isActive ? '1' : '0' ?>">
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                 <?= $isActive ? '✓ ' : '' ?><?= htmlspecialchars($o['nama_outlet']) ?>
               </span>
@@ -227,6 +230,15 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               </span>
             </a>
             <?php endforeach; ?>
+            <!-- Divider + Tambah outlet baru -->
+            <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
+            <a href="add-outlet.php"
+               style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
+                      text-decoration:none;color:#0891B2;font-size:13px;font-weight:700"
+               onmouseover="this.style.background='#F0F9FF'"
+               onmouseout ="this.style.background='transparent'">
+              <span style="font-size:16px;line-height:1">+</span> Tambah Outlet Baru
+            </a>
           </div>
           <script>
           document.addEventListener('click',function(e){
@@ -236,7 +248,6 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
           });
           </script>
           <style>.hl-outlet-dropdown.open{display:block!important}</style>
-          <?php endif; ?>
         </div>
         <?php endif; ?>
 
