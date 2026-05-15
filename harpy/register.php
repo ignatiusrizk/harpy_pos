@@ -200,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 // 4. User owner
                 $db->prepare("
                     INSERT INTO hl_users
-                      (tenant_id, outlet_id, username, email, password, name, role, email_verified)
+                      (tenant_id, outlet_id, username, email, password, nama, role, email_verified)
                     VALUES (?,?,?,?,?,?,'owner',0)
                 ")->execute([
                     $tenantId, $outletId,
