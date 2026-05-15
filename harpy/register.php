@@ -578,11 +578,11 @@ body::before {
 
 <!-- ── Top Bar ─────────────────────────────────────── -->
 <div class="reg-topbar">
-  <a href="landing.php" class="topbar-logo">
+  <a href="/ERP/harpy/landing.php" class="topbar-logo">
     <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:32px; vertical-align:middle; margin-right:8px;">
     LAMASY
   </a>
-  <a href="login.php" class="topbar-login">Sudah punya akun? Masuk →</a>
+  <a href="/ERP/harpy/login.php" class="topbar-login">Sudah punya akun? Masuk →</a>
 </div>
 
 <!-- ── Registration Card ──────────────────────────── -->
@@ -678,7 +678,7 @@ body::before {
     </div>
 
     <div class="form-footer">
-      <a href="landing.php" class="btn btn-outline">&#8592; Kembali</a>
+      <a href="/ERP/harpy/landing.php" class="btn btn-outline">&#8592; Kembali</a>
       <button type="submit" class="btn btn-primary">Lanjut &#8594;</button>
     </div>
   </form>
@@ -860,7 +860,7 @@ body::before {
       <a href="https://wa.me/6281234567890?text=<?= $waMsgEnc ?>" target="_blank" class="btn btn-wa">
         &#128172; Chat Tim Harpy
       </a>
-      <a href="landing.php" class="btn btn-home">&#8592; Kembali ke Beranda</a>
+      <a href="/ERP/harpy/landing.php" class="btn btn-home">&#8592; Kembali ke Beranda</a>
     </div>
   </div>
   <?php endif; ?>
