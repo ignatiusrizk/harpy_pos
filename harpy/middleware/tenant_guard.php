@@ -103,6 +103,33 @@ function requirePermission(string $kode): void
     }
 }
 
+// ── Grace mode: blokir operasi tulis ─────────────────
+// Dipanggil di action handler yang memodifikasi data.
+// Di grace period, user hanya boleh baca (view), tidak bisa create/update/delete.
+function requireNotGrace(string $message = ''): void
+{
+    if (!TenantResolver::isGraceMode()) return;
+
+    $daysLeft = TenantResolver::graceDaysLeft();
+    $msg = $message ?: "Outlet dalam grace period ($daysLeft hari tersisa). "
+                     . "Operasi ini tidak tersedia. Aktifkan outlet untuk melanjutkan.";
+
+    if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $msg, 'grace_mode' => true]);
+    } else {
+        http_response_code(403);
+        die('<div style="font-family:sans-serif;padding:40px;text-align:center;background:#0F1C3A;color:#fff;min-height:100vh">
+            <h2 style="color:#F59E0B">⏰ Grace Period</h2>
+            <p style="color:rgba(255,255,255,.6);max-width:380px;margin:0 auto 24px">' . htmlspecialchars($msg) . '</p>
+            <a href="/ERP/harpy/billing.php" style="background:#35E8D5;color:#0F1C3A;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none">Aktifkan Outlet</a>
+            &nbsp;
+            <a href="javascript:history.back()" style="color:#35E8D5;margin-left:12px">← Kembali</a>
+        </div>');
+    }
+    exit;
+}
+
 // ── Shorthand DB (untuk backward compat) ─────────────
 function getDB(): PDO
 {

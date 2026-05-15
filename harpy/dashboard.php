@@ -15,10 +15,30 @@ if (isset($_GET['logout'])) {
     exit;
 }
 
+// ── Early: tangani AJAX saat belum ada outlet ─────────
+$hasOutlet = TenantResolver::hasOutlet();
+
 // ── AJAX ACTIONS ──────────────────────────────────────
 $action = $_GET['action'] ?? '';
 if ($action) {
     header('Content-Type: application/json');
+
+    // Jika belum ada outlet, kembalikan data kosong agar JS tidak error
+    if (!$hasOutlet) {
+        if ($action === 'stats') {
+            echo json_encode(['order'=>['total_order'=>0,'omset'=>0,'terkumpul'=>0,'belum_lunas'=>0,'siap_diambil'=>0],'kas'=>['masuk'=>0,'keluar'=>0],'aktif'=>0,'hadir'=>0,'saldo'=>0,'is_staff'=>false,'role'=>$user['role']]);
+        } elseif ($action === 'alerts') {
+            echo json_encode(['siap'=>[],'mepet'=>[],'piutang'=>[]]);
+        } elseif ($action === 'pipeline') {
+            echo json_encode([]);
+        } elseif ($action === 'chart7') {
+            echo json_encode([]);
+        } else {
+            echo json_encode(['error'=>'Belum ada outlet.']);
+        }
+        exit;
+    }
+
     $oid = TenantResolver::outletId();
 
     // ── STATS HARIAN ─────────────────────────────────
@@ -229,6 +249,62 @@ if ($action) {
 <?php renderTopbar('dashboard'); ?>
 <div class="hl-main" style="max-width:1400px;width:100%">
 
+<?php
+// ── Status banners (trial / grace) ────────────────────
+$banners = TenantResolver::getBannerInfo();
+foreach ($banners as $b):
+    $bg = $b['type'] === 'warning'
+        ? 'linear-gradient(90deg,#FEF3C7,#FDE68A)'
+        : 'linear-gradient(90deg,#DBEAFE,#BFDBFE)';
+    $border = $b['type'] === 'warning' ? '#F59E0B' : '#3B82F6';
+    $color  = $b['type'] === 'warning' ? '#92400E' : '#1E40AF';
+?>
+<div style="background:<?= $bg ?>;border-left:4px solid <?= $border ?>;
+            color:<?= $color ?>;padding:10px 16px;border-radius:8px;
+            font-size:13px;margin-bottom:14px;line-height:1.5">
+    <?= $b['message'] ?>
+</div>
+<?php endforeach; ?>
+
+<?php if (!$hasOutlet): ?>
+  <!-- ══ EMPTY STATE — belum ada outlet ══ -->
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+              min-height:60vh;text-align:center;padding:40px 20px">
+    <div style="font-size:72px;margin-bottom:20px">🏪</div>
+    <h1 style="font-size:1.6rem;font-weight:800;color:var(--navy);margin-bottom:10px">
+      Selamat datang di LAMASY!
+    </h1>
+    <p style="font-size:15px;color:var(--gray);max-width:440px;line-height:1.65;margin-bottom:28px">
+      Akun kamu sudah aktif. Langkah berikutnya adalah menambahkan outlet pertama kamu
+      untuk mulai mengelola laundry.
+    </p>
+    <div style="background:#F0FDFB;border:1.5px solid rgba(53,232,213,.3);
+                border-radius:12px;padding:20px 28px;max-width:360px;margin-bottom:28px;
+                text-align:left">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">
+        ✅ Yang akan kamu dapatkan:
+      </div>
+      <ul style="font-size:13px;color:var(--gray);padding-left:18px;line-height:2">
+        <li><strong>7 hari trial gratis</strong></li>
+        <li>1.000 coin untuk fitur AI & WA</li>
+        <li>Manajemen order, karyawan & kas</li>
+        <li>Notifikasi WhatsApp otomatis</li>
+      </ul>
+    </div>
+    <a href="/ERP/harpy/add-outlet.php"
+       class="hl-btn hl-btn-primary"
+       style="font-size:15px;padding:14px 36px;border-radius:10px">
+      🚀 Tambah Outlet Sekarang
+    </a>
+    <p style="margin-top:16px;font-size:12px;color:var(--gray)">
+      Butuh bantuan?
+      <a href="https://wa.me/6281234567890" style="color:var(--teal)">Chat Tim LAMASY</a>
+    </p>
+  </div>
+
+<?php else: ?>
+  <!-- ══ NORMAL DASHBOARD ══ -->
+
   <!-- GREETING -->
   <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div>
@@ -343,7 +419,10 @@ if ($action) {
       </div>
     </div>
   </div>
-</div>
+
+<?php endif; // hasOutlet ?>
+
+</div><!-- /hl-main -->
 
 <?php renderToast(); ?>
 <script>
