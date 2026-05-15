@@ -9,7 +9,7 @@ function renderHead(string $title = 'Harpy'): void {
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>"/>
-    <title><?= htmlspecialchars($title) ?> — Harpy System</title>
+    <title><?= htmlspecialchars($title) ?> — LAMASY</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -84,7 +84,7 @@ function renderTopbar(string $activePage = ''): void {
     <!-- MOBILE DRAWER -->
     <div class="hl-nav-drawer" id="navDrawer">
       <div class="hl-nav-drawer-header">
-        <span class="hl-nav-drawer-brand">Harpy <span>System</span></span>
+        <span class="hl-nav-drawer-brand"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:28px; vertical-align:middle; margin-right:8px;">LAMASY <span>by Harpy</span></span>
         <button class="hl-nav-drawer-close" onclick="closeDrawer()">✕</button>
       </div>
       <div class="hl-nav-drawer-user">
@@ -124,7 +124,7 @@ function renderTopbar(string $activePage = ''): void {
     <div class="hl-topbar">
       <div class="hl-topbar-left">
         <button class="hl-nav-hamburger" onclick="openDrawer()">☰</button>
-        <a href="dashboard.php" class="hl-brand">Harpy <span>System</span></a>
+        <a href="dashboard.php" class="hl-brand"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:32px; vertical-align:middle; margin-right:8px;">LAMASY <span>by Harpy</span></a>
         <nav class="hl-nav">
           <?php foreach ($navGroups as $groupKey => $group):
             if (!groupVisible($group, $user['role'])) continue;

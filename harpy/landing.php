@@ -10,9 +10,9 @@ date_default_timezone_set('Asia/Jakarta');
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="description" content="Harpy Laundry ERP — Platform manajemen laundry modern. POS, laporan keuangan, manajemen karyawan, notifikasi WhatsApp, dan lebih banyak lagi."/>
+<meta name="description" content="LAMASY — Laundry Management System by Harpy. Platform manajemen laundry modern. POS, laporan keuangan, manajemen karyawan, notifikasi WhatsApp, dan lebih banyak lagi."/>
 <meta name="keywords" content="software laundry, ERP laundry, aplikasi laundry, POS laundry, manajemen laundry"/>
-<title>Harpy — ERP Laundry Modern untuk Bisnis yang Lebih Rapi</title>
+<title>LAMASY — Laundry Management System by Harpy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -660,8 +660,8 @@ img { max-width: 100%; }
 <!-- ── NAVBAR ──────────────────────────────────────── -->
 <nav class="navbar" id="navbar">
   <a href="landing.php" class="nav-logo">
-    <div class="logo-badge">🧺</div>
-    Har<span>py</span>
+    <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:36px; vertical-align:middle; margin-right:8px;">
+    LAMASY
   </a>
   <ul class="nav-links">
     <li><a href="#fitur">Fitur</a></li>
@@ -719,7 +719,7 @@ img { max-width: 100%; }
       <div class="mockup-sidebar">
         <div class="mockup-sidebar-logo">
           <div class="mb"></div>
-          <span>Harpy</span>
+          <span>LAMASY</span>
         </div>
         <div class="mockup-nav-item active"><span class="ni">📊</span> Dashboard</div>
         <div class="mockup-nav-item"><span class="ni">🛒</span> Order</div>
@@ -795,7 +795,7 @@ img { max-width: 100%; }
   <div class="section-header">
     <div class="section-tag">Fitur Unggulan</div>
     <h2>Semua yang Anda Butuhkan dalam Satu Platform</h2>
-    <p>Dari kasir hingga laporan keuangan, dari absensi karyawan hingga notifikasi pelanggan — semua ada di Harpy.</p>
+    <p>Dari kasir hingga laporan keuangan, dari absensi karyawan hingga notifikasi pelanggan — semua ada di LAMASY.</p>
   </div>
   <div class="features-grid">
     <div class="feature-card">
@@ -837,7 +837,7 @@ img { max-width: 100%; }
     <div class="section-header">
       <div class="section-tag">Cara Kerja</div>
       <h2>Mulai dalam 3 Langkah Mudah</h2>
-      <p>Tidak perlu keahlian teknis. Harpy dirancang agar siapapun bisa langsung pakai.</p>
+      <p>Tidak perlu keahlian teknis. LAMASY dirancang agar siapapun bisa langsung pakai.</p>
     </div>
     <div class="steps-row">
       <div class="step-card">
@@ -871,7 +871,7 @@ img { max-width: 100%; }
     <div class="pricing-card">
       <div class="pricing-name">Trial</div>
       <div class="pricing-price">Gratis<div class="per">30 hari pertama</div></div>
-      <div class="pricing-desc">Coba semua fitur Harpy tanpa risiko. Tidak perlu kartu kredit.</div>
+      <div class="pricing-desc">Coba semua fitur LAMASY tanpa risiko. Tidak perlu kartu kredit.</div>
       <div class="pricing-divider"></div>
       <ul class="pricing-features">
         <li>Semua fitur POS & order</li>
@@ -910,12 +910,12 @@ img { max-width: 100%; }
     <div class="section-header">
       <div class="section-tag">Testimoni</div>
       <h2>Dipercaya Ratusan Pemilik Laundry</h2>
-      <p>Lihat apa kata mereka yang sudah merasakan manfaat Harpy untuk bisnis mereka.</p>
+      <p>Lihat apa kata mereka yang sudah merasakan manfaat LAMASY untuk bisnis mereka.</p>
     </div>
     <div class="testimonials-grid">
       <div class="testi-card">
         <div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-        <div class="testi-text">"Sejak pakai Harpy, pelaporan keuangan outlet saya jauh lebih rapi. Dulu harus rekap manual di Excel, sekarang tinggal buka dashboard sudah keliatan semua. Hemat banget!"</div>
+        <div class="testi-text">"Sejak pakai LAMASY, pelaporan keuangan outlet saya jauh lebih rapi. Dulu harus rekap manual di Excel, sekarang tinggal buka dashboard sudah keliatan semua. Hemat banget!"</div>
         <div class="testi-author">
           <div class="testi-avatar">&#x1F464;</div>
           <div>
@@ -937,7 +937,7 @@ img { max-width: 100%; }
       </div>
       <div class="testi-card">
         <div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-        <div class="testi-text">"Saya punya 3 outlet dan sebelumnya kesulitan monitor semua dari satu tempat. Dengan Harpy, semua data terpusat. Setup-nya juga mudah, tim CS sangat responsif."</div>
+        <div class="testi-text">"Saya punya 3 outlet dan sebelumnya kesulitan monitor semua dari satu tempat. Dengan LAMASY, semua data terpusat. Setup-nya juga mudah, tim CS sangat responsif."</div>
         <div class="testi-author">
           <div class="testi-avatar">&#x1F464;</div>
           <div>
@@ -954,10 +954,10 @@ img { max-width: 100%; }
 <div class="cta-banner">
   <div class="cta-inner">
     <h2>Siap Digitalisasi Laundry Anda?</h2>
-    <p>Bergabung dengan 500+ outlet laundry yang sudah lebih rapi bersama Harpy. Daftar gratis, tidak perlu kartu kredit.</p>
+    <p>Bergabung dengan 500+ outlet laundry yang sudah lebih rapi bersama LAMASY. Daftar gratis, tidak perlu kartu kredit.</p>
     <div class="cta-btns">
       <a href="register.php" class="btn-primary">&#128640; Mulai Gratis 30 Hari</a>
-      <a href="https://wa.me/6281234567890?text=Halo+saya+ingin+tahu+lebih+lanjut+tentang+Harpy+Laundry+ERP" target="_blank" class="btn-secondary">&#128172; Chat WhatsApp</a>
+      <a href="https://wa.me/6281234567890?text=Halo+saya+ingin+tahu+lebih+lanjut+tentang+LAMASY" target="_blank" class="btn-secondary">&#128172; Chat WhatsApp</a>
     </div>
   </div>
 </div>
@@ -967,10 +967,10 @@ img { max-width: 100%; }
   <div class="footer-grid">
     <div>
       <div class="footer-logo">
-        <div class="lb">🧺</div>
-        Harpy ERP
+        <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:40px; vertical-align:middle; margin-right:8px;">
+        LAMASY <span style="font-size:13px;font-weight:500;color:rgba(255,255,255,.45);">by Harpy</span>
       </div>
-      <div class="footer-tagline">Platform manajemen laundry modern yang membantu bisnis Anda tumbuh lebih rapi dan efisien.</div>
+      <div class="footer-tagline">Platform manajemen laundry modern untuk bisnis yang lebih rapi.</div>
     </div>
     <div>
       <div class="footer-col-title">Produk</div>

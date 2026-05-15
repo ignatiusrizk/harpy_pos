@@ -181,7 +181,7 @@ $curPkg = $packages[$w['paket'] ?? 'trial'] ?? $packages['trial'];
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Daftar Harpy ERP — Mulai Gratis</title>
+<title>Daftar — LAMASY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -579,8 +579,8 @@ body::before {
 <!-- ── Top Bar ─────────────────────────────────────── -->
 <div class="reg-topbar">
   <a href="landing.php" class="topbar-logo">
-    <div class="lb">🧺</div>
-    Har<span>py</span>
+    <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:32px; vertical-align:middle; margin-right:8px;">
+    LAMASY
   </a>
   <a href="login.php" class="topbar-login">Sudah punya akun? Masuk →</a>
 </div>
@@ -810,7 +810,7 @@ body::before {
       <input type="checkbox" name="agree_terms" value="1" <?= !empty($w['agree_terms']) ? 'checked' : '' ?>/>
       <span class="terms-text">
         Saya setuju dengan <a href="#" target="_blank">Syarat & Ketentuan</a> dan
-        <a href="#" target="_blank">Kebijakan Privasi</a> Harpy ERP.
+        <a href="#" target="_blank">Kebijakan Privasi</a> LAMASY.
         Tim Harpy akan menghubungi saya via WhatsApp untuk verifikasi akun.
       </span>
     </label>

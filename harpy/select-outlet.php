@@ -60,7 +60,7 @@ $user = $_SESSION['hl_user'] ?? [];
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Pilih Outlet — Harpy</title>
+<title>Pilih Outlet — LAMASY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -262,8 +262,8 @@ html, body {
 
   <div class="header">
     <div class="brand">
-      <div class="brand-icon">&#x1F9FA;</div>
-      <div class="brand-name">Harpy ERP</div>
+      <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:44px; vertical-align:middle;">
+      <div class="brand-name">LAMASY</div>
     </div>
     <h1>Pilih Outlet</h1>
     <p>Halo, <strong><?= htmlspecialchars($user['nama'] ?? 'User') ?></strong>!<br>

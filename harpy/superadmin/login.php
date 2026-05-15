@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Super Admin Login — Harpy</title>
+<title>Super Admin — LAMASY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -248,8 +248,8 @@ input::placeholder { color: rgba(255,255,255,.25); }
 
 <div class="login-card">
   <div class="login-logo">
-    <div class="logo-icon">🛡️</div>
-    <h1>Harpy <span>Admin</span></h1>
+    <div style="margin-bottom:14px;"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:48px;"></div>
+    <h1>LAMASY <span>Admin</span></h1>
     <p>Super Admin Panel</p>
   </div>
 

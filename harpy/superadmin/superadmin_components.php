@@ -9,7 +9,7 @@ function saRenderHead(string $title = 'Super Admin'): void {
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>"/>
-    <title><?= htmlspecialchars($title) ?> — Harpy Super Admin</title>
+    <title><?= htmlspecialchars($title) ?> — LAMASY Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -368,9 +368,9 @@ function saRenderNav(string $activePage = '', string $pageTitle = ''): void {
 
     <aside class="sa-sidebar" id="saSidebar">
       <div class="sa-sidebar-brand">
-        <div class="logo-icon">🛡️</div>
+        <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:28px; flex-shrink:0;">
         <div class="brand-text">
-          Harpy Admin
+          LAMASY <span style="color:var(--sa)">Admin</span>
           <small>Super Admin Panel</small>
         </div>
       </div>

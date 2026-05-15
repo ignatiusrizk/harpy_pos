@@ -241,7 +241,7 @@ function logAuditLogin(array $user, string $aksi, string $modul, string $ket): v
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Login — Harpy System</title>
+<title>Login — LAMASY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -389,9 +389,9 @@ input[type="password"]:focus {
 
 <div class="login-card">
   <div class="login-logo">
-    <div class="logo-icon">🫧</div>
-    <h1>Harpy <span>System</span></h1>
-    <p>Laundry Management Platform</p>
+    <div style="margin-bottom:14px;"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:60px;"></div>
+    <h1>LAMASY</h1>
+    <p>Laundry Management System</p>
   </div>
 
   <div class="divider"></div>

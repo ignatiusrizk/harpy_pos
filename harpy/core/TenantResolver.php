@@ -192,7 +192,7 @@ class TenantResolver
         http_response_code(402);
         echo '<!DOCTYPE html><html lang="id"><head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Akun Ditangguhkan — Harpy</title>
+        <title>Akun Ditangguhkan — LAMASY</title>
         <style>
           body{font-family:sans-serif;background:#0F1C3A;color:#fff;display:flex;
                align-items:center;justify-content:center;min-height:100vh;margin:0}
@@ -214,7 +214,7 @@ class TenantResolver
 
     private static function errorPage(string $msg): string
     {
-        return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Error — Harpy</title></head>
+        return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Error — LAMASY</title></head>
         <body style="font-family:sans-serif;text-align:center;padding:60px;background:#0F1C3A;color:#fff">
         <h2>' . htmlspecialchars($msg) . '</h2>
         <a href="/ERP/harpy/login.php" style="color:#35E8D5">Kembali ke Login</a></body></html>';
