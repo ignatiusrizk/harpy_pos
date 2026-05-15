@@ -822,7 +822,11 @@ img { max-width: 100%; }
   .cta-inner     { padding: 40px 24px; }
   .section       { padding: 60px 20px; }
   .mockup-stats  { grid-template-columns: 1fr; }
+  .pricing-grid  { grid-template-columns: 1fr !important; }
 }
+
+/* ── FAQ ── */
+.faq-item button:hover span:first-child { color: #35E8D5; }
 </style>
 </head>
 <body>
@@ -837,8 +841,8 @@ img { max-width: 100%; }
   <ul class="nav-links">
     <li><a href="#ai" style="color:#C4B5FD;font-weight:700;">✦ AI</a></li>
     <li><a href="#fitur">Fitur</a></li>
-    <li><a href="#cara-kerja">Cara Kerja</a></li>
     <li><a href="#harga">Harga</a></li>
+    <li><a href="#faq">FAQ</a></li>
     <li><a href="#kontak">Kontak</a></li>
   </ul>
   <div class="nav-actions">
@@ -851,8 +855,8 @@ img { max-width: 100%; }
 <!-- Mobile Menu -->
 <div class="nav-mobile-menu" id="mobileMenu">
   <a href="#fitur" onclick="closeMobileMenu()">Fitur</a>
-  <a href="#cara-kerja" onclick="closeMobileMenu()">Cara Kerja</a>
   <a href="#harga" onclick="closeMobileMenu()">Harga</a>
+  <a href="#faq" onclick="closeMobileMenu()">FAQ</a>
   <a href="#kontak" onclick="closeMobileMenu()">Kontak</a>
   <div class="nav-mobile-divider"></div>
   <a href="/ERP/harpy/login.php">Masuk ke Akun</a>
@@ -965,6 +969,49 @@ img { max-width: 100%; }
     </div>
   </div>
 </div>
+
+<!-- ── PROBLEM SECTION ──────────────────────────────── -->
+<section class="section" id="masalah" style="background:rgba(255,255,255,.018)">
+  <div class="section-header">
+    <div class="section-tag" style="background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.2)">Kenali Masalahnya</div>
+    <h2>Apakah Ini Cerita Bisnis Laundry Kamu?</h2>
+    <p>Banyak pemilik laundry masih bergulat dengan masalah yang sama setiap hari.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:1000px;margin:0 auto">
+    <?php
+    $problems = [
+      ['🗓️', 'Laporan Masih Manual', 'Rekap order, kas, dan gaji karyawan dilakukan di buku atau Excel. Rawan salah, buang waktu berjam-jam.'],
+      ['📱', 'Lupa Kabari Pelanggan', 'Pelanggan komplain cuciannya sudah jadi tapi tidak ada notifikasi. Reputasi outlet jadi taruhan.'],
+      ['👀', 'Susah Pantau Karyawan', 'Tidak tahu siapa yang terlambat, siapa yang produktif, dan berapa upah yang harus dibayar bulan ini.'],
+      ['📊', 'Tidak Tahu Kondisi Bisnis', 'Apakah outlet untung atau rugi? Layanan mana yang paling laku? Semua terasa gelap tanpa data.'],
+      ['🏪', 'Kelola Banyak Cabang Ribet', 'Setiap cabang pakai sistem berbeda. Pemilik harus keliling atau telepon satu-satu untuk tahu kondisi terkini.'],
+      ['💸', 'Piutang Menumpuk', 'Banyak pelanggan yang belum bayar lunas tapi lupa ditagih. Cashflow jadi terganggu.'],
+    ];
+    foreach ($problems as [$icon, $title, $desc]):
+    ?>
+    <div style="background:rgba(239,68,68,.04);border:1.5px solid rgba(239,68,68,.12);
+                border-radius:12px;padding:20px;transition:transform .2s"
+         onmouseenter="this.style.transform='translateY(-3px)'"
+         onmouseleave="this.style.transform=''">
+      <div style="font-size:28px;margin-bottom:10px"><?= $icon ?></div>
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px"><?= $title ?></div>
+      <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.6"><?= $desc ?></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="text-align:center;margin-top:40px">
+    <div style="font-size:1.1rem;color:rgba(255,255,255,.7);font-weight:500">
+      Semua masalah di atas bisa diselesaikan dengan <strong style="color:#35E8D5">LAMASY</strong> — mulai hari ini.
+    </div>
+    <a href="/ERP/harpy/register.php"
+       style="display:inline-block;margin-top:20px;background:#35E8D5;color:#0F1C3A;
+              font-weight:700;padding:13px 32px;border-radius:10px;text-decoration:none;
+              font-size:15px;transition:opacity .2s"
+       onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
+      Coba Gratis 7 Hari →
+    </a>
+  </div>
+</section>
 
 <!-- ── AI SECTION ─────────────────────────────────── -->
 <div class="ai-section" id="ai">
@@ -1104,6 +1151,48 @@ img { max-width: 100%; }
   </div>
 </section>
 
+<!-- ── COMPARISON TABLE ─────────────────────────────── -->
+<section class="section" id="perbandingan">
+  <div class="section-header">
+    <div class="section-tag">Kenapa LAMASY?</div>
+    <h2>LAMASY vs Cara Lama</h2>
+    <p>Lihat perbedaan nyata antara mengelola laundry dengan LAMASY dan cara konvensional.</p>
+  </div>
+  <div style="max-width:820px;margin:0 auto;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead>
+        <tr>
+          <th style="padding:14px 16px;text-align:left;color:rgba(255,255,255,.5);font-weight:500;font-size:13px;border-bottom:1px solid rgba(255,255,255,.08);width:40%">Aspek</th>
+          <th style="padding:14px 16px;text-align:center;color:#f87171;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08);width:30%">❌ Cara Lama</th>
+          <th style="padding:14px 16px;text-align:center;color:#35E8D5;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08);width:30%">✅ LAMASY</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php
+        $rows = [
+          ['Pencatatan Order',     'Buku tulis / Excel manual',          'Digital real-time, auto-tersimpan'],
+          ['Notifikasi Pelanggan', 'Telepon satu-satu, sering lupa',     'WhatsApp otomatis, tanpa effort'],
+          ['Laporan Keuangan',     'Rekap manual, lambat, rawan salah',  'Dashboard otomatis, seketika'],
+          ['Pantau Karyawan',      'Tidak ada data, perkiraan saja',     'Absensi digital + laporan gaji'],
+          ['Analisis Bisnis',      'Harus baca data sendiri, subjektif', 'AI briefing harian, insight akurat'],
+          ['Multi Outlet',         'Masing-masing sistem sendiri',       'Satu dashboard, semua cabang'],
+          ['Piutang',              'Sering terlewat, cashflow bocor',    'Alert otomatis, tidak ada yang lolos'],
+          ['Waktu yang Dihemat',   'Habis untuk admin & laporan',        '3+ jam/hari untuk fokus bisnis'],
+        ];
+        foreach ($rows as $i => [$aspect, $bad, $good]):
+          $bg = $i % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent';
+        ?>
+        <tr style="background:<?= $bg ?>">
+          <td style="padding:13px 16px;color:rgba(255,255,255,.8);font-weight:500;border-bottom:1px solid rgba(255,255,255,.05)"><?= $aspect ?></td>
+          <td style="padding:13px 16px;text-align:center;color:rgba(248,113,113,.8);border-bottom:1px solid rgba(255,255,255,.05)"><?= $bad ?></td>
+          <td style="padding:13px 16px;text-align:center;color:rgba(53,232,213,.9);font-weight:600;border-bottom:1px solid rgba(255,255,255,.05)"><?= $good ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <!-- ── HOW IT WORKS ─────────────────────────────────── -->
 <div class="how-it-works">
   <section class="section" id="cara-kerja">
@@ -1132,52 +1221,124 @@ img { max-width: 100%; }
   </section>
 </div>
 
+<!-- ── TARGET AUDIENCE ─────────────────────────────── -->
+<section class="section" id="untuk-siapa">
+  <div class="section-header">
+    <div class="section-tag">Untuk Siapa?</div>
+    <h2>LAMASY Cocok untuk Kamu yang...</h2>
+    <p>Kami rancang LAMASY khusus untuk kebutuhan bisnis laundry Indonesia.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:900px;margin:0 auto">
+    <?php
+    $audiences = [
+      ['🏠', 'Laundry Rumahan', 'Baru mulai atau masih kecil? LAMASY justru ideal untuk Anda. Setup 10 menit, langsung produktif.'],
+      ['🏪', 'Outlet 1-5 Cabang', 'Kelola semua cabang dari satu dashboard. Tidak perlu WhatsApp bolak-balik ke masing-masing cabang.'],
+      ['🏢', 'Waralaba Laundry', 'Standarisasi operasional dan pantau performa seluruh mitra dari satu pusat kontrol.'],
+      ['📈', 'Yang Ingin Berkembang', 'Punya target buka cabang baru? LAMASY siap scale bersama bisnis Anda tanpa migrasi sistem.'],
+    ];
+    foreach ($audiences as [$icon, $title, $desc]):
+    ?>
+    <div style="background:rgba(53,232,213,.04);border:1.5px solid rgba(53,232,213,.15);
+                border-radius:14px;padding:24px 20px;text-align:center;transition:transform .2s,border-color .2s"
+         onmouseenter="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(53,232,213,.4)'"
+         onmouseleave="this.style.transform='';this.style.borderColor='rgba(53,232,213,.15)'">
+      <div style="font-size:40px;margin-bottom:12px"><?= $icon ?></div>
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px"><?= $title ?></div>
+      <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.6"><?= $desc ?></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="text-align:center;margin-top:32px;font-size:14px;color:rgba(255,255,255,.45)">
+    Tidak yakin LAMASY cocok untuk bisnis kamu?
+    <a href="https://wa.me/6281234567890?text=Halo+saya+mau+tanya+soal+LAMASY"
+       target="_blank" style="color:#35E8D5;margin-left:4px">Chat kami dulu →</a>
+  </div>
+</section>
+
 <!-- ── HARGA ────────────────────────────────────────── -->
 <section class="section" id="harga">
   <div class="section-header">
     <div class="section-tag">Harga</div>
     <h2>Transparan, Tanpa Biaya Tersembunyi</h2>
-    <p>Mulai gratis, upgrade saat bisnis Anda tumbuh. Tidak ada kontrak jangka panjang.</p>
+    <p>Mulai gratis 7 hari. Aktifkan dengan setup fee sekali bayar. Coin habis? Topup sesuai kebutuhan.</p>
   </div>
-  <div class="pricing-grid">
-    <!-- Trial Card -->
+
+  <!-- Coin explanation -->
+  <div style="max-width:640px;margin:0 auto 36px;background:rgba(53,232,213,.05);
+              border:1px solid rgba(53,232,213,.15);border-radius:12px;padding:16px 20px;
+              font-size:13px;color:rgba(255,255,255,.65);line-height:1.7;text-align:center">
+    💡 <strong style="color:#35E8D5">Sistem Coin:</strong>
+    Bayar hanya untuk fitur yang kamu pakai — WA notifikasi, nota digital, AI briefing, dll.
+    Tidak ada biaya langganan bulanan yang memaksa. <a href="#faq" style="color:#35E8D5">Pelajari lebih lanjut ↓</a>
+  </div>
+
+  <div class="pricing-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));max-width:960px;margin:0 auto">
+
+    <!-- Card 1: Trial -->
     <div class="pricing-card">
       <div class="pricing-name">Trial</div>
-      <div class="pricing-price">Gratis<div class="per">30 hari pertama</div></div>
-      <div class="pricing-desc">Coba semua fitur LAMASY tanpa risiko. Tidak perlu kartu kredit.</div>
+      <div class="pricing-price">Gratis<div class="per">7 hari pertama</div></div>
+      <div class="pricing-desc">Daftar langsung pakai. Tidak perlu kartu kredit, tidak ada komitmen.</div>
       <div class="pricing-divider"></div>
       <ul class="pricing-features">
         <li>Semua fitur POS & order</li>
-        <li>Laporan keuangan lengkap</li>
-        <li>50.000 coin notifikasi WA</li>
+        <li>Laporan keuangan</li>
+        <li><strong>1.000 coin</strong> gratis bawaan</li>
         <li>1 outlet, unlimited order</li>
         <li>Manajemen karyawan</li>
-        <li style="color:#C4B5FD;">✦ AI Briefing Harian</li>
-        <li style="color:#C4B5FD;">✦ AI Analisis Tren</li>
+        <li style="color:#C4B5FD;">✦ AI Briefing (pakai coin)</li>
         <li>Support via WhatsApp</li>
       </ul>
       <a href="/ERP/harpy/register.php" class="btn-pricing btn-pricing-outline">Mulai Trial Gratis</a>
     </div>
-    <!-- Professional Card -->
+
+    <!-- Card 2: Starter (featured) -->
     <div class="pricing-card featured">
       <div class="pricing-badge">&#11088; Paling Populer</div>
-      <div class="pricing-name">Professional</div>
-      <div class="pricing-price"><sup>Rp</sup>300rb<div class="per">setup fee sekali bayar</div></div>
-      <div class="pricing-desc">Setup fee untuk onboarding & konfigurasi awal. Setelah itu, hanya topup coin sesuai kebutuhan.</div>
+      <div class="pricing-name">Starter</div>
+      <div class="pricing-price"><sup>Rp</sup>300rb<div class="per">setup fee · sekali bayar</div></div>
+      <div class="pricing-desc">Setup & onboarding dibantu tim LAMASY. Setelah itu cukup topup coin.</div>
       <div class="pricing-divider"></div>
       <ul class="pricing-features">
-        <li>Semua fitur trial +</li>
-        <li>Multi outlet support</li>
-        <li>100.000 coin topup awal</li>
-        <li style="color:#C4B5FD;">✦ AI Briefing & Analisis Tren</li>
-        <li style="color:#C4B5FD;">✦ AI Rekomendasi Bisnis</li>
-        <li style="color:#C4B5FD;">✦ WA Notifikasi berbasis AI</li>
-        <li>Priority support 24/7</li>
-        <li>Training & onboarding</li>
+        <li>Semua fitur Trial +</li>
+        <li><strong>50.000 coin</strong> topup awal</li>
+        <li>1 outlet aktif</li>
+        <li style="color:#C4B5FD;">✦ AI Briefing Harian</li>
+        <li style="color:#C4B5FD;">✦ AI Analisis Tren</li>
+        <li>WA Notifikasi otomatis</li>
+        <li>Onboarding 1-on-1 (30 menit)</li>
+        <li>Support prioritas</li>
       </ul>
-      <a href="/ERP/harpy/register.php" class="btn-pricing btn-pricing-primary">Daftar Sekarang</a>
+      <a href="/ERP/harpy/register.php" class="btn-pricing btn-pricing-primary">Aktivasi Sekarang</a>
     </div>
+
+    <!-- Card 3: Growth -->
+    <div class="pricing-card" style="border-color:rgba(139,92,246,.25)">
+      <div class="pricing-name" style="color:#C4B5FD">Growth</div>
+      <div class="pricing-price"><sup style="color:#C4B5FD">Rp</sup><span style="color:#C4B5FD">500rb</span><div class="per">setup fee · sekali bayar</div></div>
+      <div class="pricing-desc">Untuk yang punya 2+ cabang atau sedang agresif ekspansi.</div>
+      <div class="pricing-divider" style="border-color:rgba(139,92,246,.2)"></div>
+      <ul class="pricing-features">
+        <li>Semua fitur Starter +</li>
+        <li><strong>150.000 coin</strong> topup awal</li>
+        <li>Multi outlet <strong>(hingga 5)</strong></li>
+        <li style="color:#C4B5FD;">✦ Semua fitur AI</li>
+        <li style="color:#C4B5FD;">✦ AI Rekomendasi Bisnis</li>
+        <li>Laporan konsolidasi multi-outlet</li>
+        <li>Onboarding + training tim (1 jam)</li>
+        <li>Dedicated support WA</li>
+      </ul>
+      <a href="https://wa.me/6281234567890?text=Halo%2C+saya+tertarik+paket+Growth+LAMASY"
+         target="_blank" class="btn-pricing btn-pricing-outline"
+         style="border-color:rgba(139,92,246,.5);color:#C4B5FD">Hubungi Kami</a>
+    </div>
+
   </div>
+
+  <p style="text-align:center;margin-top:24px;font-size:13px;color:rgba(255,255,255,.4)">
+    Butuh lebih dari 5 outlet atau solusi enterprise custom?
+    <a href="https://wa.me/6281234567890" target="_blank" style="color:#35E8D5">Diskusi dengan tim kami →</a>
+  </p>
 </section>
 
 <!-- ── TESTIMONIALS ─────────────────────────────────── -->
@@ -1237,13 +1398,70 @@ img { max-width: 100%; }
   </section>
 </div>
 
+<!-- ── FAQ ──────────────────────────────────────────── -->
+<section class="section" id="faq" style="background:rgba(255,255,255,.018)">
+  <div class="section-header">
+    <div class="section-tag">FAQ</div>
+    <h2>Pertanyaan yang Sering Ditanyakan</h2>
+    <p>Tidak menemukan jawaban yang kamu cari? <a href="https://wa.me/6281234567890" target="_blank" style="color:#35E8D5">Chat langsung dengan tim kami.</a></p>
+  </div>
+  <div style="max-width:720px;margin:0 auto" id="faqList">
+    <?php
+    $faqs = [
+      ['Apakah LAMASY benar-benar gratis?',
+       'Trial 7 hari pertama <strong>benar-benar gratis</strong> — tidak perlu kartu kredit, tidak ada biaya tersembunyi. Setelah trial, kamu bisa aktivasi dengan setup fee sekali bayar (mulai Rp 300rb). Setelah itu hanya topup coin sesuai pemakaian fitur.'],
+
+      ['Apa itu sistem "Coin"?',
+       'Coin adalah unit kredit untuk mengakses fitur premium: kirim notifikasi WhatsApp, cetak nota digital, AI briefing, dll. Kamu hanya bayar untuk yang kamu pakai. 1 notifikasi WA = 100 coin, 1 AI briefing = 500 coin. Trial dapat 1.000 coin gratis bawaan.'],
+
+      ['Apakah data saya aman?',
+       'Ya. Data kamu disimpan di server terenkripsi dengan backup harian. Setiap tenant (akun) memiliki isolasi data penuh — data outlet kamu tidak bisa diakses oleh siapapun kecuali kamu. Kami juga tidak menjual atau membagikan data ke pihak ketiga.'],
+
+      ['Bisa diakses dari HP?',
+       'LAMASY dirancang <strong>mobile-first</strong> — bisa diakses dari browser HP manapun tanpa perlu install aplikasi. Tampilannya responsif dan nyaman di layar kecil.'],
+
+      ['Bagaimana cara setup-nya? Susah tidak?',
+       'Sangat mudah. Daftar 3 langkah, verifikasi email, lalu langsung bisa pakai. Tidak perlu keahlian teknis apapun. Untuk paket Starter dan Growth, tim kami akan memandu kamu lewat sesi onboarding 1-on-1 via WhatsApp atau Zoom.'],
+
+      ['Bisa tambah karyawan?',
+       'Ya! Kamu bisa menambahkan karyawan sebagai user dengan role dan akses yang berbeda — kasir, staff laundry, manajer. Setiap role punya tampilan dan fitur yang sesuai tugas mereka.'],
+
+      ['Bagaimana jika trial habis dan belum aktivasi?',
+       'Setelah 7 hari trial, outlet masuk periode <strong>grace 7 hari</strong> — kamu masih bisa lihat data (read-only) tapi tidak bisa buat order baru. Setelah grace berakhir, outlet akan ditangguhkan dan data tetap tersimpan selama 30 hari. Kamu bisa aktivasi kapan saja.'],
+
+      ['Apakah ada kontrak jangka panjang?',
+       'Tidak ada. LAMASY tidak memiliki kontrak bulanan atau tahunan yang mengikat. Setup fee dibayar sekali untuk onboarding, setelah itu kamu topup coin sesuai kebutuhan. Berhenti kapan saja, tidak ada penalti.'],
+    ];
+    foreach ($faqs as $i => [$q, $a]):
+    ?>
+    <div class="faq-item" style="border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden">
+      <button onclick="toggleFaq(<?= $i ?>)"
+              style="width:100%;background:none;border:none;padding:18px 0;
+                     display:flex;align-items:center;justify-content:space-between;
+                     cursor:pointer;text-align:left;gap:16px">
+        <span style="font-size:15px;font-weight:600;color:#fff;line-height:1.4"><?= $q ?></span>
+        <span id="faq-icon-<?= $i ?>"
+              style="font-size:20px;color:#35E8D5;flex-shrink:0;
+                     transition:transform .25s;line-height:1">+</span>
+      </button>
+      <div id="faq-body-<?= $i ?>"
+           style="max-height:0;overflow:hidden;transition:max-height .3s ease">
+        <div style="padding:0 0 18px;font-size:14px;color:rgba(255,255,255,.62);line-height:1.75">
+          <?= $a ?>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</section>
+
 <!-- ── CTA BANNER ───────────────────────────────────── -->
 <div class="cta-banner">
   <div class="cta-inner">
     <h2>Siap Digitalisasi Laundry Anda?</h2>
     <p>Bergabung dengan 500+ outlet laundry yang sudah lebih rapi bersama LAMASY. Daftar gratis, tidak perlu kartu kredit.</p>
     <div class="cta-btns">
-      <a href="/ERP/harpy/register.php" class="btn-primary">&#128640; Mulai Gratis 30 Hari</a>
+      <a href="/ERP/harpy/register.php" class="btn-primary">&#128640; Mulai Gratis 7 Hari</a>
       <a href="https://wa.me/6281234567890?text=Halo+saya+ingin+tahu+lebih+lanjut+tentang+LAMASY" target="_blank" class="btn-secondary">&#128172; Chat WhatsApp</a>
     </div>
   </div>
@@ -1264,8 +1482,8 @@ img { max-width: 100%; }
       <ul class="footer-links">
         <li><a href="#fitur">Fitur</a></li>
         <li><a href="#harga">Harga</a></li>
-        <li><a href="#cara-kerja">Cara Kerja</a></li>
-        <li><a href="/ERP/harpy/register.php">Daftar</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="/ERP/harpy/register.php">Daftar Gratis</a></li>
       </ul>
     </div>
     <div>
@@ -1297,6 +1515,23 @@ img { max-width: 100%; }
 </footer>
 
 <script>
+// ── FAQ accordion ─────────────────────────────────
+function toggleFaq(i) {
+  const body = document.getElementById('faq-body-' + i);
+  const icon = document.getElementById('faq-icon-' + i);
+  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px';
+
+  // Tutup semua dulu
+  document.querySelectorAll('[id^="faq-body-"]').forEach(el => { el.style.maxHeight = '0px'; });
+  document.querySelectorAll('[id^="faq-icon-"]').forEach(el => { el.textContent = '+'; el.style.transform = ''; });
+
+  if (!isOpen) {
+    body.style.maxHeight = body.scrollHeight + 'px';
+    icon.textContent = '−';
+    icon.style.transform = 'rotate(180deg)';
+  }
+}
+
 // ── Mobile nav toggle ──────────────────────────────
 function toggleMobileMenu() {
   const menu = document.getElementById('mobileMenu');
