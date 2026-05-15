@@ -255,14 +255,19 @@ if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_p
     $namaOutlet = trim(strip_tags($_POST['nama_outlet'] ?? ''));
     $kota       = trim(strip_tags($_POST['kota'] ?? ''));
 
-    $db = Database::get();
-    $db->prepare("UPDATE tenants SET nama_outlet=?, owner_wa=?, kota=? WHERE id=?")
-       ->execute([$namaOutlet ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
+    try {
+        $db = Database::get();
+        $db->prepare("UPDATE tenants SET nama_outlet=?, owner_wa=?, kota=? WHERE id=?")
+           ->execute([$namaOutlet ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
 
-    // Refresh session tenant data
-    TenantResolver::reset();
-    header('Location: dashboard.php?profile_saved=1');
-    exit;
+        TenantResolver::reset();
+        header('Location: dashboard.php?profile_saved=1');
+        exit;
+    } catch (Throwable $e) {
+        error_log('[dashboard save_profile] ' . $e->getMessage());
+        header('Location: dashboard.php?profile_error=' . urlencode($e->getMessage()));
+        exit;
+    }
 }
 
 // ── Password change handler ────────────────────────────
@@ -317,6 +322,11 @@ $pwError      = $pwError ?? '';
 <?php if ($profileSaved): ?>
 <div style="background:#D1FAE5;border:1px solid #6EE7B7;color:#065F46;padding:10px 16px;border-radius:8px;font-size:14px">
   ✅ Profil berhasil diperbarui.
+</div>
+<?php endif; ?>
+<?php if (!empty($_GET['profile_error'])): ?>
+<div style="background:#FEE2E2;border:1px solid #FCA5A5;color:#991B1B;padding:10px 16px;border-radius:8px;font-size:14px">
+  ❌ Gagal menyimpan profil: <?= htmlspecialchars($_GET['profile_error']) ?>
 </div>
 <?php endif; ?>
 <?php if ($pwChanged): ?>
