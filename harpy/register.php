@@ -166,15 +166,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 $trialEnds  = date('Y-m-d H:i:s', time() + 7 * 86400);
 
                 // 1. Tenant
+                // db_name wajib NOT NULL — pakai slug sebagai identifier unik
                 $db->prepare("
                     INSERT INTO tenants
-                      (slug, email, nama_outlet, owner_name, owner_wa, kota,
+                      (slug, db_name, email, nama_outlet, owner_name, owner_wa,
                        status, password_hash, registration_source, registered_at,
                        coin_balance, coin_mode, total_outlets)
                     VALUES (?,?,?,?,?,?,'pending_verification',?,'self_service',NOW(),0,'shared',0)
                 ")->execute([
-                    $slug, $d['email'], $d['nama_outlet'],
-                    $d['owner_name'], $d['owner_wa'], $d['kota'] ?? null,
+                    $slug, $slug,
+                    $d['email'], $d['nama_outlet'],
+                    $d['owner_name'], $d['owner_wa'],
                     $pwHash,
                 ]);
                 $tenantId = (int)$db->lastInsertId();
@@ -210,12 +212,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 // 5. Registration audit log
                 $db->prepare("
                     INSERT INTO registration_requests
-                      (source, email, nama_outlet, owner_name, owner_wa,
+                      (source, email, nama_outlet, owner_name, owner_wa, kota,
                        status, tenant_id, outlet_id, captcha_passed)
-                    VALUES ('self_service',?,?,?,?,'email_sent',?,?,1)
+                    VALUES ('self_service',?,?,?,?,?,'email_sent',?,?,1)
                 ")->execute([
                     $d['email'], $d['nama_outlet'], $d['owner_name'],
-                    $d['owner_wa'],
+                    $d['owner_wa'], $d['kota'] ?? null,
                     $tenantId, $outletId,
                 ]);
 
