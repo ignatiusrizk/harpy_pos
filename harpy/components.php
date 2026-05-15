@@ -17,7 +17,7 @@ function renderHead(string $title = 'Harpy'): void {
     <?php
 }
 
-function renderTopbar(string $activePage = ''): void {
+function renderTopbar(string $activePage = '', bool $minimalMode = false): void {
     $user   = currentUser();
     $tenant = currentTenant();
     if (!$user) return;
@@ -123,8 +123,11 @@ function renderTopbar(string $activePage = ''): void {
     <!-- TOPBAR -->
     <div class="hl-topbar">
       <div class="hl-topbar-left">
+        <?php if (!$minimalMode): ?>
         <button class="hl-nav-hamburger" onclick="openDrawer()">☰</button>
+        <?php endif; ?>
         <a href="dashboard.php" class="hl-brand"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:32px; vertical-align:middle; margin-right:8px;">LAMASY <span>by Harpy</span></a>
+        <?php if (!$minimalMode): ?>
         <nav class="hl-nav">
           <?php foreach ($navGroups as $groupKey => $group):
             if (!groupVisible($group, $user['role'])) continue;
@@ -159,10 +162,13 @@ function renderTopbar(string $activePage = ''): void {
             <?php endif; ?>
           <?php endforeach; ?>
         </nav>
+        <?php endif; ?>
       </div>
       <div class="hl-topbar-right">
         <span class="hl-user-nama"><?= htmlspecialchars($user['nama']) ?></span>
+        <?php if (!$minimalMode): ?>
         <span class="hl-user-role"><?= strtoupper($user['role_nama'] ?? $user['role']) ?></span>
+        <?php endif; ?>
         <a href="logout.php" class="hl-btn-logout"
            onclick="return confirm('Yakin logout?')">Logout</a>
       </div>

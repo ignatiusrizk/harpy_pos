@@ -246,7 +246,373 @@ if ($action) {
 </style>
 </head>
 <body>
-<?php renderTopbar('dashboard'); ?>
+<?php
+// ── Profile save handler (no-outlet state) ────────────
+if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
+    $ownerWa  = preg_replace('/\D/', '', $_POST['owner_wa'] ?? '');
+    if (substr($ownerWa, 0, 2) === '08') $ownerWa = '628' . substr($ownerWa, 2);
+    if (substr($ownerWa, 0, 1) === '8')  $ownerWa = '62' . $ownerWa;
+    $namaOutlet = trim(strip_tags($_POST['nama_outlet'] ?? ''));
+    $kota       = trim(strip_tags($_POST['kota'] ?? ''));
+
+    $db = Database::get();
+    $db->prepare("UPDATE tenants SET nama_outlet=?, owner_wa=?, kota=? WHERE id=?")
+       ->execute([$namaOutlet ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
+
+    // Refresh session tenant data
+    TenantResolver::reset();
+    header('Location: dashboard.php?profile_saved=1');
+    exit;
+}
+
+// ── Password change handler ────────────────────────────
+if (!$hasOutlet && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $db        = Database::get();
+    $currentPw = $_POST['current_password'] ?? '';
+    $newPw     = $_POST['new_password']     ?? '';
+    $confPw    = $_POST['confirm_password'] ?? '';
+    $pwError   = $pwSuccess = '';
+
+    $row = $db->prepare("SELECT password FROM hl_users WHERE id=?");
+    $row->execute([$user['id']]);
+    $stored = $row->fetchColumn();
+
+    if (!password_verify($currentPw, $stored)) {
+        $pwError = 'Password lama tidak sesuai.';
+    } elseif (strlen($newPw) < 8) {
+        $pwError = 'Password baru minimal 8 karakter.';
+    } elseif ($newPw !== $confPw) {
+        $pwError = 'Konfirmasi password tidak cocok.';
+    } else {
+        $hash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 11]);
+        $db->prepare("UPDATE hl_users SET password=? WHERE id=?")->execute([$hash, $user['id']]);
+        $db->prepare("UPDATE tenants SET password_hash=? WHERE id=?")->execute([$hash, $tid]);
+        header('Location: dashboard.php?pw_changed=1');
+        exit;
+    }
+}
+?>
+<?php renderTopbar('dashboard', !$hasOutlet); ?>
+
+<?php if (!$hasOutlet):
+// ════════════════════════════════════════════════════════
+// NO-OUTLET STATE — onboarding dashboard
+// ════════════════════════════════════════════════════════
+$tenant = currentTenant();
+$ownerNama  = $user['nama'] ?? 'Owner';
+$tenantNama = $tenant['nama_outlet'] ?? '';
+$tenantWa   = $tenant['owner_wa']   ?? '';
+$tenantKota = $tenant['kota']       ?? '';
+$tenantEmail= $tenant['email']      ?? $user['email'] ?? '';
+
+// Cek onboarding progress
+$profileDone  = !empty($tenantWa);
+$profileSaved = isset($_GET['profile_saved']);
+$pwChanged    = isset($_GET['pw_changed']);
+$pwError      = $pwError ?? '';
+?>
+<div style="background:#F4F7FB;min-height:calc(100vh - 60px);padding:28px 16px 80px">
+<div style="max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+
+<?php if ($profileSaved): ?>
+<div style="background:#D1FAE5;border:1px solid #6EE7B7;color:#065F46;padding:10px 16px;border-radius:8px;font-size:14px">
+  ✅ Profil berhasil diperbarui.
+</div>
+<?php endif; ?>
+<?php if ($pwChanged): ?>
+<div style="background:#D1FAE5;border:1px solid #6EE7B7;color:#065F46;padding:10px 16px;border-radius:8px;font-size:14px">
+  ✅ Password berhasil diubah.
+</div>
+<?php endif; ?>
+
+<!-- ① HERO CTA ──────────────────────────────────────── -->
+<div style="background:linear-gradient(135deg,#0F1C3A 0%,#1a2d52 100%);
+            border-radius:16px;padding:36px 32px;color:#fff;text-align:center;
+            position:relative;overflow:hidden">
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,rgba(53,232,213,.15),transparent 70%)"></div>
+  <div style="position:relative">
+    <div style="display:inline-block;background:rgba(53,232,213,.15);border:1px solid rgba(53,232,213,.3);
+                color:#35E8D5;font-size:12px;font-weight:700;padding:4px 14px;border-radius:100px;
+                margin-bottom:16px;letter-spacing:.05em">
+      🎁 TRIAL 7 HARI GRATIS · 1.000 COIN
+    </div>
+    <h1 style="font-size:clamp(1.4rem,4vw,2rem);font-weight:800;margin:0 0 12px;line-height:1.25">
+      Selamat datang, <?= htmlspecialchars($ownerNama) ?>! 👋
+    </h1>
+    <p style="font-size:15px;color:rgba(255,255,255,.75);max-width:500px;margin:0 auto 28px;line-height:1.65">
+      Akun LAMASY kamu sudah aktif. Daftarkan outlet pertama untuk mulai
+      mengelola laundry dengan AI — gratis 7 hari, tanpa kartu kredit.
+    </p>
+    <a href="/ERP/harpy/add-outlet.php"
+       style="display:inline-block;background:#35E8D5;color:#0F1C3A;font-weight:800;
+              font-size:16px;padding:15px 40px;border-radius:12px;text-decoration:none;
+              transition:opacity .2s">
+      🏪 Daftarkan Outlet — Gratis 7 Hari
+    </a>
+    <div style="margin-top:12px;font-size:12px;color:rgba(255,255,255,.4)">
+      ⏱ Cuma butuh 3 menit. Tidak perlu kartu kredit.
+    </div>
+  </div>
+</div>
+
+<!-- ② PROFIL + CHECKLIST ────────────────────────────── -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="no-outlet-grid">
+
+  <!-- PROFIL AKUN -->
+  <div style="background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+    <h3 style="font-size:15px;font-weight:700;color:#0F1C3A;margin:0 0 18px;
+               display:flex;align-items:center;gap:8px">
+      <span style="background:#F0FDFB;border-radius:8px;padding:4px 8px">👤</span> Profil Akun
+    </h3>
+    <form method="POST">
+      <input type="hidden" name="save_profile" value="1">
+      <div style="margin-bottom:13px">
+        <label style="font-size:12px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nama Outlet / Brand</label>
+        <input type="text" name="nama_outlet" value="<?= htmlspecialchars($tenantNama) ?>"
+               style="width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                      font-size:14px;box-sizing:border-box;outline:none"
+               onfocus="this.style.borderColor='#35E8D5'" onblur="this.style.borderColor='#E5E7EB'">
+      </div>
+      <div style="margin-bottom:13px">
+        <label style="font-size:12px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
+          Email <span style="font-weight:400;color:#9CA3AF">(tidak bisa diubah)</span>
+        </label>
+        <input type="email" value="<?= htmlspecialchars($tenantEmail) ?>" disabled
+               style="width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                      font-size:14px;box-sizing:border-box;background:#F9FAFB;color:#9CA3AF">
+      </div>
+      <div style="margin-bottom:13px">
+        <label style="font-size:12px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nomor WhatsApp</label>
+        <input type="tel" name="owner_wa"
+               value="<?= htmlspecialchars(preg_replace('/^628/', '08', $tenantWa)) ?>"
+               placeholder="08xxxxxxxxxx"
+               style="width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                      font-size:14px;box-sizing:border-box;outline:none"
+               onfocus="this.style.borderColor='#35E8D5'" onblur="this.style.borderColor='#E5E7EB'">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Kota</label>
+        <input type="text" name="kota" value="<?= htmlspecialchars($tenantKota) ?>"
+               placeholder="cth: Surabaya"
+               style="width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                      font-size:14px;box-sizing:border-box;outline:none"
+               onfocus="this.style.borderColor='#35E8D5'" onblur="this.style.borderColor='#E5E7EB'">
+      </div>
+      <button type="submit"
+              style="width:100%;background:#35E8D5;color:#0F1C3A;border:none;padding:10px;
+                     border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">
+        💾 Simpan Profil
+      </button>
+    </form>
+
+    <!-- Password change toggle -->
+    <div style="margin-top:16px;border-top:1px solid #F3F4F6;padding-top:16px">
+      <button onclick="document.getElementById('pwForm').style.display=
+                document.getElementById('pwForm').style.display==='none'?'block':'none'"
+              style="background:none;border:1.5px solid #E5E7EB;color:#374151;padding:8px 16px;
+                     border-radius:8px;font-size:13px;cursor:pointer;width:100%">
+        🔑 Ubah Password
+      </button>
+      <div id="pwForm" style="display:<?= $pwError ? 'block' : 'none' ?>;margin-top:12px">
+        <?php if ($pwError): ?>
+        <div style="background:#FEE2E2;color:#991B1B;padding:8px 12px;border-radius:6px;
+                    font-size:13px;margin-bottom:10px"><?= htmlspecialchars($pwError) ?></div>
+        <?php endif; ?>
+        <form method="POST">
+          <input type="hidden" name="change_password" value="1">
+          <input type="password" name="current_password" placeholder="Password lama"
+                 style="width:100%;padding:8px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                        font-size:13px;box-sizing:border-box;margin-bottom:8px;outline:none">
+          <input type="password" name="new_password" placeholder="Password baru (min 8 karakter)"
+                 style="width:100%;padding:8px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                        font-size:13px;box-sizing:border-box;margin-bottom:8px;outline:none">
+          <input type="password" name="confirm_password" placeholder="Ulangi password baru"
+                 style="width:100%;padding:8px 12px;border:1.5px solid #E5E7EB;border-radius:8px;
+                        font-size:13px;box-sizing:border-box;margin-bottom:10px;outline:none">
+          <button type="submit"
+                  style="width:100%;background:#0F1C3A;color:#fff;border:none;padding:9px;
+                         border-radius:8px;font-weight:600;font-size:13px;cursor:pointer">
+            Simpan Password Baru
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING CHECKLIST -->
+  <div style="background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+    <h3 style="font-size:15px;font-weight:700;color:#0F1C3A;margin:0 0 6px;
+               display:flex;align-items:center;gap:8px">
+      <span style="background:#F0FDFB;border-radius:8px;padding:4px 8px">✅</span> Setup Checklist
+    </h3>
+    <?php
+    $steps = [
+      ['done'=>true,        'locked'=>false, 'label'=>'Verifikasi email',            'link'=>null,                          'icon'=>'📧'],
+      ['done'=>$profileDone,'locked'=>false, 'label'=>'Lengkapi profil perusahaan',  'link'=>null,                          'icon'=>'👤'],
+      ['done'=>false,       'locked'=>false, 'label'=>'Tonton video tutorial 2 menit','link'=>'https://youtu.be/placeholder','icon'=>'▶️'],
+      ['done'=>false,       'locked'=>false, 'label'=>'Daftarkan outlet pertama',    'link'=>'/ERP/harpy/add-outlet.php',   'icon'=>'🏪'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Setup layanan & harga',       'link'=>null,                          'icon'=>'🧺'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Tambah karyawan pertama',     'link'=>null,                          'icon'=>'👥'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Buat order pertama',          'link'=>null,                          'icon'=>'🛒'],
+    ];
+    $doneCnt = count(array_filter($steps, fn($s) => $s['done']));
+    $total   = count($steps);
+    $pct     = round($doneCnt / $total * 100);
+    ?>
+    <!-- Progress bar -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#6B7280;margin-bottom:5px">
+        <span><?= $doneCnt ?>/<?= $total ?> selesai</span>
+        <span><?= $pct ?>%</span>
+      </div>
+      <div style="background:#F3F4F6;border-radius:100px;height:8px;overflow:hidden">
+        <div style="background:linear-gradient(90deg,#35E8D5,#0891B2);height:100%;
+                    width:<?= $pct ?>%;border-radius:100px;transition:width .4s"></div>
+      </div>
+    </div>
+    <!-- Steps -->
+    <?php foreach ($steps as $i => $s):
+      $statusColor = $s['done'] ? '#065F46' : ($s['locked'] ? '#9CA3AF' : '#0F1C3A');
+      $bg = $s['done'] ? '#F0FDF4' : ($s['locked'] ? '#F9FAFB' : '#fff');
+      $border = $s['done'] ? '#6EE7B7' : '#E5E7EB';
+      $check = $s['done'] ? '✅' : ($s['locked'] ? '🔒' : '⭕');
+    ?>
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;
+                background:<?= $bg ?>;border:1px solid <?= $border ?>;
+                border-radius:8px;margin-bottom:6px;font-size:13px">
+      <span style="font-size:14px;flex-shrink:0"><?= $check ?></span>
+      <span style="flex:1;color:<?= $statusColor ?>;<?= $s['locked'] ? 'opacity:.5' : '' ?>">
+        <?= $s['icon'] ?> <?= $s['label'] ?>
+        <?php if ($s['locked']): ?>
+          <span style="font-size:11px;color:#9CA3AF;display:block">Tersedia setelah outlet didaftarkan</span>
+        <?php endif; ?>
+      </span>
+      <?php if (!$s['done'] && !$s['locked'] && $s['link']): ?>
+      <a href="<?= $s['link'] ?>"
+         style="background:#35E8D5;color:#0F1C3A;font-size:11px;font-weight:700;
+                padding:4px 10px;border-radius:6px;text-decoration:none;white-space:nowrap">
+        <?= $i === 3 ? 'Mulai →' : 'Buka →' ?>
+      </a>
+      <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div><!-- /profil+checklist grid -->
+
+<!-- ③ SCREENSHOT TOUR ──────────────────────────────── -->
+<div style="background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+  <h3 style="font-size:15px;font-weight:700;color:#0F1C3A;margin:0 0 4px">
+    🖥️ Ini yang bisa kamu lakukan dengan LAMASY
+  </h3>
+  <p style="font-size:13px;color:#6B7280;margin:0 0 18px">Daftar outlet untuk akses penuh ke semua fitur</p>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" class="tour-grid">
+    <?php
+    $features = [
+      ['icon'=>'🛒','title'=>'POS & Order',       'desc'=>'Input order, cetak nota, kelola status cucian'],
+      ['icon'=>'📊','title'=>'Dashboard & Laporan','desc'=>'Pantau omset, saldo kas, dan kinerja harian'],
+      ['icon'=>'🤖','title'=>'AI Briefing',        'desc'=>'Laporan performa outlet otomatis setiap hari'],
+      ['icon'=>'💬','title'=>'WhatsApp Otomatis',  'desc'=>'Notif pelanggan saat cucian siap, otomatis'],
+    ];
+    foreach ($features as $f):
+    ?>
+    <div style="background:#F8FAFC;border:1.5px solid #E5E7EB;border-radius:10px;
+                padding:16px 14px;text-align:center">
+      <div style="font-size:28px;margin-bottom:8px"><?= $f['icon'] ?></div>
+      <div style="font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:4px"><?= $f['title'] ?></div>
+      <div style="font-size:11px;color:#6B7280;line-height:1.5"><?= $f['desc'] ?></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="text-align:center;margin-top:16px">
+    <a href="/ERP/harpy/add-outlet.php"
+       style="font-size:13px;color:#0891B2;text-decoration:none;font-weight:600">
+      Daftar outlet untuk akses penuh →
+    </a>
+  </div>
+</div>
+
+<!-- ④ FAQ ──────────────────────────────────────────── -->
+<div style="background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+  <h3 style="font-size:15px;font-weight:700;color:#0F1C3A;margin:0 0 16px">❓ Pertanyaan Umum</h3>
+  <?php
+  $faqs = [
+    ['q'=>'Apa bedanya "akun" dan "outlet" di LAMASY?',
+     'a'=>'<strong>Akun</strong> = identitas perusahaan kamu (gratis selamanya, tidak kadaluarsa). <strong>Outlet</strong> = toko/cabang operasional yang punya trial 7 hari. 1 akun bisa punya banyak outlet.'],
+    ['q'=>'Berapa biaya setelah trial 7 hari habis?',
+     'a'=>'Setup fee Rp 300rb–500rb untuk aktivasi outlet. Setelah itu pakai sistem coin: topup mulai Rp 50rb, bayar per fitur yang dipakai saja.'],
+    ['q'=>'Saya punya 3 cabang, harus bayar 3x?',
+     'a'=>'Ya, setiap outlet bayar setup fee terpisah. Tapi 1 akun bisa kelola semua cabang dari 1 dashboard — hemat waktu dan lebih mudah dipantau.'],
+    ['q'=>'Apakah data saya aman?',
+     'a'=>'Data tersimpan di server aman. Setelah trial habis, data tetap ada 7 hari (grace period) + 30 hari recovery. Cukup waktu untuk aktivasi tanpa kehilangan data.'],
+    ['q'=>'Butuh install aplikasi?',
+     'a'=>'Tidak perlu. LAMASY berjalan di browser — buka di HP atau laptop. Tidak perlu install apapun, langsung pakai.'],
+  ];
+  foreach ($faqs as $i => $faq):
+  ?>
+  <div style="border-bottom:1px solid #F3F4F6;<?= $i===count($faqs)-1 ? 'border-bottom:none' : '' ?>">
+    <button onclick="toggleFaqNo(<?= $i ?>)"
+            style="width:100%;text-align:left;background:none;border:none;padding:13px 0;
+                   font-size:14px;font-weight:600;color:#0F1C3A;cursor:pointer;
+                   display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span><?= htmlspecialchars($faq['q']) ?></span>
+      <span id="faqArrowNo<?= $i ?>" style="font-size:12px;color:#9CA3AF;flex-shrink:0">▼</span>
+    </button>
+    <div id="faqAnsNo<?= $i ?>"
+         style="max-height:0;overflow:hidden;transition:max-height .3s ease">
+      <p style="font-size:13px;color:#4B5563;line-height:1.7;padding:0 0 14px;margin:0">
+        <?= $faq['a'] ?>
+      </p>
+    </div>
+  </div>
+  <?php endforeach; ?>
+  <div style="margin-top:16px;text-align:center;font-size:13px;color:#6B7280">
+    Masih ada pertanyaan?
+    <a href="https://wa.me/6281234567890?text=Halo%2C+saya+baru+daftar+LAMASY+dan+butuh+bantuan"
+       style="color:#35E8D5;font-weight:700;text-decoration:none">Chat WhatsApp Kami →</a>
+  </div>
+</div>
+
+</div><!-- /max-width wrapper -->
+</div><!-- /no-outlet bg -->
+
+<!-- FLOATING WA BUTTON -->
+<a href="https://wa.me/6281234567890?text=Halo%2C+saya+baru+daftar+LAMASY+dan+butuh+bantuan"
+   target="_blank" rel="noopener"
+   style="position:fixed;bottom:24px;right:24px;background:#25D366;color:#fff;
+          border-radius:100px;padding:12px 18px 12px 14px;font-size:14px;font-weight:700;
+          text-decoration:none;box-shadow:0 4px 16px rgba(37,211,102,.4);
+          display:flex;align-items:center;gap:8px;z-index:999;transition:transform .2s"
+   onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+  Butuh bantuan?
+</a>
+
+<style>
+@media(max-width:640px){
+  .no-outlet-grid{grid-template-columns:1fr!important}
+  .tour-grid{grid-template-columns:repeat(2,1fr)!important}
+}
+</style>
+<script>
+function toggleFaqNo(i){
+  var a=document.getElementById('faqAnsNo'+i);
+  var arr=document.getElementById('faqArrowNo'+i);
+  var isOpen=a.style.maxHeight&&a.style.maxHeight!=='0px';
+  a.style.maxHeight=isOpen?'0px':a.scrollHeight+'px';
+  arr.textContent=isOpen?'▼':'▲';
+}
+// Mark tutorial step done via localStorage
+if(localStorage.getItem('lamasy_tutorial_done')){
+  // Could update UI here if needed
+}
+</script>
+
+<?php else: ?>
+<!-- ════════════════════════════════════════════════════
+     NORMAL DASHBOARD (outlet exists)
+════════════════════════════════════════════════════ -->
 <div class="hl-main" style="max-width:1400px;width:100%">
 
 <?php
@@ -265,44 +631,6 @@ foreach ($banners as $b):
     <?= $b['message'] ?>
 </div>
 <?php endforeach; ?>
-
-<?php if (!$hasOutlet): ?>
-  <!-- ══ EMPTY STATE — belum ada outlet ══ -->
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
-              min-height:60vh;text-align:center;padding:40px 20px">
-    <div style="font-size:72px;margin-bottom:20px">🏪</div>
-    <h1 style="font-size:1.6rem;font-weight:800;color:var(--navy);margin-bottom:10px">
-      Selamat datang di LAMASY!
-    </h1>
-    <p style="font-size:15px;color:var(--gray);max-width:440px;line-height:1.65;margin-bottom:28px">
-      Akun kamu sudah aktif. Langkah berikutnya adalah menambahkan outlet pertama kamu
-      untuk mulai mengelola laundry.
-    </p>
-    <div style="background:#F0FDFB;border:1.5px solid rgba(53,232,213,.3);
-                border-radius:12px;padding:20px 28px;max-width:360px;margin-bottom:28px;
-                text-align:left">
-      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">
-        ✅ Yang akan kamu dapatkan:
-      </div>
-      <ul style="font-size:13px;color:var(--gray);padding-left:18px;line-height:2">
-        <li><strong>7 hari trial gratis</strong></li>
-        <li>1.000 coin untuk fitur AI & WA</li>
-        <li>Manajemen order, karyawan & kas</li>
-        <li>Notifikasi WhatsApp otomatis</li>
-      </ul>
-    </div>
-    <a href="/ERP/harpy/add-outlet.php"
-       class="hl-btn hl-btn-primary"
-       style="font-size:15px;padding:14px 36px;border-radius:10px">
-      🚀 Tambah Outlet Sekarang
-    </a>
-    <p style="margin-top:16px;font-size:12px;color:var(--gray)">
-      Butuh bantuan?
-      <a href="https://wa.me/6281234567890" style="color:var(--teal)">Chat Tim LAMASY</a>
-    </p>
-  </div>
-
-<?php else: ?>
   <!-- ══ NORMAL DASHBOARD ══ -->
 
   <!-- GREETING -->
@@ -420,9 +748,10 @@ foreach ($banners as $b):
     </div>
   </div>
 
-<?php endif; // hasOutlet ?>
-
+<?php endif; // hasOutlet — end normal dashboard ?>
 </div><!-- /hl-main -->
+
+<?php endif; // outer hasOutlet check ?>
 
 <?php renderToast(); ?>
 <script>

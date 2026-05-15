@@ -160,13 +160,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
         } else {
             $db->beginTransaction();
             try {
-                $slug       = uniqueSlug($d['nama_outlet']);
-                $outletSlug = $slug . '_outlet1';
-                $pwHash     = password_hash($d['password'], PASSWORD_BCRYPT, ['cost' => 11]);
-                $trialEnds  = date('Y-m-d H:i:s', time() + 7 * 86400);
+                $slug   = uniqueSlug($d['nama_outlet']);
+                $pwHash = password_hash($d['password'], PASSWORD_BCRYPT, ['cost' => 11]);
 
-                // 1. Tenant
-                // db_name wajib NOT NULL — pakai slug sebagai identifier unik
+                // 1. Tenant (outlet belum dibuat — dibuat terpisah via add-outlet.php)
                 $db->prepare("
                     INSERT INTO tenants
                       (slug, db_name, email, nama_outlet, owner_name, owner_wa,
@@ -181,44 +178,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 ]);
                 $tenantId = (int)$db->lastInsertId();
 
-                // 2. Outlet (trial 7d, 1000 trial coins)
-                $db->prepare("
-                    INSERT INTO outlets
-                      (tenant_id, nama_outlet, slug, kota, status,
-                       trial_starts_at, trial_ends_at,
-                       trial_coin_balance, coin_balance, is_main, setup_done)
-                    VALUES (?,?,?,?,'trial',NOW(),?,1000,0,1,0)
-                ")->execute([
-                    $tenantId, $d['nama_outlet'], $outletSlug,
-                    $d['kota'] ?? null, $trialEnds,
-                ]);
-                $outletId = (int)$db->lastInsertId();
-
-                // 3. Update tenant.total_outlets
-                $db->prepare("UPDATE tenants SET total_outlets=1 WHERE id=?")->execute([$tenantId]);
-
-                // 4. User owner
+                // 2. User owner (outlet_id default 1 dari schema, tapi belum ada outlet nyata)
                 $db->prepare("
                     INSERT INTO hl_users
                       (tenant_id, outlet_id, username, email, password, nama, role, email_verified)
-                    VALUES (?,?,?,?,?,?,'owner',0)
+                    VALUES (?,0,?,?,?,?,'owner',0)
                 ")->execute([
-                    $tenantId, $outletId,
+                    $tenantId,
                     'owner_' . $slug,
                     $d['email'], $pwHash,
                     $d['owner_name'],
                 ]);
 
-                // 5. Registration audit log
+                // 3. Registration audit log
                 $db->prepare("
                     INSERT INTO registration_requests
                       (source, email, nama_outlet, owner_name, owner_wa, kota,
-                       status, tenant_id, outlet_id, captcha_passed)
-                    VALUES ('self_service',?,?,?,?,?,'email_sent',?,?,1)
+                       status, tenant_id, captcha_passed)
+                    VALUES ('self_service',?,?,?,?,?,'email_sent',?,1)
                 ")->execute([
                     $d['email'], $d['nama_outlet'], $d['owner_name'],
                     $d['owner_wa'], $d['kota'] ?? null,
-                    $tenantId, $outletId,
+                    $tenantId,
                 ]);
 
                 $db->commit();
