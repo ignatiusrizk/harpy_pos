@@ -748,10 +748,9 @@ foreach ($banners as $b):
     </div>
   </div>
 
-<?php endif; // hasOutlet — end normal dashboard ?>
 </div><!-- /hl-main -->
 
-<?php endif; // outer hasOutlet check ?>
+<?php endif; // hasOutlet ?>
 
 <?php renderToast(); ?>
 <script>
