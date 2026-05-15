@@ -168,6 +168,38 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       </div>
       <div class="hl-topbar-right">
         <?php
+        // ── Trial countdown + Coin balance (hanya jika ada outlet aktif) ──
+        if (!$minimalMode && TenantResolver::hasOutlet()):
+          $isTrial   = TenantResolver::isTrial();
+          $trialDays = $isTrial ? TenantResolver::trialDaysLeft() : 0;
+          $coin      = TenantResolver::coinBalance();
+          $isGrace   = TenantResolver::isGraceMode();
+          $coinFmt   = number_format($coin, 0, ',', '.');
+        ?>
+          <?php if ($isTrial): ?>
+          <div title="Trial outlet aktif"
+               style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);
+                      color:#F59E0B;font-size:12px;font-weight:700;padding:5px 11px;
+                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
+            ⏰ Trial: <?= $trialDays ?>h
+          </div>
+          <?php elseif ($isGrace): ?>
+          <div title="Outlet dalam grace period"
+               style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);
+                      color:#EF4444;font-size:12px;font-weight:700;padding:5px 11px;
+                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
+            ⚠️ Grace: <?= TenantResolver::graceDaysLeft() ?>h
+          </div>
+          <?php endif; ?>
+          <div title="Saldo coin"
+               style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+                      color:#fff;font-size:12px;font-weight:700;padding:5px 11px;
+                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
+            🪙 <?= $coinFmt ?><?= $isTrial ? ' <span style="font-size:10px;opacity:.6;font-weight:600">trial</span>' : '' ?>
+          </div>
+        <?php endif; ?>
+
+        <?php
         // ── Outlet indicator + switcher (hanya jika ada outlet aktif) ──
         if (!$minimalMode && TenantResolver::hasOutlet()):
           $currentOutletId = TenantResolver::outletId();
