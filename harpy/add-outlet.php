@@ -13,25 +13,19 @@ error_reporting(E_ALL);
 $activePage = 'add-outlet';
 define('ROOT', __DIR__);
 
-// Load minimal (tanpa full tenant_guard karena bisa dipanggil sebelum outlet ada)
+// ── Auth check sebelum tenant_guard ───────────────────
 if (session_status() === PHP_SESSION_NONE) session_start();
-
-require_once ROOT . '/master/config/db.php';
-require_once ROOT . '/core/Database.php';
-require_once ROOT . '/core/TenantResolver.php';
-require_once ROOT . '/core/TenantQuery.php';
-require_once ROOT . '/core/CoinLedger.php';
-
-// ── Auth check ────────────────────────────────────────
 if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
     header('Location: /ERP/harpy/login.php?msg=not_logged_in');
     exit;
 }
 
-// Resolve tenant (tapi biarkan outlet_id=0)
-TenantResolver::resolve();
+// tenant_guard memberikan: currentUser(), getCsrfToken(), Database, TenantResolver, dll
+// TenantResolver sudah tolerate no-outlet untuk add-outlet.php
+require_once ROOT . '/middleware/tenant_guard.php';
+
 $tid  = TenantResolver::id();
-$user = $_SESSION['hl_user'] ?? [];
+$user = currentUser() ?? [];
 
 // Hanya owner yang boleh tambah outlet
 if (($user['role'] ?? '') !== 'owner') {
