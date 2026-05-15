@@ -159,8 +159,17 @@ class TenantResolver
 
         // ── Status checks outlet ──────────────────────
 
-        // Outlet suspended atau closed
-        if (in_array($outlet['status'], ['suspended', 'closed'])) {
+        // Outlet closed → treat as no-outlet (user bisa daftar outlet baru)
+        // Sesuai brief: outlet closed tidak bisa diaktivasi ulang
+        if ($outlet['status'] === 'closed') {
+            unset($_SESSION['outlet_id']);
+            $_SESSION['has_outlet'] = false;
+            self::$outlet = null;
+            return;
+        }
+
+        // Outlet suspended → blok dengan halaman aktivasi
+        if ($outlet['status'] === 'suspended') {
             self::showSuspendedPage($tenant, $outlet);
             exit;
         }
