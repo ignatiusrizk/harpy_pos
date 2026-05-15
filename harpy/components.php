@@ -167,6 +167,79 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
         <?php endif; ?>
       </div>
       <div class="hl-topbar-right">
+        <?php
+        // ── Outlet indicator + switcher (hanya jika ada outlet aktif) ──
+        if (!$minimalMode && TenantResolver::hasOutlet()):
+          $currentOutletId = TenantResolver::outletId();
+          $currentOutletNm = TenantResolver::namaOutlet();
+
+          $tdb = Database::get();
+          $stmt = $tdb->prepare(
+            "SELECT id, nama_outlet, status FROM outlets
+             WHERE tenant_id = ? AND status IN ('trial','grace','active')
+             ORDER BY is_main DESC, nama_outlet ASC"
+          );
+          $stmt->execute([TenantResolver::id()]);
+          $allOutlets = $stmt->fetchAll();
+          $hasMulti   = count($allOutlets) > 1;
+        ?>
+        <div class="hl-outlet-switch" style="position:relative">
+          <button class="hl-outlet-btn" type="button"
+                  onclick="<?= $hasMulti ? 'this.nextElementSibling.classList.toggle(\'open\')' : 'event.preventDefault()' ?>"
+                  style="background:rgba(53,232,213,.1);border:1px solid rgba(53,232,213,.25);
+                         color:#35E8D5;font-size:13px;font-weight:600;padding:6px 12px;
+                         border-radius:8px;cursor:<?= $hasMulti ? 'pointer' : 'default' ?>;
+                         display:flex;align-items:center;gap:6px;font-family:inherit">
+            <span>📍</span>
+            <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              <?= htmlspecialchars($currentOutletNm) ?>
+            </span>
+            <?php if ($hasMulti): ?>
+              <span style="font-size:10px;opacity:.7">▼</span>
+            <?php endif; ?>
+          </button>
+          <?php if ($hasMulti): ?>
+          <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);
+                       right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;
+                       box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:240px;z-index:1000;
+                       padding:6px;max-height:340px;overflow-y:auto">
+            <div style="font-size:11px;color:#9CA3AF;font-weight:600;padding:8px 12px 4px;
+                        text-transform:uppercase;letter-spacing:.05em">Pilih Outlet</div>
+            <?php foreach ($allOutlets as $o):
+              $isActive  = (int)$o['id'] === $currentOutletId;
+              $statusBg  = $o['status'] === 'active' ? '#D1FAE5' : ($o['status'] === 'trial' ? '#DBEAFE' : '#FEF3C7');
+              $statusFg  = $o['status'] === 'active' ? '#065F46' : ($o['status'] === 'trial' ? '#1E40AF' : '#92400E');
+            ?>
+            <a href="switch-outlet.php?id=<?= (int)$o['id'] ?>"
+               style="display:flex;align-items:center;justify-content:space-between;gap:8px;
+                      padding:8px 12px;border-radius:6px;text-decoration:none;
+                      background:<?= $isActive ? '#F0FDFB' : 'transparent' ?>;
+                      color:<?= $isActive ? '#0F1C3A' : '#374151' ?>;font-size:13px;
+                      <?= $isActive ? 'font-weight:700' : '' ?>"
+               onmouseover="if('<?= $isActive ?>'!=='1')this.style.background='#F9FAFB'"
+               onmouseout ="if('<?= $isActive ?>'!=='1')this.style.background='transparent'">
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                <?= $isActive ? '✓ ' : '' ?><?= htmlspecialchars($o['nama_outlet']) ?>
+              </span>
+              <span style="background:<?= $statusBg ?>;color:<?= $statusFg ?>;font-size:10px;
+                           font-weight:700;padding:2px 7px;border-radius:100px;text-transform:uppercase">
+                <?= $o['status'] ?>
+              </span>
+            </a>
+            <?php endforeach; ?>
+          </div>
+          <script>
+          document.addEventListener('click',function(e){
+            if(!e.target.closest('.hl-outlet-switch')){
+              document.querySelectorAll('.hl-outlet-dropdown.open').forEach(function(el){el.classList.remove('open')});
+            }
+          });
+          </script>
+          <style>.hl-outlet-dropdown.open{display:block!important}</style>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <span class="hl-user-nama"><?= htmlspecialchars($user['nama']) ?></span>
         <?php if (!$minimalMode): ?>
         <span class="hl-user-role"><?= strtoupper($user['role_nama'] ?? $user['role']) ?></span>
