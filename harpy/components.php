@@ -78,6 +78,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
     }
     ?>
 
+    <?php if (!$minimalMode): ?>
     <!-- MOBILE DRAWER OVERLAY -->
     <div class="hl-nav-drawer-overlay" id="navOverlay" onclick="closeDrawer()"></div>
 
@@ -119,6 +120,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
            onclick="return confirm('Yakin logout?')">🚪 Logout</a>
       </div>
     </div>
+    <?php endif; // !$minimalMode — end drawer ?>
 
     <!-- TOPBAR -->
     <div class="hl-topbar">
