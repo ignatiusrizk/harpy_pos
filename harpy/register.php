@@ -210,12 +210,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 // 5. Registration audit log
                 $db->prepare("
                     INSERT INTO registration_requests
-                      (source, email, nama_outlet, owner_name, owner_wa, kota,
+                      (source, email, nama_outlet, owner_name, owner_wa,
                        status, tenant_id, outlet_id, captcha_passed)
-                    VALUES ('self_service',?,?,?,?,?,'email_sent',?,?,1)
+                    VALUES ('self_service',?,?,?,?,'email_sent',?,?,1)
                 ")->execute([
                     $d['email'], $d['nama_outlet'], $d['owner_name'],
-                    $d['owner_wa'], $d['kota'] ?? null,
+                    $d['owner_wa'],
                     $tenantId, $outletId,
                 ]);
 
