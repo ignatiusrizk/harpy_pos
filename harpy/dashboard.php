@@ -455,13 +455,12 @@ $pwError      = $pwError ?? '';
     </h3>
     <?php
     $steps = [
-      ['done'=>true,        'locked'=>false, 'label'=>'Verifikasi email',            'link'=>null,                          'icon'=>'📧'],
-      ['done'=>$profileDone,'locked'=>false, 'label'=>'Lengkapi profil perusahaan',  'link'=>null,                          'icon'=>'👤'],
-      ['done'=>false,       'locked'=>false, 'label'=>'Tonton video tutorial 2 menit','link'=>'https://youtu.be/placeholder','icon'=>'▶️'],
-      ['done'=>false,       'locked'=>false, 'label'=>'Daftarkan outlet pertama',    'link'=>'/ERP/harpy/add-outlet.php',   'icon'=>'🏪'],
-      ['done'=>false,       'locked'=>true,  'label'=>'Setup layanan & harga',       'link'=>null,                          'icon'=>'🧺'],
-      ['done'=>false,       'locked'=>true,  'label'=>'Tambah karyawan pertama',     'link'=>null,                          'icon'=>'👥'],
-      ['done'=>false,       'locked'=>true,  'label'=>'Buat order pertama',          'link'=>null,                          'icon'=>'🛒'],
+      ['done'=>true,        'locked'=>false, 'label'=>'Verifikasi email',           'link'=>null,                        'icon'=>'📧'],
+      ['done'=>$profileDone,'locked'=>false, 'label'=>'Lengkapi profil perusahaan', 'link'=>null,                        'icon'=>'👤'],
+      ['done'=>false,       'locked'=>false, 'label'=>'Daftarkan outlet pertama',   'link'=>'/ERP/harpy/add-outlet.php', 'icon'=>'🏪'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Setup layanan & harga',      'link'=>null,                        'icon'=>'🧺'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Tambah karyawan pertama',    'link'=>null,                        'icon'=>'👥'],
+      ['done'=>false,       'locked'=>true,  'label'=>'Buat order pertama',         'link'=>null,                        'icon'=>'🛒'],
     ];
     $doneCnt = count(array_filter($steps, fn($s) => $s['done']));
     $total   = count($steps);
@@ -499,7 +498,7 @@ $pwError      = $pwError ?? '';
       <a href="<?= $s['link'] ?>"
          style="background:#35E8D5;color:#0F1C3A;font-size:11px;font-weight:700;
                 padding:4px 10px;border-radius:6px;text-decoration:none;white-space:nowrap">
-        <?= $i === 3 ? 'Mulai →' : 'Buka →' ?>
+        <?= $i === 2 ? 'Mulai →' : 'Buka →' ?>
       </a>
       <?php endif; ?>
     </div>
