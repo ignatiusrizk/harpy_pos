@@ -94,9 +94,85 @@ class Mailer
         }
 
         try {
-            $boundary = 'LAMASY_' . md5(uniqid((string)mt_rand(), true));
+            $boundary  = 'LAMASY_' . md5(uniqid((string)mt_rand(), true));
             $fromEmail = self::fromEmail();
             $fromName  = self::fromName();
+
+            // ── Helpers ───────────────────────────────────
+            // Baca response dari server (handle multi-line "250-..." sampai "250 ")
+            $read = function() use ($socket): string {
+                $resp = '';
+                while ($line = fgets($socket, 512)) {
+                    $resp .= $line;
+                    // Response selesai jika karakter ke-4 adalah spasi (bukan '-')
+                    if (strlen($line) >= 4 && $line[3] === ' ') break;
+                    if (strlen($line) < 4) break;
+                }
+                return $resp;
+            };
+
+            // Kirim command + baca response
+            $cmd = function(string $command) use ($socket, $read): string {
+                fwrite($socket, $command . "\r\n");
+                return $read();
+            };
+
+            // ── 1. Baca banner server (jangan kirim apa-apa dulu) ──
+            $banner = $read();
+            if (strpos($banner, '220') === false) {
+                error_log("[Mailer] SMTP banner tidak valid: $banner");
+                fclose($socket);
+                return self::sendNativeMail($toEmail, $toName, $subject, $htmlBody, $textBody);
+            }
+
+            // ── 2. EHLO ───────────────────────────────────
+            $ehlo = $cmd("EHLO " . gethostname());
+            if (strpos($ehlo, '250') === false) {
+                // Coba HELO sebagai fallback
+                $ehlo = $cmd("HELO " . gethostname());
+            }
+
+            // ── 3. STARTTLS jika diperlukan ───────────────
+            if ($encryption === 'tls') {
+                $cmd("STARTTLS");
+                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+                $cmd("EHLO " . gethostname()); // EHLO ulang setelah TLS
+            }
+
+            // ── 4. AUTH LOGIN ─────────────────────────────
+            $authChallenge = $cmd("AUTH LOGIN");
+            if (strpos($authChallenge, '334') === false) {
+                error_log("[Mailer] SMTP AUTH LOGIN tidak didukung: $authChallenge");
+                fclose($socket);
+                return false;
+            }
+            $cmd(base64_encode($user));          // kirim username
+            $authResp = $cmd(base64_encode($pass)); // kirim password
+
+            if (strpos($authResp, '235') === false) {
+                error_log("[Mailer] SMTP auth gagal: " . trim($authResp));
+                fclose($socket);
+                return false;
+            }
+
+            // ── 5. MAIL FROM ──────────────────────────────
+            $fromResp = $cmd("MAIL FROM:<$fromEmail>");
+            if (strpos($fromResp, '250') === false) {
+                error_log("[Mailer] SMTP MAIL FROM gagal: $fromResp");
+                fclose($socket);
+                return false;
+            }
+
+            // ── 6. RCPT TO ────────────────────────────────
+            $rcptResp = $cmd("RCPT TO:<$toEmail>");
+            if (strpos($rcptResp, '250') === false && strpos($rcptResp, '251') === false) {
+                error_log("[Mailer] SMTP RCPT TO gagal: $rcptResp");
+                fclose($socket);
+                return false;
+            }
+
+            // ── 7. DATA ───────────────────────────────────
+            $cmd("DATA"); // server balas 354
 
             // Build MIME body
             $mime  = "MIME-Version: 1.0\r\n";
@@ -111,49 +187,6 @@ class Mailer
             $mime .= "Content-Transfer-Encoding: quoted-printable\r\n\r\n";
             $mime .= quoted_printable_encode($htmlBody) . "\r\n";
             $mime .= "--$boundary--\r\n";
-
-            $send = function(string $cmd) use ($socket): string {
-                fwrite($socket, $cmd . "\r\n");
-                $resp = '';
-                while ($line = fgets($socket, 512)) {
-                    $resp .= $line;
-                    if (strlen($line) >= 4 && $line[3] === ' ') break; // last line of response
-                }
-                return $resp;
-            };
-
-            $send(''); // read greeting
-            fgets($socket, 512); // read banner
-
-            // EHLO
-            $ehloResp = $send("EHLO " . ($host));
-            if ($encryption === 'tls') {
-                $send("STARTTLS");
-                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-                $send("EHLO $host");
-            }
-
-            // AUTH LOGIN
-            $send("AUTH LOGIN");
-            $send(base64_encode($user));
-            $authResp = $send(base64_encode($pass));
-
-            if (strpos($authResp, '535') !== false || strpos($authResp, '5') === 0) {
-                error_log("[Mailer] SMTP auth gagal: $authResp");
-                fclose($socket);
-                return false;
-            }
-
-            // MAIL FROM / RCPT TO / DATA
-            $send("MAIL FROM:<$fromEmail>");
-            $rcptResp = $send("RCPT TO:<$toEmail>");
-            if (strpos($rcptResp, '250') === false && strpos($rcptResp, '251') === false) {
-                error_log("[Mailer] SMTP RCPT gagal: $rcptResp");
-                fclose($socket);
-                return false;
-            }
-
-            $send("DATA");
 
             $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
             $encodedFrom    = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
