@@ -143,11 +143,14 @@ if ($action) {
              COALESCE(SUM(a.durasi_menit),0) as total_menit,
              MAX(a.tanggal) as last_absen
              FROM hl_users u
+             JOIN hl_karyawan_outlet ko
+               ON ko.karyawan_id=u.id AND ko.tenant_id=u.tenant_id
+              AND ko.outlet_id=? AND ko.is_active=1
              LEFT JOIN hl_absensi a ON a.user_id=u.id AND a.tenant_id=u.tenant_id AND a.outlet_id=?
                 AND a.tanggal BETWEEN ? AND ?
              WHERE u.tenant_id=? AND u.is_active=1
              GROUP BY u.id ORDER BY u.nama",
-            [$oid, $dari, $sampai, $tid]
+            [$oid, $oid, $dari, $sampai, $tid]
         );
         echo json_encode(['data'=>$rows, 'periode'=>['bulan'=>$bulan,'dari'=>$dari,'sampai'=>$sampai]]);
         exit;
@@ -229,9 +232,16 @@ if ($action) {
         if (!hasPermission('absensi.view_all') && !hasPermission('absensi.approve_izin')) {
             echo json_encode([]); exit;
         }
+        // Hanya karyawan yang ditugaskan ke outlet ini (per brief HQ-Outlet)
         $rows = TenantQuery::raw(
-            "SELECT id, nama, role FROM hl_users WHERE tenant_id=? AND is_active=1 ORDER BY nama",
-            [$tid]
+            "SELECT u.id, u.nama, u.role
+             FROM hl_users u
+             JOIN hl_karyawan_outlet ko
+               ON ko.karyawan_id=u.id AND ko.tenant_id=u.tenant_id
+              AND ko.outlet_id=? AND ko.is_active=1
+             WHERE u.tenant_id=? AND u.is_active=1
+             ORDER BY u.nama",
+            [$oid, $tid]
         );
         echo json_encode($rows); exit;
     }

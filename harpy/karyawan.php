@@ -21,17 +21,26 @@ if ($action) {
     }
 
     if ($action === 'list') {
+        // OUTLET VIEW: tampilkan karyawan yang DITUGASKAN ke outlet ini
+        // Sesuai brief HQ-Outlet Fase 3: karyawan = aset account, penugasan via hl_karyawan_outlet
         $rows = TenantQuery::raw(
             "SELECT u.*,
                 COALESCE(r.nama, u.role) as role_nama,
-                (SELECT COUNT(*) FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
+                ko.assigned_at,
+                (SELECT COUNT(*) FROM hl_absensi
+                  WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
                     AND MONTH(tanggal)=MONTH(CURDATE()) AND status='hadir') as hadir_bulan_ini,
-                (SELECT jam_masuk FROM hl_absensi WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
+                (SELECT jam_masuk FROM hl_absensi
+                  WHERE user_id=u.id AND tenant_id=u.tenant_id AND outlet_id=?
                     AND tanggal=CURDATE() LIMIT 1) as jam_masuk_hari_ini
              FROM hl_users u
+             JOIN hl_karyawan_outlet ko
+               ON ko.karyawan_id=u.id AND ko.tenant_id=u.tenant_id
+              AND ko.outlet_id=? AND ko.is_active=1
              LEFT JOIN hl_roles r ON r.id=u.role_id AND r.tenant_id=u.tenant_id
-             WHERE u.tenant_id=? ORDER BY u.nama",
-            [$oid, $oid, $tid]
+             WHERE u.tenant_id=?
+             ORDER BY u.nama",
+            [$oid, $oid, $oid, $tid]
         );
         echo json_encode($rows); exit;
     }
@@ -86,8 +95,21 @@ if ($action) {
             if (TenantQuery::exists('hl_users', 'username = ?', [$username])) {
                 echo json_encode(['error'=>'Username sudah digunakan']); exit;
             }
-            $data['password'] = password_hash($d['password'], PASSWORD_DEFAULT);
+            $data['password']  = password_hash($d['password'], PASSWORD_DEFAULT);
+            $data['outlet_id'] = $oid; // outlet default saat login
             TenantQuery::insert('hl_users', $data);
+            $newUserId = (int)Database::get()->lastInsertId();
+
+            // Auto-assign ke outlet ini (sesuai brief HQ-Outlet Fase 3)
+            try {
+                Database::get()->prepare(
+                    "INSERT INTO hl_karyawan_outlet
+                       (tenant_id, karyawan_id, outlet_id, assigned_by, is_active)
+                     VALUES (?,?,?,?,1)"
+                )->execute([$tid, $newUserId, $oid, currentUser()['id'] ?? null]);
+            } catch (Throwable $e) {
+                error_log('[karyawan create assign] ' . $e->getMessage());
+            }
         }
         logAudit(!empty($d['id'])?'update':'create','karyawan',(!empty($d['id'])?'Edit':'Tambah').' karyawan: '.$nama);
         echo json_encode(['success'=>true]); exit;
@@ -110,7 +132,15 @@ if ($action) {
         verifyCsrf();
         $d     = json_decode(file_get_contents('php://input'), true);
         $bulan = $d['bulan'] ?? date('Y-m');
-        $users = TenantQuery::raw("SELECT * FROM hl_users WHERE tenant_id=? AND is_active=1", [$tid]);
+        // Hanya generate gaji untuk karyawan yang ditugaskan di outlet ini
+        $users = TenantQuery::raw(
+            "SELECT u.* FROM hl_users u
+             JOIN hl_karyawan_outlet ko
+               ON ko.karyawan_id=u.id AND ko.tenant_id=u.tenant_id
+              AND ko.outlet_id=? AND ko.is_active=1
+             WHERE u.tenant_id=? AND u.is_active=1",
+            [$oid, $tid]
+        );
         $db    = Database::get();
         $stmt  = $db->prepare(
             "INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,created_by,created_at)
