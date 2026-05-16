@@ -78,19 +78,24 @@ if ($action) {
                 'is_active'   => intval($d['is_active'] ?? 1),
             ], 'id = ?', [intval($d['id'])]);
         } else {
-            // Cek duplikat telepon
+            // Cek duplikat telepon (TENANT-SCOPED — lintas outlet)
+            // Sesuai brief: 1 nomor HP unique per tenant
             if (!empty($telepon)) {
                 if (TenantQuery::exists('hl_pelanggan', 'telepon = ?', [$telepon])) {
-                    echo json_encode(['error'=>'Nomor HP sudah terdaftar']); exit;
+                    echo json_encode(['error'=>'Nomor HP sudah terdaftar di akun ini (cek di outlet lain)']);
+                    exit;
                 }
             }
+            $currentOid = TenantResolver::outletId();
             TenantQuery::insert('hl_pelanggan', [
-                'nama'        => $nama,
-                'telepon'     => $telepon,
-                'alamat'      => $alamat,
-                'tipe'        => $tipe,
-                'catatan'     => $catatan,
-                'metode_bayar'=> $metodeBayar,
+                'nama'                 => $nama,
+                'telepon'              => $telepon,
+                'alamat'               => $alamat,
+                'tipe'                 => $tipe,
+                'catatan'              => $catatan,
+                'metode_bayar'         => $metodeBayar,
+                'registered_outlet_id' => $currentOid, // catat outlet pertama daftar
+                'outlet_id'            => $currentOid, // legacy compat
             ]);
         }
         logAudit(!empty($d['id'])?'update':'create','customer',(!empty($d['id'])?'Edit':'Tambah').' customer: '.$nama);

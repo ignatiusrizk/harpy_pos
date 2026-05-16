@@ -33,8 +33,11 @@
 class TenantQuery
 {
     // Tabel yang punya outlet_id dan perlu outlet filter
+    // CATATAN: hl_pelanggan dipindah ke account-level (per brief HQ-Outlet) —
+    // pelanggan adalah aset perusahaan, bukan milik 1 cabang.
+    // hl_karyawan akan menyusul di Fase 3.
     private static array $outletTables = [
-        'hl_transaksi', 'hl_transaksi_item', 'hl_pelanggan', 'hl_karyawan',
+        'hl_transaksi', 'hl_transaksi_item', 'hl_karyawan',
         'hl_kas', 'hl_absensi', 'hl_layanan', 'hl_gaji', 'hl_izin', 'hl_promo', 'hl_audit_log'
     ];
 

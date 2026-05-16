@@ -22,12 +22,18 @@ if ($action) {
         echo json_encode($rows); exit;
     }
 
-    // SEARCH pelanggan
+    // SEARCH pelanggan — TENANT-SCOPED (lintas outlet)
+    // Pelanggan adalah aset account, bisa transaksi di outlet manapun
     if ($action === 'search_pelanggan') {
         $q = '%' . trim($_GET['q'] ?? '') . '%';
         $rows = TenantQuery::raw(
-            "SELECT * FROM hl_pelanggan WHERE tenant_id=? AND outlet_id=? AND (nama LIKE ? OR telepon LIKE ?) AND is_active=1 LIMIT 8",
-            [$tid, $oid, $q, $q]
+            "SELECT p.*,
+                    (SELECT nama_outlet FROM outlets WHERE id=p.registered_outlet_id) AS registered_at_outlet
+             FROM hl_pelanggan p
+             WHERE p.tenant_id=? AND (p.nama LIKE ? OR p.telepon LIKE ?) AND p.is_active=1
+             ORDER BY (p.registered_outlet_id = ?) DESC, p.total_visit_count DESC
+             LIMIT 8",
+            [$tid, $q, $q, $oid]
         );
         echo json_encode($rows); exit;
     }
@@ -78,23 +84,33 @@ if ($action) {
             $sisa     = $total - $dp;
             $status_b = $dp >= $total ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
 
-            // Upsert pelanggan
+            // Upsert pelanggan — TENANT-SCOPED (lintas outlet)
+            // Lookup by tenant_id + telepon (HP unique per tenant)
             $pel_id = null;
             if ($nama_pel) {
                 $pelRow = TenantQuery::rawOne(
-                    "SELECT id FROM hl_pelanggan WHERE tenant_id=? AND outlet_id=? AND nama=? AND telepon=?",
-                    [$tid, $oid, $nama_pel, $telepon]
+                    "SELECT id FROM hl_pelanggan WHERE tenant_id=? AND telepon=? LIMIT 1",
+                    [$tid, $telepon]
                 );
                 if ($pelRow) {
+                    // Sudah pernah daftar (di outlet manapun) — increment visit count
                     $pel_id = $pelRow['id'];
-                    $db->prepare("UPDATE hl_pelanggan SET total_order=total_order+1 WHERE id=? AND tenant_id=? AND outlet_id=?")
-                       ->execute([$pel_id, $tid, $oid]);
+                    $db->prepare(
+                        "UPDATE hl_pelanggan
+                            SET total_order = total_order + 1,
+                                total_visit_count = total_visit_count + 1
+                          WHERE id = ? AND tenant_id = ?"
+                    )->execute([$pel_id, $tid]);
                 } else {
+                    // Pelanggan baru — catat outlet pertama daftar
                     TenantQuery::insert('hl_pelanggan', [
-                        'nama'        => $nama_pel,
-                        'telepon'     => $telepon,
-                        'tipe'        => 'retail',
-                        'total_order' => 1,
+                        'nama'                  => $nama_pel,
+                        'telepon'               => $telepon,
+                        'tipe'                  => 'retail',
+                        'total_order'           => 1,
+                        'total_visit_count'     => 1,
+                        'registered_outlet_id'  => $oid,
+                        'outlet_id'             => $oid, // legacy compat
                     ]);
                     $pel_id = $db->lastInsertId();
                 }

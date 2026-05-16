@@ -137,8 +137,10 @@ foreach ($purgeRows as $outlet) {
     $tid = $outlet['tenant_id'];
 
     // Hapus data operasional outlet
+    // CATATAN: hl_pelanggan TIDAK DIHAPUS — pelanggan adalah aset account
+    // (lintas outlet), bukan milik 1 cabang. Sesuai brief HQ-Outlet Fase 2.
     $tables = [
-        'hl_transaksi_item', 'hl_transaksi', 'hl_pelanggan',
+        'hl_transaksi_item', 'hl_transaksi',
         'hl_layanan', 'hl_kas', 'hl_absensi', 'hl_izin',
         'hl_gaji', 'hl_promo', 'hl_voucher', 'hl_audit_log',
     ];
@@ -148,6 +150,15 @@ foreach ($purgeRows as $outlet) {
         } catch (Throwable $e) {
             clog("  WARN: gagal hapus $table untuk outlet $oid: " . $e->getMessage());
         }
+    }
+
+    // hl_pelanggan: registered_outlet_id pointer ke outlet yang di-purge
+    // → set null, biarkan record tetap (account-level)
+    try {
+        $db->prepare("UPDATE hl_pelanggan SET registered_outlet_id=NULL WHERE tenant_id=? AND registered_outlet_id=?")
+           ->execute([$tid, $oid]);
+    } catch (Throwable $e) {
+        clog("  WARN: gagal reset registered_outlet_id pelanggan: " . $e->getMessage());
     }
 
     // Hapus coin ledger outlet
