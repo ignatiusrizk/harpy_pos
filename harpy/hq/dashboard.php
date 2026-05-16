@@ -27,31 +27,64 @@ $todayRow = $todayStats->fetch() ?: ['omset_today'=>0,'order_today'=>0,'terkumpu
 
 // ── Outlet aktif + karyawan + pelanggan total ─────────
 $outletCnt = (int)$db->query("SELECT COUNT(*) FROM outlets WHERE tenant_id=$tid AND status IN ('trial','grace','active')")->fetchColumn();
-$pelangganCnt = (int)$db->query("SELECT COUNT(*) FROM hl_pelanggan WHERE tenant_id=$tid AND is_active=1")->fetchColumn();
+
+$pelangganCnt = 0;
+try {
+    $pelangganCnt = (int)$db->query("SELECT COUNT(*) FROM hl_pelanggan WHERE tenant_id=$tid AND is_active=1")->fetchColumn();
+} catch (Throwable $e) {
+    error_log('[hq pelangganCnt] ' . $e->getMessage());
+}
+
 $karyawanCnt = 0;
 try {
     $karyawanCnt = (int)$db->query("SELECT COUNT(DISTINCT karyawan_id) FROM hl_karyawan_outlet WHERE tenant_id=$tid AND is_active=1")->fetchColumn();
 } catch (Throwable) {
-    $karyawanCnt = (int)$db->query("SELECT COUNT(*) FROM hl_users WHERE tenant_id=$tid AND is_active=1")->fetchColumn();
+    try {
+        $karyawanCnt = (int)$db->query("SELECT COUNT(*) FROM hl_users WHERE tenant_id=$tid AND is_active=1")->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('[hq karyawanCnt fallback] ' . $e->getMessage());
+    }
 }
 
 // ── Per-outlet detail ─────────────────────────────────
-$outletsStmt = $db->prepare("
-    SELECT o.*,
-      (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-        WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS omset_today,
-      (SELECT COUNT(*) FROM hl_transaksi
-        WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS order_today,
-      (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-        WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE_FORMAT(tanggal,'%Y-%m')=?) AS omset_month,
-      (SELECT COUNT(DISTINCT ko.karyawan_id) FROM hl_karyawan_outlet ko
-        WHERE ko.tenant_id=o.tenant_id AND ko.outlet_id=o.id AND ko.is_active=1) AS karyawan_count
-    FROM outlets o
-    WHERE o.tenant_id = ? AND o.status != 'closed'
-    ORDER BY o.is_main DESC, o.nama_outlet ASC
-");
-$outletsStmt->execute([$today, $today, $thisMonth, $tid]);
-$outlets = $outletsStmt->fetchAll();
+// Defensive: kalau hl_karyawan_outlet belum ada (SQL Fase 3 belum dijalankan),
+// fallback ke COUNT(*) FROM hl_users.
+try {
+    $outletsStmt = $db->prepare("
+        SELECT o.*,
+          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS omset_today,
+          (SELECT COUNT(*) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS order_today,
+          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE_FORMAT(tanggal,'%Y-%m')=?) AS omset_month,
+          (SELECT COUNT(DISTINCT ko.karyawan_id) FROM hl_karyawan_outlet ko
+            WHERE ko.tenant_id=o.tenant_id AND ko.outlet_id=o.id AND ko.is_active=1) AS karyawan_count
+        FROM outlets o
+        WHERE o.tenant_id = ? AND o.status != 'closed'
+        ORDER BY o.is_main DESC, o.nama_outlet ASC
+    ");
+    $outletsStmt->execute([$today, $today, $thisMonth, $tid]);
+    $outlets = $outletsStmt->fetchAll();
+} catch (Throwable $e) {
+    error_log('[hq/dashboard] fallback query: ' . $e->getMessage());
+    $outletsStmt = $db->prepare("
+        SELECT o.*,
+          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS omset_today,
+          (SELECT COUNT(*) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS order_today,
+          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE_FORMAT(tanggal,'%Y-%m')=?) AS omset_month,
+          (SELECT COUNT(*) FROM hl_users u
+            WHERE u.tenant_id=o.tenant_id AND u.outlet_id=o.id AND u.is_active=1) AS karyawan_count
+        FROM outlets o
+        WHERE o.tenant_id = ? AND o.status != 'closed'
+        ORDER BY o.is_main DESC, o.nama_outlet ASC
+    ");
+    $outletsStmt->execute([$today, $today, $thisMonth, $tid]);
+    $outlets = $outletsStmt->fetchAll();
+}
 
 // ── Alert: trial mau habis, coin tipis ────────────────
 $alerts = [];
