@@ -1,0 +1,101 @@
+<?php
+// ══════════════════════════════════════════════════════
+// middleware/hq_guard.php — Guard untuk halaman HQ view
+//
+// HQ view = mode konsolidasi lintas outlet (kantor pusat).
+// Berbeda dengan tenant_guard (yang scope-nya outlet aktif).
+//
+// Usage:
+//   define('ROOT', dirname(__DIR__));
+//   require_once ROOT . '/middleware/hq_guard.php';
+//
+// Yang di-provide:
+//   $hqTenant   — data tenant aktif
+//   $hqUser     — data user yang login
+//   hqCsrf()    — token CSRF
+//   verifyHqCsrf()
+//   currentTenant() — alias agar components.php tetap kompatibel
+//   currentUser()
+// ══════════════════════════════════════════════════════
+
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+if (!defined('ROOT')) define('ROOT', dirname(__DIR__));
+require_once ROOT . '/master/config/db.php';
+require_once ROOT . '/core/Database.php';
+
+// ── Auth check ────────────────────────────────────────
+if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
+    header('Location: /ERP/harpy/login.php?msg=not_logged_in');
+    exit;
+}
+
+$db = Database::get();
+
+// ── Load tenant ───────────────────────────────────────
+$_stmt = $db->prepare("SELECT * FROM tenants WHERE id = ? LIMIT 1");
+$_stmt->execute([$_SESSION['tenant_id']]);
+$hqTenant = $_stmt->fetch();
+
+if (!$hqTenant) {
+    session_destroy();
+    header('Location: /ERP/harpy/login.php?error=tenant_not_found');
+    exit;
+}
+
+// ── Tenant status check ───────────────────────────────
+if ($hqTenant['status'] === 'pending_verification') {
+    header('Location: /ERP/harpy/pending-verify.php');
+    exit;
+}
+
+if (in_array($hqTenant['status'], ['suspended', 'closed'])) {
+    header('Location: /ERP/harpy/account-suspended.php');
+    exit;
+}
+
+// ── Role check: hanya owner (manager future) ──────────
+$hqUser = $_SESSION['hl_user'] ?? [];
+$hqRole = $hqUser['role'] ?? '';
+
+if (!in_array($hqRole, ['owner', 'superadmin'])) {
+    http_response_code(403);
+    die('<div style="font-family:sans-serif;padding:60px;text-align:center;background:#0F1C3A;color:#fff;min-height:100vh">
+        <h2 style="color:#35E8D5">🔒 Akses HQ Ditolak</h2>
+        <p style="color:rgba(255,255,255,.6)">HQ view hanya untuk Owner & Manager.</p>
+        <a href="/ERP/harpy/dashboard.php" style="color:#35E8D5">← Kembali ke Dashboard</a>
+    </div>');
+}
+
+// ── Set HQ mode flag di session ───────────────────────
+$_SESSION['hq_mode'] = true;
+
+// ── Helpers (compatible dengan components.php) ────────
+if (!function_exists('currentUser')) {
+    function currentUser(): ?array {
+        return $_SESSION['hl_user'] ?? null;
+    }
+}
+if (!function_exists('currentTenant')) {
+    function currentTenant(): array {
+        global $hqTenant;
+        return $hqTenant ?? [];
+    }
+}
+if (!function_exists('getCsrfToken')) {
+    function getCsrfToken(): string {
+        if (empty($_SESSION['hl_csrf'])) {
+            $_SESSION['hl_csrf'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['hl_csrf'];
+    }
+}
+if (!function_exists('verifyCsrf')) {
+    function verifyCsrf(): void {
+        $token = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!hash_equals($_SESSION['hl_csrf'] ?? '', $token)) {
+            http_response_code(403);
+            die('CSRF mismatch');
+        }
+    }
+}

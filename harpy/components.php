@@ -262,8 +262,18 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               </span>
             </a>
             <?php endforeach; ?>
-            <!-- Divider + Tambah outlet baru -->
+            <!-- Divider + Mode HQ + Tambah outlet -->
             <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
+            <?php if (($user['role'] ?? '') === 'owner' || ($user['role'] ?? '') === 'superadmin'): ?>
+            <a href="/ERP/harpy/hq/dashboard.php"
+               style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
+                      text-decoration:none;color:#0F1C3A;font-size:13px;font-weight:700;
+                      background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08))"
+               onmouseover="this.style.background='linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15))'"
+               onmouseout ="this.style.background='linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08))'">
+              🏢 Mode HQ (konsolidasi semua outlet)
+            </a>
+            <?php endif; ?>
             <a href="add-outlet.php"
                style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
                       text-decoration:none;color:#0891B2;font-size:13px;font-weight:700"

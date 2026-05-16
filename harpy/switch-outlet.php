@@ -43,9 +43,10 @@ if (!$outlet) {
     exit;
 }
 
-// Set outlet baru di session
+// Set outlet baru di session, keluar dari HQ mode
 $_SESSION['outlet_id']  = (int)$outlet['id'];
 $_SESSION['has_outlet'] = true;
+$_SESSION['hq_mode']    = false;
 TenantResolver::reset();
 
 header('Location: /ERP/harpy/dashboard.php?switched=1');
