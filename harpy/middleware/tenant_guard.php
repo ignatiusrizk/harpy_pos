@@ -81,7 +81,9 @@ function currentUser(): ?array
 function hasPermission(string $kode): bool
 {
     $perms = $_SESSION['hl_permissions'] ?? [];
-    if (isset($perms['*'])) return true;   // superadmin bypass
+    if (isset($perms['*'])) return true;                              // superadmin bypass
+    $role = $_SESSION['hl_user']['role'] ?? '';
+    if (in_array($role, ['owner','superadmin'], true)) return true;   // owner = full access (brief 6.8)
     return isset($perms[$kode]);
 }
 
