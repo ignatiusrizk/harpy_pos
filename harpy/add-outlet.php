@@ -70,6 +70,55 @@ $outletCount = (int)$cntQ->fetchColumn();
 
 $isFirstOutlet = $outletCount === 0;
 
+// Per brief: outlet ke-2 dst wajib bayar setup fee (tidak ada trial gratis)
+// Payment gateway belum di-integrasikan → tampilkan halaman placeholder
+if (!$isFirstOutlet) {
+    require_once __DIR__ . '/components.php';
+    $hasOutlet = TenantResolver::hasOutlet();
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+    <?php renderHead('Tambah Outlet Baru'); ?>
+    </head>
+    <body>
+    <?php renderTopbar('add-outlet', !$hasOutlet); ?>
+    <div style="max-width:560px;margin:48px auto;padding:0 16px">
+      <div style="background:#fff;border-radius:16px;padding:36px 28px;box-shadow:0 4px 24px rgba(0,0,0,.06);text-align:center">
+        <div style="font-size:64px;margin-bottom:16px">💳</div>
+        <h1 style="font-size:1.4rem;font-weight:800;color:#0F1C3A;margin-bottom:10px">
+          Outlet Berbayar
+        </h1>
+        <p style="color:#6B7280;font-size:14px;line-height:1.7;margin-bottom:20px">
+          Outlet pertama mendapat <strong>trial 7 hari gratis</strong>.
+          Outlet berikutnya memerlukan pembayaran <strong>setup fee</strong>
+          (Rp 300rb – 500rb) langsung tanpa periode trial.
+        </p>
+        <div style="background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;padding:12px 16px;
+                    border-radius:10px;font-size:13px;margin-bottom:24px;text-align:left">
+          🚧 <strong>Coming soon</strong> — payment gateway sedang dalam pengembangan.
+          Hubungi tim LAMASY untuk aktivasi outlet tambahan manual.
+        </div>
+        <a href="https://wa.me/6281234567890?text=<?= urlencode('Halo Tim LAMASY, saya mau buka outlet kedua untuk akun saya. Mohon info untuk proses pembayaran setup fee.') ?>"
+           target="_blank" rel="noopener"
+           style="display:inline-block;background:#25D366;color:#fff;font-weight:700;
+                  font-size:14px;padding:13px 28px;border-radius:10px;text-decoration:none;margin-bottom:10px">
+          💬 Chat Tim LAMASY untuk Aktivasi
+        </a>
+        <div>
+          <a href="dashboard.php"
+             style="display:inline-block;font-size:13px;color:#6B7280;text-decoration:none;padding:10px">
+            ← Kembali ke Dashboard
+          </a>
+        </div>
+      </div>
+    </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
 // Wizard state
 if (isset($_GET['reset'])) unset($_SESSION['ao']);
 if (empty($_SESSION['ao'])) {

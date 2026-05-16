@@ -72,10 +72,16 @@ class TenantResolver
             return;
         }
 
-        // Akun ditutup / suspended
+        // Akun ditutup / suspended → redirect ke halaman info khusus
         if (in_array($tenant['status'], ['suspended', 'closed'])) {
-            self::showSuspendedPage($tenant);
-            exit;
+            $allowed = ['/ERP/harpy/account-suspended.php', '/ERP/harpy/logout.php'];
+            $currentPath = $_SERVER['PHP_SELF'] ?? '';
+            if (!in_array($currentPath, $allowed)) {
+                header('Location: /ERP/harpy/account-suspended.php');
+                exit;
+            }
+            self::$tenant = $tenant;
+            return;
         }
 
         self::$tenant = $tenant;
@@ -168,10 +174,17 @@ class TenantResolver
             return;
         }
 
-        // Outlet suspended → blok dengan halaman aktivasi
+        // Outlet suspended → redirect ke halaman aktivasi
         if ($outlet['status'] === 'suspended') {
-            self::showSuspendedPage($tenant, $outlet);
-            exit;
+            $allowed = ['/ERP/harpy/outlet-suspended.php', '/ERP/harpy/switch-outlet.php',
+                        '/ERP/harpy/add-outlet.php', '/ERP/harpy/logout.php'];
+            $currentPath = $_SERVER['PHP_SELF'] ?? '';
+            if (!in_array($currentPath, $allowed)) {
+                header('Location: /ERP/harpy/outlet-suspended.php');
+                exit;
+            }
+            self::$outlet = $outlet;
+            return;
         }
 
         // Grace period — cek apakah sudah expired

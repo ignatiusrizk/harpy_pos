@@ -24,6 +24,23 @@ require_once ROOT . '/master/config/db.php';
 require_once ROOT . '/core/Database.php';
 require_once ROOT . '/core/EmailVerification.php';
 require_once ROOT . '/core/RateLimiter.php';
+require_once ROOT . '/core/Mailer.php';
+
+// ── Helper: log transisi outlet ke superadmin_logs (best-effort) ──
+function logOutletTransition(PDO $db, int $outletId, int $tenantId, string $from, string $to): void {
+    try {
+        $db->prepare(
+            "INSERT INTO superadmin_logs (action, target_type, target_id, details, created_at)
+             VALUES ('outlet_status_transition','outlet',?,?,NOW())"
+        )->execute([
+            $outletId,
+            json_encode(['tenant_id'=>$tenantId,'from'=>$from,'to'=>$to,'source'=>'cron']),
+        ]);
+    } catch (Throwable $e) {
+        // Table mungkin belum ada / kolom beda — skip diam
+        error_log('[cron logOutletTransition] ' . $e->getMessage());
+    }
+}
 
 $db  = Database::get();
 $now = date('Y-m-d H:i:s');
@@ -58,9 +75,32 @@ foreach ($trialRows as $outlet) {
         WHERE id = ?
     ")->execute([$graceEndsAt, $purgeAt, $outlet['id']]);
 
+    logOutletTransition($db, (int)$outlet['id'], (int)$outlet['tenant_id'], 'trial', 'grace');
     clog("trial→grace: outlet_id={$outlet['id']} ({$outlet['nama_outlet']}) tenant_id={$outlet['tenant_id']}");
 }
 clog(count($trialRows) . ' outlets moved trial→grace');
+
+// ── 1b. Trial reminder (H-3 dan H-1 sebelum trial_ends_at) ───
+$reminderRows = $db->prepare("
+    SELECT o.id, o.nama_outlet, o.tenant_id, o.trial_ends_at,
+           DATEDIFF(o.trial_ends_at, NOW()) AS days_left,
+           t.email, t.owner_name
+      FROM outlets o
+      JOIN tenants t ON t.id = o.tenant_id
+     WHERE o.status = 'trial'
+       AND o.trial_ends_at IS NOT NULL
+       AND DATEDIFF(o.trial_ends_at, NOW()) IN (1, 3)
+       AND t.email IS NOT NULL
+");
+$reminderRows->execute();
+$reminders = $reminderRows->fetchAll();
+$sent = 0;
+foreach ($reminders as $r) {
+    $ok = Mailer::sendTrialReminder($r['email'], $r['owner_name'] ?? 'Owner', (int)$r['days_left']);
+    if ($ok) $sent++;
+    clog("reminder ($r[days_left]h): outlet_id=$r[id] email=$r[email] " . ($ok ? 'sent' : 'FAILED'));
+}
+clog("$sent trial reminder emails sent");
 
 // ── 2. grace → suspended ─────────────────────────────
 $graceExpired = $db->prepare("
@@ -77,6 +117,7 @@ foreach ($graceRows as $outlet) {
         UPDATE outlets SET status = 'suspended' WHERE id = ?
     ")->execute([$outlet['id']]);
 
+    logOutletTransition($db, (int)$outlet['id'], (int)$outlet['tenant_id'], 'grace', 'suspended');
     clog("grace→suspended: outlet_id={$outlet['id']} ({$outlet['nama_outlet']})");
 }
 clog(count($graceRows) . ' outlets moved grace→suspended');
@@ -125,6 +166,7 @@ foreach ($purgeRows as $outlet) {
         WHERE id=?
     ")->execute([$tid, $tid]);
 
+    logOutletTransition($db, (int)$oid, (int)$tid, 'suspended', 'closed');
     clog("PURGED: outlet_id=$oid ({$outlet['nama_outlet']}) tenant_id=$tid");
 }
 clog(count($purgeRows) . ' outlets purged');
