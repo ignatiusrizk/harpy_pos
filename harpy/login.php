@@ -187,24 +187,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 session_regenerate_id(true);
 
-                // Tentukan outlet — include trial & grace sebagai valid
-                $outletCount = Database::get()->prepare(
+                // ── Login flow per role (brief Akses Karyawan Section 6.2) ──
+                $userRole = $user['role'] ?? 'staff';
+                $isOwnerOrAdmin = in_array($userRole, ['owner','superadmin','admin','manager'], true);
+
+                $db = Database::get();
+
+                // Hitung outlet aktif tenant (total — utk owner/admin)
+                $outletCount = $db->prepare(
                     "SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active')"
                 );
                 $outletCount->execute([$user['tenant_id']]);
                 $oCount = (int)$outletCount->fetchColumn();
 
-                if ($oCount === 1) {
-                    $outletRow = Database::get()->prepare(
-                        "SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') LIMIT 1"
-                    );
-                    $outletRow->execute([$user['tenant_id']]);
-                    $_SESSION['outlet_id'] = (int)$outletRow->fetchColumn();
-                } elseif ($oCount === 0) {
-                    // Belum ada outlet → arahkan ke add-outlet
-                    $_SESSION['outlet_id'] = 0;
+                if ($isOwnerOrAdmin) {
+                    // OWNER / MANAGER: punya akses semua outlet tenant
+                    if ($oCount === 0) {
+                        $_SESSION['outlet_id'] = 0;
+                        $redirectTo = 'add-outlet.php';
+                    } elseif ($oCount === 1) {
+                        $outletRow = $db->prepare(
+                            "SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') LIMIT 1"
+                        );
+                        $outletRow->execute([$user['tenant_id']]);
+                        $_SESSION['outlet_id'] = (int)$outletRow->fetchColumn();
+                        $redirectTo = 'dashboard.php';
+                    } else {
+                        // Multi-outlet owner → select-outlet (bisa juga loncat ke HQ nanti)
+                        $redirectTo = 'select-outlet.php';
+                    }
+                } else {
+                    // KASIR / STAFF / KURIR: scope ke hl_karyawan_outlet
+                    try {
+                        $aStmt = $db->prepare(
+                            "SELECT o.id FROM hl_karyawan_outlet ko
+                               JOIN outlets o ON o.id=ko.outlet_id AND o.tenant_id=ko.tenant_id
+                              WHERE ko.tenant_id=? AND ko.karyawan_id=? AND ko.is_active=1
+                                AND o.status IN ('trial','grace','active')"
+                        );
+                        $aStmt->execute([$user['tenant_id'], $user['id']]);
+                        $assignedIds = $aStmt->fetchAll(PDO::FETCH_COLUMN);
+                    } catch (Throwable $e) {
+                        // Tabel belum ada — fallback ke hl_users.outlet_id
+                        $assignedIds = $user['outlet_id'] > 0 ? [(int)$user['outlet_id']] : [];
+                    }
+
+                    if (count($assignedIds) === 0) {
+                        // Belum ditugaskan → halaman info
+                        $redirectTo = 'no-assignment.php';
+                    } elseif (count($assignedIds) === 1) {
+                        $_SESSION['outlet_id'] = (int)$assignedIds[0];
+                        $redirectTo = 'dashboard.php';
+                    } else {
+                        // Multi-assignment → select-outlet (scoped sesuai assignment)
+                        $redirectTo = 'select-outlet.php';
+                    }
                 }
-                // $oCount > 1 → select-outlet menangani
+
+                $_SESSION['hq_mode'] = false;
 
                 // Audit log
                 try {
@@ -214,13 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     logAuditLogin($user, 'login', 'auth', 'Login berhasil');
                 } catch (Throwable $e) {}
 
-                if ($oCount === 0) {
-                    header('Location: add-outlet.php');
-                } elseif ($oCount > 1) {
-                    header('Location: select-outlet.php');
-                } else {
-                    header('Location: dashboard.php');
-                }
+                header('Location: ' . $redirectTo);
                 exit;
             }
         } else {

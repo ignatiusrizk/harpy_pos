@@ -3,11 +3,17 @@
 // select-outlet.php — Pilih outlet setelah login
 // Tidak pakai tenant_guard (outlet belum dipilih),
 // tapi WAJIB ada session user_id dan tenant_id.
+//
+// Role-aware (per brief Akses Karyawan Section 6.5):
+//   - Owner/Manager/Superadmin → semua outlet aktif tenant
+//   - Kasir/Staff/Kurir → hanya outlet di hl_karyawan_outlet (assigned)
+//   - Non-owner tanpa assignment → halaman "belum ditugaskan"
 // ══════════════════════════════════════════════════════
 
 if (!defined('ROOT')) define('ROOT', __DIR__);
 require_once ROOT . '/master/config/db.php';
 require_once ROOT . '/core/Database.php';
+require_once ROOT . '/core/TenantResolver.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -15,36 +21,49 @@ if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
     header('Location: /ERP/harpy/login.php'); exit;
 }
 
-$tid = (int)$_SESSION['tenant_id'];
+$tid  = (int)$_SESSION['tenant_id'];
+$uid  = (int)$_SESSION['user_id'];
+$role = $_SESSION['hl_user']['role'] ?? '';
+$isOwnerOrManager = in_array($role, ['owner','manager','superadmin','admin'], true);
+
+// ── Ambil outlet sesuai role ──────────────────────────
+// getAssignedOutlets() handle owner vs non-owner automatically
+$outlets = TenantResolver::getAssignedOutlets();
+
+// Non-owner tanpa assignment → halaman "belum ditugaskan"
+if (empty($outlets) && !$isOwnerOrManager) {
+    header('Location: /ERP/harpy/no-assignment.php');
+    exit;
+}
 
 // ── Handle outlet selection POST ──────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['outlet_id'])) {
     $oid = (int)$_POST['outlet_id'];
-    $ok  = Database::get()->prepare(
-        "SELECT id FROM outlets WHERE id=? AND tenant_id=? AND status='active'"
-    );
-    $ok->execute([$oid, $tid]);
-    if ($ok->fetchColumn()) {
-        $_SESSION['outlet_id'] = $oid;
+    // Validasi: outlet harus ada di list yang user diizinkan akses
+    $allowedIds = array_column($outlets, 'id');
+    if (in_array($oid, $allowedIds)) {
+        $_SESSION['outlet_id']  = $oid;
+        $_SESSION['has_outlet'] = true;
+        $_SESSION['hq_mode']    = false;
         header('Location: /ERP/harpy/dashboard.php'); exit;
     }
-    $postError = 'Outlet tidak valid. Silakan pilih ulang.';
+    $postError = 'Outlet tidak valid atau Anda tidak ditugaskan ke outlet ini.';
 }
 
-// ── Fetch outlets ─────────────────────────────────────
-$stmt = Database::get()->prepare(
-    "SELECT o.*,
-     (SELECT COUNT(*) FROM hl_transaksi t WHERE t.outlet_id=o.id AND DATE(t.tanggal)=CURDATE()) as orders_today
-     FROM outlets o
-     WHERE o.tenant_id=? AND o.status='active'
-     ORDER BY o.is_main DESC, o.nama_outlet ASC"
-);
-$stmt->execute([$tid]);
-$outlets = $stmt->fetchAll();
+// Tambah orders_today untuk display
+$db = Database::get();
+foreach ($outlets as &$o) {
+    $stmt = $db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE outlet_id=? AND DATE(tanggal)=CURDATE()");
+    $stmt->execute([$o['id']]);
+    $o['orders_today'] = (int)$stmt->fetchColumn();
+}
+unset($o);
 
 // Auto-redirect jika hanya 1 outlet
 if (count($outlets) === 1) {
-    $_SESSION['outlet_id'] = $outlets[0]['id'];
+    $_SESSION['outlet_id']  = $outlets[0]['id'];
+    $_SESSION['has_outlet'] = true;
+    $_SESSION['hq_mode']    = false;
     header('Location: /ERP/harpy/dashboard.php'); exit;
 }
 
