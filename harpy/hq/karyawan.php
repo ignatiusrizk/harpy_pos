@@ -222,6 +222,78 @@ if ($action) {
         exit;
     }
 
+    if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $d = json_decode(file_get_contents('php://input'), true);
+        verifyCsrf();
+
+        $nama     = substr(trim(strip_tags($d['nama'] ?? '')), 0, 100);
+        $username = substr(trim(strip_tags($d['username'] ?? '')), 0, 50);
+        $email    = substr(trim($d['email'] ?? ''), 0, 150);
+        $password = $d['password'] ?? '';
+        $role     = in_array($d['role'] ?? '', ['owner','manager','admin','kasir','staff','kurir'], true) ? $d['role'] : 'staff';
+        $jabatan  = substr(trim(strip_tags($d['jabatan'] ?? '')), 0, 100);
+        $telepon  = substr(preg_replace('/[^0-9+\-\s]/', '', $d['telepon'] ?? ''), 0, 20);
+        $assignOutlets = array_map('intval', $d['outlet_ids'] ?? []);
+
+        if (!$nama)                  { echo json_encode(['error'=>'Nama wajib diisi']); exit; }
+        if (!$username)              { echo json_encode(['error'=>'Username wajib diisi']); exit; }
+        if (strlen($password) < 6)   { echo json_encode(['error'=>'Password minimal 6 karakter']); exit; }
+        if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(['error'=>'Format email tidak valid']); exit;
+        }
+
+        // Cek duplikat username per tenant
+        $chk = $db->prepare("SELECT id FROM hl_users WHERE tenant_id=? AND username=? LIMIT 1");
+        $chk->execute([$tid, $username]);
+        if ($chk->fetchColumn()) { echo json_encode(['error'=>'Username sudah digunakan']); exit; }
+
+        // Validasi outlet (semua harus milik tenant + aktif)
+        if (!empty($assignOutlets)) {
+            $ph = implode(',', array_fill(0, count($assignOutlets), '?'));
+            $vO = $db->prepare("SELECT COUNT(*) FROM outlets
+                                 WHERE tenant_id=? AND id IN ($ph) AND status IN ('trial','grace','active')");
+            $vO->execute(array_merge([$tid], $assignOutlets));
+            if ((int)$vO->fetchColumn() !== count($assignOutlets)) {
+                echo json_encode(['error'=>'Salah satu outlet tujuan tidak valid']); exit;
+            }
+        }
+
+        $db->beginTransaction();
+        try {
+            $primaryOid = $assignOutlets[0] ?? 0;
+            $db->prepare(
+                "INSERT INTO hl_users
+                   (tenant_id, outlet_id, username, email, password, nama, role, jabatan, telepon,
+                    is_active, email_verified)
+                 VALUES (?,?,?,?,?,?,?,?,?,1,1)"
+            )->execute([
+                $tid, $primaryOid, $username, $email ?: null,
+                password_hash($password, PASSWORD_DEFAULT),
+                $nama, $role, $jabatan ?: null, $telepon ?: null,
+            ]);
+            $newId = (int)$db->lastInsertId();
+
+            // Assign ke outlet yang dipilih
+            foreach ($assignOutlets as $oid) {
+                $db->prepare(
+                    "INSERT INTO hl_karyawan_outlet
+                       (tenant_id, karyawan_id, outlet_id, is_active, assigned_at, assigned_by)
+                     VALUES (?,?,?,1,NOW(),?)"
+                )->execute([$tid, $newId, $oid, $uid]);
+            }
+
+            $db->commit();
+            hqAudit($db, $tid, $uid, 'create_karyawan',
+                "karyawan=$newId nama=$nama role=$role outlets=".implode(',', $assignOutlets));
+            echo json_encode(['success'=>true, 'id'=>$newId]);
+        } catch (Throwable $e) {
+            $db->rollBack();
+            error_log('[hq create karyawan] '.$e->getMessage());
+            echo json_encode(['error'=>'Gagal simpan: '.$e->getMessage()]);
+        }
+        exit;
+    }
+
     if ($action === 'remove_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $d = json_decode(file_get_contents('php://input'), true);
         verifyCsrf();
@@ -387,6 +459,9 @@ $csrf       = getCsrfToken();
     <h1>👥 Manajemen Karyawan
       <small>Karyawan lintas outlet · <?= htmlspecialchars($tenantNama) ?></small>
     </h1>
+    <button class="btn btn-primary" style="padding:11px 20px;font-size:14px" onclick="openCreate()">
+      + Tambah Karyawan
+    </button>
   </div>
 
   <div class="toolbar">
@@ -432,6 +507,67 @@ $csrf       = getCsrfToken();
       </div>
       <button class="btn btn-primary" style="padding:12px;font-size:14px" onclick="submitMutasi()">
         ✓ Konfirmasi Mutasi
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Karyawan Modal -->
+<div class="modal-backdrop" id="createModal" onclick="if(event.target===this)closeModal('createModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Tambah Karyawan Baru</div>
+      <button class="modal-close" onclick="closeModal('createModal')">×</button>
+    </div>
+    <div id="createAlert"></div>
+    <div class="form-grid">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Nama Lengkap <span style="color:#EF4444">*</span></label>
+          <input type="text" id="crNama" maxlength="100" placeholder="cth: Budi Santoso">
+        </div>
+        <div>
+          <label>Username <span style="color:#EF4444">*</span></label>
+          <input type="text" id="crUsername" maxlength="50" placeholder="cth: budi.s">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Password <span style="color:#EF4444">*</span></label>
+          <input type="password" id="crPassword" minlength="6" placeholder="Min 6 karakter">
+        </div>
+        <div>
+          <label>Role <span style="color:#EF4444">*</span></label>
+          <select id="crRole">
+            <option value="kasir">Kasir (POS, Order, Customer)</option>
+            <option value="staff">Staff (produksi laundry)</option>
+            <option value="kurir">Kurir (delivery)</option>
+            <option value="manager">Manager (HQ terbatas)</option>
+            <option value="admin">Admin (ops penuh)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Telepon</label>
+          <input type="tel" id="crTelepon" maxlength="20" placeholder="08xxxxxxxxxx">
+        </div>
+        <div>
+          <label>Email</label>
+          <input type="email" id="crEmail" maxlength="150" placeholder="opsional">
+        </div>
+      </div>
+      <div>
+        <label>Jabatan</label>
+        <input type="text" id="crJabatan" maxlength="100" placeholder="cth: Kasir Senior">
+      </div>
+      <div>
+        <label>Tugaskan ke Outlet <span style="font-weight:400;color:#9CA3AF">(bisa pilih banyak)</span></label>
+        <div id="crOutletList" style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;
+                                       padding:10px;max-height:140px;overflow-y:auto"></div>
+      </div>
+      <button class="btn btn-primary" style="padding:12px;font-size:14px" onclick="submitCreate()">
+        ✓ Simpan Karyawan
       </button>
     </div>
   </div>
@@ -651,6 +787,56 @@ async function removeAssignment(kid, oid, outletName){
   if (j.error) { alert(j.error); return; }
   closeModal('detailModal');
   loadList();
+}
+
+function openCreate(){
+  // Reset form
+  ['crNama','crUsername','crPassword','crTelepon','crEmail','crJabatan'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('crRole').value = 'kasir';
+  document.getElementById('createAlert').innerHTML = '';
+
+  // Populate outlet checkbox list
+  const allOutlets = <?= json_encode($outletList) ?>;
+  document.getElementById('crOutletList').innerHTML = allOutlets.length === 0
+    ? '<div style="color:#9CA3AF;font-size:12px">Belum ada outlet aktif. Tambahkan outlet dulu sebelum assign karyawan.</div>'
+    : allOutlets.map(o => `
+        <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;color:#374151">
+          <input type="checkbox" class="cr-outlet-cb" value="${o.id}" style="width:auto;margin:0">
+          📍 ${escapeHtml(o.nama_outlet)}
+        </label>
+      `).join('');
+
+  openModal('createModal');
+}
+
+async function submitCreate(){
+  const alertEl = document.getElementById('createAlert');
+  alertEl.innerHTML = '';
+
+  const data = {
+    nama: document.getElementById('crNama').value.trim(),
+    username: document.getElementById('crUsername').value.trim(),
+    password: document.getElementById('crPassword').value,
+    role: document.getElementById('crRole').value,
+    telepon: document.getElementById('crTelepon').value.trim(),
+    email: document.getElementById('crEmail').value.trim(),
+    jabatan: document.getElementById('crJabatan').value.trim(),
+    outlet_ids: Array.from(document.querySelectorAll('.cr-outlet-cb:checked')).map(c => parseInt(c.value)),
+  };
+
+  if (!data.nama)     { alertEl.innerHTML = '<div class="alert error">Nama wajib diisi</div>'; return; }
+  if (!data.username) { alertEl.innerHTML = '<div class="alert error">Username wajib diisi</div>'; return; }
+  if (data.password.length < 6) { alertEl.innerHTML = '<div class="alert error">Password minimal 6 karakter</div>'; return; }
+
+  const r = await fetch('hq/karyawan.php?action=create', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
+    body: JSON.stringify(data),
+  });
+  const j = await r.json();
+  if (j.error) { alertEl.innerHTML = '<div class="alert error">'+escapeHtml(j.error)+'</div>'; return; }
+  alertEl.innerHTML = '<div class="alert success">✓ Karyawan berhasil ditambahkan</div>';
+  setTimeout(() => { closeModal('createModal'); loadList(); }, 800);
 }
 
 function openModal(id){document.getElementById(id).classList.add('open')}
