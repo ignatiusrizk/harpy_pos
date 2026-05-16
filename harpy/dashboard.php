@@ -811,7 +811,7 @@ if ($_dashRole === 'kasir'):
   <h3 style="font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px">📋 Order Yang Perlu Dikerjakan</h3>
   <?php
   $orderList = TenantQuery::raw(
-    "SELECT id, kode, nama_pel, status_proses, tanggal, estimasi_selesai
+    "SELECT id, no_order, nama_pelanggan, status_proses, tanggal, estimasi_selesai
        FROM hl_transaksi
       WHERE tenant_id=? AND outlet_id=? AND status_proses IN ('cuci','kering','setrika')
       ORDER BY estimasi_selesai ASC, tanggal ASC LIMIT 10",
@@ -824,8 +824,8 @@ if ($_dashRole === 'kasir'):
   <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;
               border-bottom:1px solid #F3F4F6;font-size:13px">
     <div>
-      <div style="font-weight:700;color:#0F1C3A"><?= htmlspecialchars($o['kode']) ?>
-        — <?= htmlspecialchars($o['nama_pel'] ?? '-') ?></div>
+      <div style="font-weight:700;color:#0F1C3A"><?= htmlspecialchars($o['no_order']) ?>
+        — <?= htmlspecialchars($o['nama_pelanggan'] ?? '-') ?></div>
       <div style="font-size:11px;color:#9CA3AF">Estimasi: <?= $o['estimasi_selesai'] ? date('d M H:i', strtotime($o['estimasi_selesai'])) : '-' ?></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
@@ -866,8 +866,10 @@ if ($_dashRole === 'kasir'):
   <h3 style="font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px">🚚 Daftar Antar Hari Ini</h3>
   <?php
   $antarList = TenantQuery::raw(
-    "SELECT t.id, t.kode, t.nama_pel, t.alamat_pel, t.telepon_pel, t.status_proses
+    "SELECT t.id, t.no_order, t.nama_pelanggan, t.telepon, t.status_proses,
+            p.alamat AS alamat_pelanggan
        FROM hl_transaksi t
+       LEFT JOIN hl_pelanggan p ON p.id = t.pelanggan_id
       WHERE t.tenant_id=? AND t.outlet_id=? AND t.status_proses='siap'
       ORDER BY t.tanggal ASC LIMIT 10",
     [$tid, $oid]
@@ -879,16 +881,16 @@ if ($_dashRole === 'kasir'):
   <div style="padding:13px 0;border-bottom:1px solid #F3F4F6;font-size:13px">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;margin-bottom:5px">
       <div style="font-weight:700;color:#0F1C3A">
-        <?= htmlspecialchars($o['kode']) ?> — <?= htmlspecialchars($o['nama_pel'] ?? '-') ?>
+        <?= htmlspecialchars($o['no_order']) ?> — <?= htmlspecialchars($o['nama_pelanggan'] ?? '-') ?>
       </div>
       <a href="orders.php?id=<?= $o['id'] ?>" style="color:#0891B2;text-decoration:none;font-size:12px;font-weight:700">Update Status →</a>
     </div>
-    <?php if (!empty($o['alamat_pel'])): ?>
-    <div style="font-size:12px;color:#6B7280">📍 <?= htmlspecialchars($o['alamat_pel']) ?></div>
+    <?php if (!empty($o['alamat_pelanggan'])): ?>
+    <div style="font-size:12px;color:#6B7280">📍 <?= htmlspecialchars($o['alamat_pelanggan']) ?></div>
     <?php endif; ?>
-    <?php if (!empty($o['telepon_pel'])): ?>
+    <?php if (!empty($o['telepon'])): ?>
     <div style="font-size:12px;color:#6B7280">📞
-      <a href="tel:<?= htmlspecialchars($o['telepon_pel']) ?>" style="color:#0891B2;text-decoration:none"><?= htmlspecialchars($o['telepon_pel']) ?></a>
+      <a href="tel:<?= htmlspecialchars($o['telepon']) ?>" style="color:#0891B2;text-decoration:none"><?= htmlspecialchars($o['telepon']) ?></a>
     </div>
     <?php endif; ?>
   </div>
