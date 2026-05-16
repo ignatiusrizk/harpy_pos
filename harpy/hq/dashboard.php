@@ -228,6 +228,7 @@ $greeting = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat siang'
   <div class="hq-topbar-right">
     <div class="coin">🪙 <?= number_format($tenantCoin, 0, ',', '.') ?></div>
     <span><?= htmlspecialchars($ownerNama) ?></span>
+    <a href="/ERP/harpy/hq/karyawan.php">👥 Karyawan</a>
     <a href="/ERP/harpy/dashboard.php?to=outlet" title="Kembali ke outlet view">← Outlet View</a>
     <a href="/ERP/harpy/logout.php" class="hq-logout"
        onclick="return confirm('Yakin logout?')">Logout</a>
@@ -350,7 +351,7 @@ $greeting = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat siang'
     <div class="section-title" style="margin-bottom:14px">⚡ Aksi Cepat</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
       <a href="/ERP/harpy/add-outlet.php" class="btn btn-light" style="justify-content:center">🏪 Tambah Outlet</a>
-      <a href="#" class="btn btn-light" style="justify-content:center;opacity:.5;pointer-events:none">👥 Karyawan Lintas Outlet <small style="color:#9CA3AF;margin-left:4px">(Fase 5)</small></a>
+      <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
       <a href="#" class="btn btn-light" style="justify-content:center;opacity:.5;pointer-events:none">📊 Laporan Konsolidasi <small style="color:#9CA3AF;margin-left:4px">(Fase 5)</small></a>
       <a href="#" class="btn btn-light" style="justify-content:center;opacity:.5;pointer-events:none">⚙️ Pengaturan Akun <small style="color:#9CA3AF;margin-left:4px">(Fase 7)</small></a>
     </div>
