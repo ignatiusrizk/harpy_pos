@@ -12,14 +12,39 @@ if ($action) {
     $tid = TenantResolver::id();
 
     // LIST PROMO
+    // Filter: outlet-scope (outlet_id=current) ATAU account-scope (assigned to current/all outlets)
     if ($action === 'list_promo') {
-        $rows = TenantQuery::raw(
-            "SELECT p.*,
-                (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id) as total_voucher,
-                (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id AND is_used=1) as used_voucher
-                FROM hl_promo p WHERE p.tenant_id=? ORDER BY p.created_at DESC",
-            [$tid]
-        );
+        try {
+            $rows = TenantQuery::raw(
+                "SELECT p.*,
+                    (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id) as total_voucher,
+                    (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id AND is_used=1) as used_voucher
+                  FROM hl_promo p
+                  WHERE p.tenant_id=?
+                    AND (
+                      (COALESCE(p.scope,'outlet')='outlet' AND p.outlet_id=?)
+                      OR (
+                        p.scope='account' AND EXISTS (
+                          SELECT 1 FROM hl_promo_outlets po
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id
+                            AND po.outlet_id IN (0, ?)
+                        )
+                      )
+                    )
+                  ORDER BY p.created_at DESC",
+                [$tid, $oid, $oid]
+            );
+        } catch (Throwable $e) {
+            // Fallback kalau kolom scope / tabel hl_promo_outlets belum ada (migration belum)
+            error_log('[promo list_promo fallback] '.$e->getMessage());
+            $rows = TenantQuery::raw(
+                "SELECT p.*,
+                    (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id) as total_voucher,
+                    (SELECT COUNT(*) FROM hl_voucher WHERE promo_id=p.id AND tenant_id=p.tenant_id AND is_used=1) as used_voucher
+                    FROM hl_promo p WHERE p.tenant_id=? AND p.outlet_id=? ORDER BY p.created_at DESC",
+                [$tid, $oid]
+            );
+        }
         echo json_encode($rows); exit;
     }
 
@@ -146,13 +171,34 @@ if ($action) {
             ]); exit;
         }
 
-        // Cek promo langsung (tanpa voucher)
-        $pRows = TenantQuery::raw(
-            "SELECT * FROM hl_promo WHERE tenant_id=? AND (UPPER(nama)=? OR UPPER(deskripsi)=?)
-             AND is_active=1 AND (berlaku_sampai IS NULL OR berlaku_sampai >= CURDATE())
-             AND (kuota=0 OR terpakai < kuota)",
-            [$tid, $kode, $kode]
-        );
+        // Cek promo langsung (tanpa voucher) — include scope account assigned ke outlet ini
+        try {
+            $pRows = TenantQuery::raw(
+                "SELECT * FROM hl_promo p
+                  WHERE p.tenant_id=? AND (UPPER(p.nama)=? OR UPPER(p.deskripsi)=?)
+                    AND p.is_active=1
+                    AND (p.berlaku_sampai IS NULL OR p.berlaku_sampai >= CURDATE())
+                    AND (p.kuota=0 OR p.terpakai < p.kuota)
+                    AND (
+                      (COALESCE(p.scope,'outlet')='outlet' AND p.outlet_id=?)
+                      OR (
+                        p.scope='account' AND EXISTS (
+                          SELECT 1 FROM hl_promo_outlets po
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id
+                            AND po.outlet_id IN (0, ?)
+                        )
+                      )
+                    )",
+                [$tid, $kode, $kode, $oid, $oid]
+            );
+        } catch (Throwable) {
+            $pRows = TenantQuery::raw(
+                "SELECT * FROM hl_promo WHERE tenant_id=? AND outlet_id=? AND (UPPER(nama)=? OR UPPER(deskripsi)=?)
+                 AND is_active=1 AND (berlaku_sampai IS NULL OR berlaku_sampai >= CURDATE())
+                 AND (kuota=0 OR terpakai < kuota)",
+                [$tid, $oid, $kode, $kode]
+            );
+        }
         $p = $pRows[0] ?? null;
         if ($p) {
             if ($p['min_transaksi'] > 0 && $total < $p['min_transaksi']) {

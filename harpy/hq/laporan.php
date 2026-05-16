@@ -212,6 +212,7 @@ $tenantNama = $hqTenant['nama_outlet'] ?? 'HQ';
     <a href="/ERP/harpy/dashboard.php?to=hq">📊 Dashboard</a>
     <a href="/ERP/harpy/hq/karyawan.php">👥 Karyawan</a>
     <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
+    <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>
     <a href="/ERP/harpy/hq/laporan.php" class="active">📈 Laporan</a>
     <span><?= htmlspecialchars($ownerNama) ?></span>
     <a href="/ERP/harpy/dashboard.php?to=outlet">← Outlet View</a>
