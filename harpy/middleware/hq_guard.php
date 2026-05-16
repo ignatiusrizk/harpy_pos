@@ -54,11 +54,11 @@ if (in_array($hqTenant['status'], ['suspended', 'closed'])) {
     exit;
 }
 
-// ── Role check: hanya owner (manager future) ──────────
+// ── Role check: owner, manager, superadmin (brief 6.7 point 2) ──
 $hqUser = $_SESSION['hl_user'] ?? [];
 $hqRole = $hqUser['role'] ?? '';
 
-if (!in_array($hqRole, ['owner', 'superadmin'])) {
+if (!in_array($hqRole, ['owner', 'manager', 'superadmin'])) {
     http_response_code(403);
     die('<div style="font-family:sans-serif;padding:60px;text-align:center;background:#0F1C3A;color:#fff;min-height:100vh">
         <h2 style="color:#35E8D5">🔒 Akses HQ Ditolak</h2>

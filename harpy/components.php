@@ -22,47 +22,69 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
     $tenant = currentTenant();
     if (!$user) return;
 
+    // Menu per role — sesuai brief 'Akses Karyawan Saat Login' Section 6.3
+    //
+    // Role mapping:
+    //   owner/superadmin → full akses
+    //   manager/admin    → ops + analytics (tidak settings/audit/manage_karyawan)
+    //   kasir            → POS focused (Dashboard, POS, Orders, Customer)
+    //   staff            → produksi (Dashboard, Orders, Absensi)
+    //   kurir            → delivery (Dashboard, Orders, Absensi)
     $navGroups = [
         'dashboard' => [
             'label' => 'Dashboard',
             'items' => [
-                'dashboard' => ['label'=>'Dashboard', 'url'=>'dashboard.php', 'roles'=>['owner','superadmin','admin','staff']],
+                'dashboard' => ['label'=>'Dashboard', 'url'=>'dashboard.php',
+                                'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
             ],
         ],
         'operasional' => [
             'label' => 'Operasional',
             'items' => [
-                'pos'    => ['label'=>'POS',   'url'=>'pos.php',    'roles'=>['owner','superadmin','admin','staff']],
-                'orders' => ['label'=>'Order', 'url'=>'orders.php', 'roles'=>['owner','superadmin','admin','staff']],
-                'kas'    => ['label'=>'Kas',   'url'=>'kas.php',    'roles'=>['owner','superadmin','admin']],
+                'pos'    => ['label'=>'POS',   'url'=>'pos.php',
+                             'roles'=>['owner','superadmin','admin','manager','kasir']],
+                'orders' => ['label'=>'Order', 'url'=>'orders.php',
+                             'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
+                'kas'    => ['label'=>'Kas',   'url'=>'kas.php',
+                             'roles'=>['owner','superadmin','admin','manager']],
             ],
         ],
         'keuangan' => [
             'label' => 'Keuangan',
             'items' => [
-                'laporan' => ['label'=>'Laporan', 'url'=>'laporan.php', 'roles'=>['owner','superadmin','admin']],
+                'laporan' => ['label'=>'Laporan', 'url'=>'laporan.php',
+                              'roles'=>['owner','superadmin','admin','manager']],
             ],
         ],
         'master' => [
             'label' => 'Master',
             'items' => [
-                'layanan'  => ['label'=>'Layanan',  'url'=>'layanan.php',  'roles'=>['owner','superadmin','admin']],
-                'promo'    => ['label'=>'Promo',    'url'=>'promo.php',    'roles'=>['owner','superadmin','admin']],
-                'customer' => ['label'=>'Customer', 'url'=>'customer.php', 'roles'=>['owner','superadmin','admin','staff']],
+                'layanan'  => ['label'=>'Layanan',  'url'=>'layanan.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
+                'promo'    => ['label'=>'Promo',    'url'=>'promo.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
+                'customer' => ['label'=>'Customer', 'url'=>'customer.php',
+                               'roles'=>['owner','superadmin','admin','manager','kasir']],
             ],
         ],
         'hr' => [
             'label' => 'HR',
             'items' => [
-                'karyawan' => ['label'=>'Karyawan', 'url'=>'karyawan.php', 'roles'=>['owner','superadmin','admin']],
-                'absensi'  => ['label'=>'Absensi',  'url'=>'absensi.php',  'roles'=>['owner','superadmin','admin','staff']],
+                'karyawan' => ['label'=>'Karyawan', 'url'=>'karyawan.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
+                // Absensi: kasir NOT included per brief 6.3 (kasir clock via dashboard ringkas)
+                'absensi'  => ['label'=>'Absensi',  'url'=>'absensi.php',
+                               'roles'=>['owner','superadmin','admin','manager','staff','kurir']],
             ],
         ],
         'settings' => [
             'label' => 'Settings',
             'items' => [
-                'settings' => ['label'=>'Role & Permission', 'url'=>'settings.php', 'roles'=>['superadmin']],
-                'audit'    => ['label'=>'Audit Log',         'url'=>'audit.php',    'roles'=>['owner','superadmin','admin']],
+                'settings' => ['label'=>'Role & Permission', 'url'=>'settings.php',
+                               'roles'=>['owner','superadmin']],
+                // Audit: manager BISA lihat (brief 6.3 manager view_audit ✅, manage tidak)
+                'audit'    => ['label'=>'Audit Log',         'url'=>'audit.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
             ],
         ],
     ];
@@ -264,7 +286,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
             <?php endforeach; ?>
             <!-- Divider + Mode HQ + Tambah outlet -->
             <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
-            <?php if (($user['role'] ?? '') === 'owner' || ($user['role'] ?? '') === 'superadmin'): ?>
+            <?php if (in_array($user['role'] ?? '', ['owner','manager','superadmin'], true)): ?>
             <a href="/ERP/harpy/hq/dashboard.php"
                style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
                       text-decoration:none;color:#0F1C3A;font-size:13px;font-weight:700;
@@ -274,6 +296,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               🏢 Mode HQ (konsolidasi semua outlet)
             </a>
             <?php endif; ?>
+            <?php if (in_array($user['role'] ?? '', ['owner','superadmin'], true)): ?>
             <a href="add-outlet.php"
                style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
                       text-decoration:none;color:#0891B2;font-size:13px;font-weight:700"
@@ -281,6 +304,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                onmouseout ="this.style.background='transparent'">
               <span style="font-size:16px;line-height:1">+</span> Tambah Outlet Baru
             </a>
+            <?php endif; ?>
           </div>
           <script>
           document.addEventListener('click',function(e){
