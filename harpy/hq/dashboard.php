@@ -47,44 +47,57 @@ try {
 }
 
 // ── Per-outlet detail ─────────────────────────────────
-// Defensive: kalau hl_karyawan_outlet belum ada (SQL Fase 3 belum dijalankan),
-// fallback ke COUNT(*) FROM hl_users.
-try {
-    $outletsStmt = $db->prepare("
-        SELECT o.*,
-          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS omset_today,
-          (SELECT COUNT(*) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS order_today,
-          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE_FORMAT(tanggal,'%Y-%m')=?) AS omset_month,
-          (SELECT COUNT(DISTINCT ko.karyawan_id) FROM hl_karyawan_outlet ko
-            WHERE ko.tenant_id=o.tenant_id AND ko.outlet_id=o.id AND ko.is_active=1) AS karyawan_count
-        FROM outlets o
-        WHERE o.tenant_id = ? AND o.status != 'closed'
-        ORDER BY o.is_main DESC, o.nama_outlet ASC
-    ");
-    $outletsStmt->execute([$today, $today, $thisMonth, $tid]);
-    $outlets = $outletsStmt->fetchAll();
-} catch (Throwable $e) {
-    error_log('[hq/dashboard] fallback query: ' . $e->getMessage());
-    $outletsStmt = $db->prepare("
-        SELECT o.*,
-          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS omset_today,
-          (SELECT COUNT(*) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE(tanggal)=?) AS order_today,
-          (SELECT COALESCE(SUM(total),0) FROM hl_transaksi
-            WHERE tenant_id=o.tenant_id AND outlet_id=o.id AND DATE_FORMAT(tanggal,'%Y-%m')=?) AS omset_month,
-          (SELECT COUNT(*) FROM hl_users u
-            WHERE u.tenant_id=o.tenant_id AND u.outlet_id=o.id AND u.is_active=1) AS karyawan_count
-        FROM outlets o
-        WHERE o.tenant_id = ? AND o.status != 'closed'
-        ORDER BY o.is_main DESC, o.nama_outlet ASC
-    ");
-    $outletsStmt->execute([$today, $today, $thisMonth, $tid]);
-    $outlets = $outletsStmt->fetchAll();
+// Pisah jadi 2 step utk hindari collation mismatch saat subquery JOIN.
+// Step 1: ambil daftar outlet
+// Step 2: untuk tiap outlet, hitung omset/order/karyawan terpisah
+$outletsStmt = $db->prepare(
+    "SELECT * FROM outlets
+      WHERE tenant_id = ? AND status IN ('trial','grace','active')
+      ORDER BY is_main DESC, nama_outlet ASC"
+);
+$outletsStmt->execute([$tid]);
+$outlets = $outletsStmt->fetchAll();
+
+foreach ($outlets as &$o) {
+    $oid = (int)$o['id'];
+
+    try {
+        $stmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS s, COUNT(*) AS c
+                                FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?");
+        $stmt->execute([$tid, $oid, $today]);
+        $r = $stmt->fetch();
+        $o['omset_today'] = (int)$r['s'];
+        $o['order_today'] = (int)$r['c'];
+    } catch (Throwable) {
+        $o['omset_today'] = 0; $o['order_today'] = 0;
+    }
+
+    try {
+        $stmt = $db->prepare("SELECT COALESCE(SUM(total),0) AS s FROM hl_transaksi
+                              WHERE tenant_id=? AND outlet_id=? AND DATE_FORMAT(tanggal,'%Y-%m')=?");
+        $stmt->execute([$tid, $oid, $thisMonth]);
+        $o['omset_month'] = (int)$stmt->fetchColumn();
+    } catch (Throwable) {
+        $o['omset_month'] = 0;
+    }
+
+    try {
+        $stmt = $db->prepare("SELECT COUNT(DISTINCT karyawan_id) FROM hl_karyawan_outlet
+                              WHERE tenant_id=? AND outlet_id=? AND is_active=1");
+        $stmt->execute([$tid, $oid]);
+        $o['karyawan_count'] = (int)$stmt->fetchColumn();
+    } catch (Throwable) {
+        // Fallback: hl_karyawan_outlet belum ada
+        try {
+            $stmt = $db->prepare("SELECT COUNT(*) FROM hl_users WHERE tenant_id=? AND outlet_id=? AND is_active=1");
+            $stmt->execute([$tid, $oid]);
+            $o['karyawan_count'] = (int)$stmt->fetchColumn();
+        } catch (Throwable) {
+            $o['karyawan_count'] = 0;
+        }
+    }
 }
+unset($o);
 
 // ── Alert: trial mau habis, coin tipis ────────────────
 $alerts = [];
