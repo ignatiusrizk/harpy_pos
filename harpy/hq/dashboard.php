@@ -182,7 +182,7 @@ $greeting = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat siang'
   <div class="hq-topbar-right">
     <div class="coin">🪙 <?= number_format($tenantCoin, 0, ',', '.') ?></div>
     <span><?= htmlspecialchars($ownerNama) ?></span>
-    <a href="/ERP/harpy/dashboard.php" title="Kembali ke outlet view">← Outlet View</a>
+    <a href="/ERP/harpy/dashboard.php?to=outlet" title="Kembali ke outlet view">← Outlet View</a>
     <a href="/ERP/harpy/logout.php" class="hq-logout"
        onclick="return confirm('Yakin logout?')">Logout</a>
   </div>

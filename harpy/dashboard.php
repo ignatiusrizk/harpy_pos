@@ -1,4 +1,24 @@
 <?php
+// ── Mode routing (HQ vs Outlet) — single URL /dashboard.php ──
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+// Switch mode via ?to=hq atau ?to=outlet
+if (isset($_GET['to'])) {
+    $_SESSION['hq_mode'] = ($_GET['to'] === 'hq');
+    header('Location: dashboard.php');
+    exit;
+}
+
+// Kalau hq_mode aktif & role boleh akses HQ → render HQ view
+$_dashRole = $_SESSION['hl_user']['role'] ?? '';
+if (!empty($_SESSION['hq_mode'])
+    && in_array($_dashRole, ['owner','manager','superadmin'], true)) {
+    require __DIR__ . '/hq/dashboard.php';
+    exit;
+}
+// Kalau bukan owner/manager tapi hq_mode tertinggal di session → reset
+$_SESSION['hq_mode'] = false;
+
 $activePage = 'dashboard';
 define('ROOT', __DIR__);
 require_once ROOT . '/middleware/tenant_guard.php';
@@ -638,7 +658,259 @@ foreach ($banners as $b):
     <?= $b['message'] ?>
 </div>
 <?php endforeach; ?>
-  <!-- ══ NORMAL DASHBOARD ══ -->
+
+<?php
+// ══════════════════════════════════════════════════════
+// Dashboard variant per role (brief Akses Karyawan Section 6.4)
+// owner/manager/admin/superadmin → full dashboard (existing)
+// kasir/staff/kurir → dashboard ringkas (task-focused)
+// ══════════════════════════════════════════════════════
+$_dashRole = $user['role'] ?? '';
+$_isRingkas = in_array($_dashRole, ['kasir','staff','kurir'], true);
+
+if ($_isRingkas):
+    $oid = TenantResolver::outletId();
+    $uname = htmlspecialchars($user['nama'] ?? 'Karyawan');
+    $greetTime = (date('H') < 11 ? 'pagi' : (date('H') < 15 ? 'siang' : (date('H') < 19 ? 'sore' : 'malam')));
+    $outletNm = htmlspecialchars(TenantResolver::namaOutlet());
+
+    // Cek absensi hari ini
+    $absStmt = TenantQuery::rawOne(
+        "SELECT id, jam_masuk, jam_keluar, status FROM hl_absensi
+          WHERE tenant_id=? AND outlet_id=? AND user_id=? AND tanggal=? LIMIT 1",
+        [$tid, $oid, $user['id'], $today]
+    );
+    $clockedIn  = $absStmt && !empty($absStmt['jam_masuk']) && empty($absStmt['jam_keluar']);
+    $clockedOut = $absStmt && !empty($absStmt['jam_keluar']);
+?>
+
+<!-- HERO RINGKAS -->
+<div style="background:linear-gradient(135deg,#0F1C3A,#1a2d52);color:#fff;border-radius:14px;
+            padding:22px 26px;margin-bottom:20px;display:flex;justify-content:space-between;
+            align-items:center;flex-wrap:wrap;gap:14px">
+  <div>
+    <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:3px">Selamat <?= $greetTime ?>, <?= $uname ?>!</h2>
+    <div style="font-size:13px;color:rgba(255,255,255,.55)">
+      📍 <?= $outletNm ?> · <?= date('d M Y') ?>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <?php if ($clockedOut): ?>
+      <div style="background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);
+                  color:#34D399;font-size:12px;font-weight:700;padding:6px 14px;border-radius:100px">
+        ✓ Sudah Clock Out
+      </div>
+    <?php elseif ($clockedIn): ?>
+      <div style="background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);
+                  color:#34D399;font-size:12px;font-weight:700;padding:6px 14px;border-radius:100px">
+        🟢 Clocked In · <?= substr($absStmt['jam_masuk'], 0, 5) ?>
+      </div>
+      <a href="absensi.php" class="hl-btn hl-btn-outline hl-btn-sm" style="color:#fff;border-color:rgba(255,255,255,.3)">Clock Out</a>
+    <?php else: ?>
+      <a href="absensi.php" class="hl-btn"
+         style="background:#35E8D5;color:#0F1C3A;font-weight:700;padding:8px 18px;
+                border-radius:8px;text-decoration:none;font-size:13px">
+        🕐 Clock In Sekarang
+      </a>
+    <?php endif; ?>
+  </div>
+</div>
+
+<?php // ── DASHBOARD KASIR ──────────────────────────────
+if ($_dashRole === 'kasir'):
+    // Stats kasir: transaksi yang dia proses hari ini
+    $kasirStats = TenantQuery::rawOne(
+        "SELECT COUNT(*) AS total, COALESCE(SUM(total),0) AS omset
+           FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=? AND created_by=?",
+        [$tid, $oid, $today, $user['id']]
+    ) ?: ['total'=>0,'omset'=>0];
+
+    // Order masuk hari ini (semua kasir di outlet ini)
+    $orderMasuk = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?",
+        [$tid, $oid, $today]
+    )['c'] ?? 0);
+
+    // Order siap diambil
+    $orderSiap = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND status_proses='siap'",
+        [$tid, $oid]
+    )['c'] ?? 0);
+?>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px" class="rk-grid3">
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #35E8D5">
+    <div style="font-size:1.4rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= (int)$kasirStats['total'] ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Transaksi Saya Hari Ini</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:3px">Rp <?= number_format((int)$kasirStats['omset'], 0, ',', '.') ?></div>
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #3B82F6">
+    <div style="font-size:1.4rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $orderMasuk ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Order Masuk Hari Ini</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:3px">Semua kasir outlet</div>
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #F59E0B">
+    <div style="font-size:1.4rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $orderSiap ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Siap Diambil</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:3px">Perlu notif pelanggan</div>
+  </div>
+</div>
+
+<!-- Quick actions kasir -->
+<div style="background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:20px">
+  <h3 style="font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px">⚡ Aksi Cepat</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+    <a href="pos.php" style="background:#35E8D5;color:#0F1C3A;font-weight:800;font-size:15px;
+       padding:18px;border-radius:10px;text-decoration:none;text-align:center">
+      🛒 Buat Order Baru
+    </a>
+    <a href="orders.php?status=aktif" style="background:#0F1C3A;color:#fff;font-weight:700;font-size:14px;
+       padding:18px;border-radius:10px;text-decoration:none;text-align:center">
+      📋 Lihat Antrian Order
+    </a>
+    <a href="orders.php?status=siap" style="background:#F59E0B;color:#fff;font-weight:700;font-size:14px;
+       padding:18px;border-radius:10px;text-decoration:none;text-align:center">
+      ✅ Order Siap Diambil
+    </a>
+    <a href="customer.php" style="background:rgba(53,232,213,.1);color:#0F1C3A;font-weight:700;font-size:14px;
+       padding:18px;border-radius:10px;text-decoration:none;text-align:center;border:1.5px solid rgba(53,232,213,.3)">
+      👥 Cari Pelanggan
+    </a>
+  </div>
+</div>
+
+<?php elseif ($_dashRole === 'staff'):
+    // ── DASHBOARD STAFF (produksi) ────────────────────
+    $perluKerja = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND status_proses IN ('cuci','kering','setrika')",
+        [$tid, $oid]
+    )['c'] ?? 0);
+    $selesaiHariIni = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND status_proses='siap' AND DATE(tanggal)=?",
+        [$tid, $oid, $today]
+    )['c'] ?? 0);
+?>
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px" class="rk-grid2">
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #F59E0B">
+    <div style="font-size:1.5rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $perluKerja ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Perlu Dikerjakan</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:3px">Status: cuci / kering / setrika</div>
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #34D399">
+    <div style="font-size:1.5rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $selesaiHariIni ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Selesai Hari Ini</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:3px">Status: siap</div>
+  </div>
+</div>
+
+<div style="background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:20px">
+  <h3 style="font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px">📋 Order Yang Perlu Dikerjakan</h3>
+  <?php
+  $orderList = TenantQuery::raw(
+    "SELECT id, kode, nama_pel, status_proses, tanggal, estimasi_selesai
+       FROM hl_transaksi
+      WHERE tenant_id=? AND outlet_id=? AND status_proses IN ('cuci','kering','setrika')
+      ORDER BY estimasi_selesai ASC, tanggal ASC LIMIT 10",
+    [$tid, $oid]
+  );
+  ?>
+  <?php if (empty($orderList)): ?>
+  <div style="text-align:center;padding:30px;color:#9CA3AF;font-size:13px">Tidak ada order yang perlu dikerjakan saat ini ✓</div>
+  <?php else: foreach ($orderList as $o): ?>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;
+              border-bottom:1px solid #F3F4F6;font-size:13px">
+    <div>
+      <div style="font-weight:700;color:#0F1C3A"><?= htmlspecialchars($o['kode']) ?>
+        — <?= htmlspecialchars($o['nama_pel'] ?? '-') ?></div>
+      <div style="font-size:11px;color:#9CA3AF">Estimasi: <?= $o['estimasi_selesai'] ? date('d M H:i', strtotime($o['estimasi_selesai'])) : '-' ?></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="background:#FEF3C7;color:#92400E;font-size:10px;font-weight:700;padding:3px 10px;border-radius:100px;text-transform:uppercase">
+        <?= $o['status_proses'] ?>
+      </span>
+      <a href="orders.php?id=<?= $o['id'] ?>" style="color:#0891B2;text-decoration:none;font-size:12px;font-weight:700">Update →</a>
+    </div>
+  </div>
+  <?php endforeach; endif; ?>
+</div>
+
+<?php elseif ($_dashRole === 'kurir'):
+    // ── DASHBOARD KURIR (delivery) ────────────────────
+    $siapAntar = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND status_proses='siap'",
+        [$tid, $oid]
+    )['c'] ?? 0);
+    $sudahAntar = (int)(TenantQuery::rawOne(
+        "SELECT COUNT(*) AS c FROM hl_transaksi
+          WHERE tenant_id=? AND outlet_id=? AND status_proses='selesai' AND DATE(tanggal)=?",
+        [$tid, $oid, $today]
+    )['c'] ?? 0);
+?>
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px" class="rk-grid2">
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #F59E0B">
+    <div style="font-size:1.5rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $siapAntar ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Siap Antar Hari Ini</div>
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-top:3px solid #34D399">
+    <div style="font-size:1.5rem;font-weight:800;color:#0F1C3A;font-family:monospace"><?= $sudahAntar ?></div>
+    <div style="font-size:12px;color:#6B7280;font-weight:600">Sudah Diantar Hari Ini</div>
+  </div>
+</div>
+
+<div style="background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:20px">
+  <h3 style="font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px">🚚 Daftar Antar Hari Ini</h3>
+  <?php
+  $antarList = TenantQuery::raw(
+    "SELECT t.id, t.kode, t.nama_pel, t.alamat_pel, t.telepon_pel, t.status_proses
+       FROM hl_transaksi t
+      WHERE t.tenant_id=? AND t.outlet_id=? AND t.status_proses='siap'
+      ORDER BY t.tanggal ASC LIMIT 10",
+    [$tid, $oid]
+  );
+  ?>
+  <?php if (empty($antarList)): ?>
+  <div style="text-align:center;padding:30px;color:#9CA3AF;font-size:13px">Belum ada order yang perlu diantar ✓</div>
+  <?php else: foreach ($antarList as $o): ?>
+  <div style="padding:13px 0;border-bottom:1px solid #F3F4F6;font-size:13px">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;margin-bottom:5px">
+      <div style="font-weight:700;color:#0F1C3A">
+        <?= htmlspecialchars($o['kode']) ?> — <?= htmlspecialchars($o['nama_pel'] ?? '-') ?>
+      </div>
+      <a href="orders.php?id=<?= $o['id'] ?>" style="color:#0891B2;text-decoration:none;font-size:12px;font-weight:700">Update Status →</a>
+    </div>
+    <?php if (!empty($o['alamat_pel'])): ?>
+    <div style="font-size:12px;color:#6B7280">📍 <?= htmlspecialchars($o['alamat_pel']) ?></div>
+    <?php endif; ?>
+    <?php if (!empty($o['telepon_pel'])): ?>
+    <div style="font-size:12px;color:#6B7280">📞
+      <a href="tel:<?= htmlspecialchars($o['telepon_pel']) ?>" style="color:#0891B2;text-decoration:none"><?= htmlspecialchars($o['telepon_pel']) ?></a>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php endforeach; endif; ?>
+</div>
+
+<?php endif; // role-specific ringkas ?>
+
+<style>
+@media(max-width:640px){
+  .rk-grid3{grid-template-columns:1fr!important}
+  .rk-grid2{grid-template-columns:1fr!important}
+}
+</style>
+
+</div><!-- /hl-main untuk ringkas -->
+<?php renderToast(); ?>
+</body>
+</html>
+<?php exit; endif; // _isRingkas — full dashboard di bawah hanya untuk owner/manager ?>
+
+  <!-- ══ FULL DASHBOARD (owner/manager/admin/superadmin) ══ -->
 
   <!-- GREETING -->
   <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">

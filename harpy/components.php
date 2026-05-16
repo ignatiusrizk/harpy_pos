@@ -287,7 +287,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
             <!-- Divider + Mode HQ + Tambah outlet -->
             <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
             <?php if (in_array($user['role'] ?? '', ['owner','manager','superadmin'], true)): ?>
-            <a href="/ERP/harpy/hq/dashboard.php"
+            <a href="/ERP/harpy/dashboard.php?to=hq"
                style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
                       text-decoration:none;color:#0F1C3A;font-size:13px;font-weight:700;
                       background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08))"
