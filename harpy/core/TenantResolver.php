@@ -318,6 +318,97 @@ class TenantResolver
         return (self::$outlet['status'] ?? '') === 'trial';
     }
 
+    // ══ Role & Permission helpers (per brief Akses Karyawan 6.7) ══
+
+    /** Role user aktif: owner | superadmin | manager | admin | staff | kasir | kurir */
+    public static function getRole(): string
+    {
+        return $_SESSION['hl_user']['role'] ?? '';
+    }
+
+    /** Cek apakah user role-nya owner atau superadmin (akses HQ penuh) */
+    public static function isOwnerOrAdmin(): bool
+    {
+        return in_array(self::getRole(), ['owner', 'superadmin'], true);
+    }
+
+    /** Cek apakah user boleh akses HQ view (owner/manager/superadmin) */
+    public static function canAccessHq(): bool
+    {
+        return in_array(self::getRole(), ['owner', 'manager', 'superadmin'], true);
+    }
+
+    /** Cek single permission (compatible dengan hasPermission() di tenant_guard) */
+    public static function can(string $perm): bool
+    {
+        $perms = $_SESSION['hl_permissions'] ?? [];
+        if (isset($perms['*'])) return true;     // superadmin / wildcard
+        return isset($perms[$perm]);
+    }
+
+    /** Return semua permission key user aktif */
+    public static function getPermissions(): array
+    {
+        return array_keys($_SESSION['hl_permissions'] ?? []);
+    }
+
+    /**
+     * Outlet yang ditugaskan ke user aktif (via hl_karyawan_outlet)
+     * Untuk owner/superadmin → return SEMUA outlet aktif tenant.
+     * Untuk role lain → hanya yang ada di hl_karyawan_outlet WHERE is_active=1.
+     */
+    public static function getAssignedOutlets(): array
+    {
+        $tid = self::id();
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        if (!$tid || !$uid) return [];
+
+        $db = Database::get();
+
+        // Owner/superadmin → akses semua outlet aktif tenant
+        if (self::isOwnerOrAdmin()) {
+            $stmt = $db->prepare(
+                "SELECT id, nama_outlet, status FROM outlets
+                 WHERE tenant_id = ? AND status IN ('trial','grace','active')
+                 ORDER BY is_main DESC, nama_outlet ASC"
+            );
+            $stmt->execute([$tid]);
+            return $stmt->fetchAll();
+        }
+
+        // Non-owner → cek hl_karyawan_outlet
+        try {
+            $stmt = $db->prepare(
+                "SELECT o.id, o.nama_outlet, o.status
+                   FROM hl_karyawan_outlet ko
+                   JOIN outlets o ON o.id = ko.outlet_id AND o.tenant_id = ko.tenant_id
+                  WHERE ko.tenant_id = ?
+                    AND ko.karyawan_id = ?
+                    AND ko.is_active = 1
+                    AND o.status IN ('trial','grace','active')
+                  ORDER BY o.is_main DESC, o.nama_outlet ASC"
+            );
+            $stmt->execute([$tid, $uid]);
+            return $stmt->fetchAll();
+        } catch (Throwable $e) {
+            // Tabel belum ada (fresh deploy) — fallback ke outlet_id di hl_users
+            error_log('[getAssignedOutlets] ' . $e->getMessage());
+            $stmt = $db->prepare(
+                "SELECT o.id, o.nama_outlet, o.status FROM outlets o
+                  JOIN hl_users u ON u.outlet_id = o.id AND u.tenant_id = o.tenant_id
+                 WHERE u.id = ? AND o.status IN ('trial','grace','active')"
+            );
+            $stmt->execute([$uid]);
+            return $stmt->fetchAll();
+        }
+    }
+
+    /** Jumlah outlet yang ditugaskan ke user aktif */
+    public static function assignedOutletCount(): int
+    {
+        return count(self::getAssignedOutlets());
+    }
+
     /** Sisa hari trial outlet */
     public static function trialDaysLeft(): int
     {
