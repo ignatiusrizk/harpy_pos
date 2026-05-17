@@ -23,7 +23,10 @@ if ($action) {
     header('Content-Type: application/json');
 
     if ($action === 'list') {
-        $q = trim($_GET['q'] ?? '');
+        $q       = trim($_GET['q'] ?? '');
+        $segment = $_GET['segment'] ?? 'all';   // all | new | active | dormant
+        $sort    = $_GET['sort']    ?? 'visit'; // visit | spender | recent | newest
+
         $params = [$tid];
         $whereExtra = '';
         if ($q !== '') {
@@ -31,6 +34,21 @@ if ($action) {
             $like = "%$q%";
             $params[] = $like; $params[] = $like; $params[] = $like;
         }
+        if ($segment === 'new') {
+            $whereExtra .= " AND DATE_FORMAT(p.created_at,'%Y-%m')='" . date('Y-m') . "'";
+        }
+        $havingExtra = '';
+        if ($segment === 'active') {
+            $havingExtra = " HAVING last_order_at IS NOT NULL AND last_order_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+        } elseif ($segment === 'dormant') {
+            $havingExtra = " HAVING last_order_at IS NULL OR last_order_at < DATE_SUB(NOW(), INTERVAL 60 DAY)";
+        }
+
+        $orderBy = "p.total_visit_count DESC, p.nama ASC";
+        if ($sort === 'spender')      $orderBy = "total_spend DESC, p.nama ASC";
+        elseif ($sort === 'recent')   $orderBy = "last_order_at DESC, p.nama ASC";
+        elseif ($sort === 'newest')   $orderBy = "p.created_at DESC, p.nama ASC";
+
         try {
             $stmt = $db->prepare(
                 "SELECT p.id, p.nama, p.telepon, p.alamat, p.tipe, p.is_active,
@@ -40,16 +58,18 @@ if ($action) {
                         (SELECT MAX(tanggal) FROM hl_transaksi t
                           WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS last_order_at,
                         (SELECT COALESCE(SUM(total),0) FROM hl_transaksi t
-                          WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS total_spend
+                          WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS total_spend,
+                        (SELECT COUNT(DISTINCT outlet_id) FROM hl_transaksi t
+                          WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS outlet_count
                    FROM hl_pelanggan p
                   WHERE p.tenant_id = ? $whereExtra
-                  ORDER BY p.total_visit_count DESC, p.nama ASC
+                  $havingExtra
+                  ORDER BY $orderBy
                   LIMIT 200"
             );
             $stmt->execute($params);
             echo json_encode($stmt->fetchAll());
         } catch (Throwable $e) {
-            // Fallback kalau kolom registered_outlet_id / total_visit_count belum ada
             error_log('[hq pelanggan list] '.$e->getMessage());
             $stmt = $db->prepare(
                 "SELECT p.id, p.nama, p.telepon, p.alamat, p.tipe, p.is_active,
@@ -62,6 +82,50 @@ if ($action) {
             echo json_encode($stmt->fetchAll());
         }
         exit;
+    }
+
+    if ($action === 'segment_stats') {
+        $stats = ['all'=>0,'new'=>0,'active'=>0,'dormant'=>0,'top_spender'=>null,'top_visitor'=>null];
+        try { $stats['all'] = (int)$db->query("SELECT COUNT(*) FROM hl_pelanggan WHERE tenant_id=$tid AND is_active=1")->fetchColumn(); } catch (Throwable) {}
+        try {
+            $stats['new'] = (int)$db->query("SELECT COUNT(*) FROM hl_pelanggan
+                                              WHERE tenant_id=$tid AND DATE_FORMAT(created_at,'%Y-%m')='".date('Y-m')."'")->fetchColumn();
+        } catch (Throwable) {}
+        try {
+            $s = $db->prepare("SELECT COUNT(*) FROM (
+                                 SELECT p.id, (SELECT MAX(tanggal) FROM hl_transaksi t
+                                                WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS lo
+                                   FROM hl_pelanggan p WHERE p.tenant_id=? AND p.is_active=1
+                               ) x WHERE lo >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+            $s->execute([$tid]);
+            $stats['active'] = (int)$s->fetchColumn();
+        } catch (Throwable) {}
+        try {
+            $s = $db->prepare("SELECT COUNT(*) FROM (
+                                 SELECT p.id, (SELECT MAX(tanggal) FROM hl_transaksi t
+                                                WHERE t.tenant_id=p.tenant_id AND t.pelanggan_id=p.id) AS lo
+                                   FROM hl_pelanggan p WHERE p.tenant_id=? AND p.is_active=1
+                               ) x WHERE lo IS NULL OR lo < DATE_SUB(NOW(), INTERVAL 60 DAY)");
+            $s->execute([$tid]);
+            $stats['dormant'] = (int)$s->fetchColumn();
+        } catch (Throwable) {}
+        try {
+            $s = $db->prepare("SELECT p.nama, p.telepon, COALESCE(SUM(t.total),0) AS total_spend
+                                 FROM hl_pelanggan p
+                                 JOIN hl_transaksi t ON t.pelanggan_id=p.id AND t.tenant_id=p.tenant_id
+                                WHERE p.tenant_id=? AND DATE_FORMAT(t.tanggal,'%Y-%m')='".date('Y-m')."'
+                                GROUP BY p.id ORDER BY total_spend DESC LIMIT 1");
+            $s->execute([$tid]);
+            $stats['top_spender'] = $s->fetch() ?: null;
+        } catch (Throwable) {}
+        try {
+            $s = $db->prepare("SELECT nama, telepon, total_visit_count FROM hl_pelanggan
+                                WHERE tenant_id=? AND is_active=1 AND total_visit_count > 0
+                                ORDER BY total_visit_count DESC LIMIT 1");
+            $s->execute([$tid]);
+            $stats['top_visitor'] = $s->fetch() ?: null;
+        } catch (Throwable) {}
+        echo json_encode($stats); exit;
     }
 
     if ($action === 'detail') {
@@ -204,8 +268,29 @@ $csrf       = getCsrfToken();
 
   .toolbar{background:#fff;border-radius:12px;padding:14px 18px;display:flex;gap:10px;align-items:center;
            flex-wrap:wrap;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
-  .toolbar input{flex:1;min-width:200px;padding:9px 14px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:14px;outline:none}
-  .toolbar input:focus{border-color:#35E8D5}
+  .toolbar input,.toolbar select{padding:9px 14px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:14px;outline:none;font-family:inherit}
+  .toolbar input{flex:1;min-width:200px}
+  .toolbar select{min-width:170px;background:#fff;cursor:pointer}
+  .toolbar input:focus,.toolbar select:focus{border-color:#35E8D5}
+  /* Segment tabs */
+  .seg-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .seg-btn{background:#fff;border:1.5px solid #E5E7EB;color:#374151;padding:8px 14px;border-radius:100px;
+           font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;
+           display:inline-flex;align-items:center;gap:6px}
+  .seg-btn:hover{border-color:#9CA3AF}
+  .seg-btn.active{background:#0F1C3A;color:#fff;border-color:#0F1C3A}
+  .seg-btn .badge{background:rgba(255,255,255,.18);padding:1px 7px;border-radius:100px;font-size:10px;font-weight:800}
+  .seg-btn:not(.active) .badge{background:#F3F4F6;color:#6B7280}
+  /* Top customer chips */
+  .top-chip{background:linear-gradient(135deg,#FEF3C7,#FFFBEB);border:1.5px solid rgba(245,158,11,.3);
+            border-radius:12px;padding:10px 14px;font-size:12px;color:#92400E;flex:1;min-width:200px}
+  .top-chip strong{color:#0F1C3A;font-weight:800;font-size:13px;display:block;margin-bottom:1px}
+  .top-chip small{display:block;color:#6B7280;font-weight:400;font-size:11px;margin-top:2px}
+  /* Card dormant indicator */
+  .pl-dormant{background:#FEF2F2;color:#991B1B;font-size:9px;font-weight:700;padding:2px 7px;
+              border-radius:4px;margin-left:5px}
+  .pl-new{background:#D1FAE5;color:#065F46;font-size:9px;font-weight:700;padding:2px 7px;
+          border-radius:4px;margin-left:5px}
 
   .pl-grid{display:grid;grid-template-columns:1fr;gap:8px}
   .pl-card{background:#fff;border-radius:10px;padding:13px 16px;display:grid;
@@ -306,6 +391,10 @@ $csrf       = getCsrfToken();
     </h1>
   </div>
 
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap" id="topChips">
+    <!-- Top spender & top visitor chips loaded via JS -->
+  </div>
+
   <div class="stats">
     <div class="stat-card">
       <div class="stat-num"><?= number_format($totalP) ?></div>
@@ -317,12 +406,26 @@ $csrf       = getCsrfToken();
     </div>
     <div class="stat-card" style="border-top-color:#F59E0B">
       <div class="stat-num" id="topCustomer">-</div>
-      <div class="stat-label">Top Customer (Visit)</div>
+      <div class="stat-label">Total Lintas Visit</div>
     </div>
+  </div>
+
+  <!-- Segment tabs -->
+  <div class="seg-tabs" id="segTabs">
+    <button class="seg-btn active" data-seg="all" onclick="setSegment('all')">🧑‍🤝‍🧑 Semua <span class="badge" id="cnt-all">-</span></button>
+    <button class="seg-btn" data-seg="new" onclick="setSegment('new')">🆕 Baru Bulan Ini <span class="badge" id="cnt-new">-</span></button>
+    <button class="seg-btn" data-seg="active" onclick="setSegment('active')">✓ Aktif <small style="opacity:.7">(&lt;30 hari)</small> <span class="badge" id="cnt-active">-</span></button>
+    <button class="seg-btn" data-seg="dormant" onclick="setSegment('dormant')">💤 Tidak Aktif <small style="opacity:.7">(&gt;60 hari)</small> <span class="badge" id="cnt-dormant">-</span></button>
   </div>
 
   <div class="toolbar">
     <input type="search" id="searchInput" placeholder="🔍 Cari nama, nomor HP, alamat…" oninput="loadList()">
+    <select id="sortBy" onchange="loadList()">
+      <option value="visit">🔁 Sortir: Paling Sering Datang</option>
+      <option value="spender">💰 Sortir: Top Spender</option>
+      <option value="recent">🕐 Sortir: Order Terbaru</option>
+      <option value="newest">🆕 Sortir: Pelanggan Terbaru</option>
+    </select>
     <span id="totalCount" style="font-size:12px;color:#6B7280;font-weight:600"></span>
   </div>
 
@@ -377,22 +480,63 @@ function escapeHtml(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&am
 function fmtRp(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
 function fmtDate(s){if(!s)return '-';const d=new Date(s);return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
 
+let currentSegment = 'all';
+function setSegment(seg){
+  currentSegment = seg;
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
+  loadList();
+}
+
+function isDormant(lastOrder){
+  if (!lastOrder) return true;
+  const diff = (Date.now() - new Date(lastOrder).getTime()) / 86400000;
+  return diff > 60;
+}
+function isNewThisMonth(createdAt){
+  if (!createdAt) return false;
+  const d = new Date(createdAt);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+async function loadSegmentStats(){
+  try {
+    const r = await fetch('/ERP/harpy/hq/pelanggan.php?action=segment_stats');
+    const s = await r.json();
+    document.getElementById('cnt-all').textContent     = s.all || 0;
+    document.getElementById('cnt-new').textContent     = s.new || 0;
+    document.getElementById('cnt-active').textContent  = s.active || 0;
+    document.getElementById('cnt-dormant').textContent = s.dormant || 0;
+
+    const chips = document.getElementById('topChips');
+    let html = '';
+    if (s.top_spender) {
+      html += `<div class="top-chip">💰 <strong>Top Spender Bulan Ini</strong>${escapeHtml(s.top_spender.nama||'-')} — ${fmtRp(s.top_spender.total_spend||0)}
+        <small>${s.top_spender.telepon ? '📞 '+escapeHtml(s.top_spender.telepon) : ''}</small></div>`;
+    }
+    if (s.top_visitor) {
+      html += `<div class="top-chip" style="border-color:rgba(59,130,246,.3);background:linear-gradient(135deg,#EFF6FF,#fff);color:#1E40AF">
+        🏆 <strong>Pelanggan Paling Setia</strong>${escapeHtml(s.top_visitor.nama||'-')} — ${s.top_visitor.total_visit_count}x kunjungan
+        <small>${s.top_visitor.telepon ? '📞 '+escapeHtml(s.top_visitor.telepon) : ''}</small></div>`;
+    }
+    chips.innerHTML = html || '<div style="color:#9CA3AF;font-size:12px;padding:6px 4px">Belum ada data transaksi pelanggan.</div>';
+  } catch (e) { /* ignore */ }
+}
+
 async function loadList(){
-  const q = document.getElementById('searchInput').value;
-  const r = await fetch('/ERP/harpy/hq/pelanggan.php?action=list&q=' + encodeURIComponent(q));
+  const q     = document.getElementById('searchInput').value;
+  const sort  = document.getElementById('sortBy').value;
+  const url = '/ERP/harpy/hq/pelanggan.php?action=list&q=' + encodeURIComponent(q)
+    + '&segment=' + encodeURIComponent(currentSegment)
+    + '&sort=' + encodeURIComponent(sort);
+  const r = await fetch(url);
   const rows = await r.json();
   document.getElementById('totalCount').textContent = rows.length + ' pelanggan';
-  if (rows.length) {
-    document.getElementById('topCustomer').textContent = rows[0].total_visit_count
-      ? (rows[0].total_visit_count + 'x') : '-';
-  } else {
-    document.getElementById('topCustomer').textContent = '-';
-  }
 
   const grid = document.getElementById('pelangganGrid');
   if (rows.length === 0) {
     grid.innerHTML = '<div class="empty"><div class="ico">🧑‍🤝‍🧑</div><p>Belum ada pelanggan' +
-      (q?' yang cocok':'') + '</p></div>';
+      (q?' yang cocok':'') + ' di segmen ini</p></div>';
     return;
   }
 
@@ -400,6 +544,8 @@ async function loadList(){
     <div class="pl-card" onclick="showDetail(${r.id})">
       <div>
         <div class="pl-name">${escapeHtml(r.nama)}
+          ${isNewThisMonth(r.created_at) ? '<span class="pl-new">🆕 BARU</span>' : ''}
+          ${isDormant(r.last_order_at) ? '<span class="pl-dormant">💤 DORMAN</span>' : ''}
           <small>${r.telepon ? '📞 '+escapeHtml(r.telepon) : '(tanpa HP)'}</small>
         </div>
         <span class="pl-tipe tipe-${r.tipe||'retail'}">${r.tipe||'retail'}</span>
@@ -528,6 +674,7 @@ async function submitEdit(){
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 
+loadSegmentStats();
 loadList();
 </script>
 </body>
