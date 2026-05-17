@@ -35,17 +35,39 @@ if ($action) {
     header('Content-Type: application/json');
 
     if ($action === 'list') {
-        $q = trim($_GET['q'] ?? '');
+        $q          = trim($_GET['q'] ?? '');
+        $filterOid  = (int)($_GET['outlet_id'] ?? 0);
+        $filterStat = $_GET['status']  ?? '';     // active | inactive
+        $filterJab  = trim($_GET['jabatan'] ?? '');
+
         $params = [$tid];
         $whereExtra = '';
         if ($q !== '') {
-            $whereExtra = " AND (u.nama LIKE ? OR u.username LIKE ? OR u.telepon LIKE ?)";
+            $whereExtra .= " AND (u.nama LIKE ? OR u.username LIKE ? OR u.telepon LIKE ?)";
             $like = "%$q%";
             $params[] = $like; $params[] = $like; $params[] = $like;
         }
+        if ($filterStat === 'active')   { $whereExtra .= " AND u.is_active=1"; }
+        if ($filterStat === 'inactive') { $whereExtra .= " AND u.is_active=0"; }
+        if ($filterJab !== '')          { $whereExtra .= " AND u.jabatan = ?"; $params[] = $filterJab; }
+
+        // Filter outlet → JOIN hl_karyawan_outlet
+        $joinOutlet = '';
+        if ($filterOid > 0) {
+            try {
+                // pakai EXISTS subquery agar tidak duplicate
+                $whereExtra .= " AND EXISTS (
+                    SELECT 1 FROM hl_karyawan_outlet ko
+                    WHERE ko.tenant_id=u.tenant_id AND ko.karyawan_id=u.id
+                      AND ko.outlet_id=? AND ko.is_active=1
+                )";
+                $params[] = $filterOid;
+            } catch (Throwable) {}
+        }
+
         $stmt = $db->prepare(
             "SELECT u.id, u.nama, u.username, u.role, u.telepon, u.is_active, u.email,
-                    u.outlet_id AS primary_outlet_id,
+                    u.jabatan, u.outlet_id AS primary_outlet_id,
                     u.created_at, u.last_login
                FROM hl_users u
               WHERE u.tenant_id = ? $whereExtra
@@ -71,6 +93,111 @@ if ($action) {
         }
         unset($r);
         echo json_encode($rows); exit;
+    }
+
+    if ($action === 'filter_options') {
+        // Outlet list + daftar jabatan unique untuk dropdown filter
+        $outlets = $db->prepare("SELECT id, nama_outlet FROM outlets
+                                   WHERE tenant_id=? AND status!='closed'
+                                   ORDER BY is_main DESC, nama_outlet ASC");
+        $outlets->execute([$tid]);
+
+        $jabs = $db->prepare("SELECT DISTINCT jabatan FROM hl_users
+                                WHERE tenant_id=? AND jabatan IS NOT NULL AND jabatan!=''
+                                ORDER BY jabatan ASC");
+        $jabs->execute([$tid]);
+
+        echo json_encode([
+            'outlets'  => $outlets->fetchAll(),
+            'jabatan'  => $jabs->fetchAll(PDO::FETCH_COLUMN),
+        ]);
+        exit;
+    }
+
+    if ($action === 'toggle_active' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $d = json_decode(file_get_contents('php://input'), true);
+        verifyCsrf();
+        $kid = (int)($d['karyawan_id'] ?? 0);
+        $newState = !empty($d['activate']) ? 1 : 0;
+        if (!$kid) { echo json_encode(['error'=>'ID invalid']); exit; }
+
+        // Validate ownership + jangan deactivate diri sendiri
+        $u = $db->prepare("SELECT id, role FROM hl_users WHERE id=? AND tenant_id=?");
+        $u->execute([$kid, $tid]);
+        $usr = $u->fetch();
+        if (!$usr) { echo json_encode(['error'=>'Karyawan tidak ditemukan']); exit; }
+        if ($kid === $uid && $newState === 0) {
+            echo json_encode(['error'=>'Tidak bisa menonaktifkan akun sendiri']); exit;
+        }
+        if ($usr['role'] === 'owner' && $newState === 0) {
+            echo json_encode(['error'=>'Akun owner tidak bisa dinonaktifkan dari sini']); exit;
+        }
+
+        try {
+            $db->prepare("UPDATE hl_users SET is_active=? WHERE id=? AND tenant_id=?")
+               ->execute([$newState, $kid, $tid]);
+            // Saat di-deactivate: cabut semua active assignment juga
+            if ($newState === 0) {
+                try {
+                    $db->prepare("UPDATE hl_karyawan_outlet
+                                     SET is_active=0, unassigned_at=NOW()
+                                   WHERE tenant_id=? AND karyawan_id=? AND is_active=1")
+                       ->execute([$tid, $kid]);
+                } catch (Throwable) {}
+            }
+            hqAudit($db, $tid, $uid, $newState ? 'activate_karyawan' : 'deactivate_karyawan', "karyawan=$kid");
+            echo json_encode(['success'=>true]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>'Gagal: '.$e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($action === 'performance') {
+        // Rekap absensi & order yg ditangani karyawan lintas outlet (30 hari terakhir)
+        $kid = (int)($_GET['id'] ?? 0);
+        if (!$kid) { echo json_encode(['error'=>'ID invalid']); exit; }
+
+        $since = date('Y-m-d', strtotime('-30 days'));
+        $today = date('Y-m-d');
+
+        $absensi = [];
+        try {
+            $a = $db->prepare(
+                "SELECT a.outlet_id, COUNT(*) AS total,
+                        SUM(a.status='hadir') AS hadir,
+                        SUM(a.status='izin')  AS izin,
+                        SUM(a.status='sakit') AS sakit,
+                        SUM(a.status='alpha') AS alpha,
+                        (SELECT nama_outlet FROM outlets WHERE id=a.outlet_id) AS nama_outlet
+                   FROM hl_absensi a
+                  WHERE a.tenant_id=? AND a.user_id=? AND a.tanggal BETWEEN ? AND ?
+                  GROUP BY a.outlet_id"
+            );
+            $a->execute([$tid, $kid, $since, $today]);
+            $absensi = $a->fetchAll();
+        } catch (Throwable) {}
+
+        $orders = [];
+        try {
+            $o = $db->prepare(
+                "SELECT t.outlet_id, COUNT(*) AS total_order,
+                        COALESCE(SUM(t.total),0) AS total_omset,
+                        (SELECT nama_outlet FROM outlets WHERE id=t.outlet_id) AS nama_outlet
+                   FROM hl_transaksi t
+                  WHERE t.tenant_id=? AND t.created_by=? AND DATE(t.tanggal) BETWEEN ? AND ?
+                  GROUP BY t.outlet_id"
+            );
+            $o->execute([$tid, $kid, $since, $today]);
+            $orders = $o->fetchAll();
+        } catch (Throwable) {}
+
+        echo json_encode([
+            'periode'  => ['since'=>$since, 'until'=>$today, 'days'=>30],
+            'absensi'  => $absensi,
+            'orders'   => $orders,
+        ]);
+        exit;
     }
 
     if ($action === 'detail') {
@@ -122,6 +249,12 @@ if ($action) {
         $from = (int)($d['from_outlet_id'] ?? 0);
         $to   = (int)($d['to_outlet_id']   ?? 0);
         $note = trim(strip_tags($d['notes'] ?? ''));
+        $efektif = $d['tanggal_efektif'] ?? '';
+        // Validate date format YYYY-MM-DD, default = today
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $efektif)) {
+            $efektif = date('Y-m-d');
+        }
+        $efektifTs = $efektif . ' ' . date('H:i:s');
 
         if (!$kid || !$from || !$to || $from === $to) {
             echo json_encode(['error'=>'Data mutasi tidak valid']); exit;
@@ -135,13 +268,13 @@ if ($action) {
 
         $db->beginTransaction();
         try {
-            // Tutup assignment lama (FROM)
+            // Tutup assignment lama (FROM) — unassigned_at = tanggal efektif
             $db->prepare(
                 "UPDATE hl_karyawan_outlet
-                    SET is_active=0, unassigned_at=NOW(),
-                        notes = CONCAT(COALESCE(notes,''), ' | Mutasi ke outlet #$to: ', ?)
+                    SET is_active=0, unassigned_at=?,
+                        notes = CONCAT(COALESCE(notes,''), ' | Mutasi ke outlet #$to efektif $efektif: ', ?)
                   WHERE tenant_id=? AND karyawan_id=? AND outlet_id=? AND is_active=1"
-            )->execute([$note, $tid, $kid, $from]);
+            )->execute([$efektifTs, $note, $tid, $kid, $from]);
 
             // Buat assignment baru (TO) — atau aktifkan kalau sudah ada inactive
             $existing = $db->prepare(
@@ -152,16 +285,16 @@ if ($action) {
             if ($exId = $existing->fetchColumn()) {
                 $db->prepare(
                     "UPDATE hl_karyawan_outlet
-                        SET is_active=1, assigned_at=NOW(), unassigned_at=NULL,
-                            assigned_by=?, notes=CONCAT(COALESCE(notes,''),' | Mutasi dari outlet #$from: ',?)
+                        SET is_active=1, assigned_at=?, unassigned_at=NULL,
+                            assigned_by=?, notes=CONCAT(COALESCE(notes,''),' | Mutasi dari outlet #$from efektif $efektif: ',?)
                       WHERE id=?"
-                )->execute([$uid, $note, $exId]);
+                )->execute([$efektifTs, $uid, $note, $exId]);
             } else {
                 $db->prepare(
                     "INSERT INTO hl_karyawan_outlet
                        (tenant_id, karyawan_id, outlet_id, is_active, assigned_at, assigned_by, notes)
-                     VALUES (?,?,?,1,NOW(),?,?)"
-                )->execute([$tid, $kid, $to, $uid, "Mutasi dari outlet #$from: $note"]);
+                     VALUES (?,?,?,1,?,?,?)"
+                )->execute([$tid, $kid, $to, $efektifTs, $uid, "Mutasi dari outlet #$from efektif $efektif: $note"]);
             }
 
             // Update primary outlet (default login) ke outlet baru
@@ -169,7 +302,7 @@ if ($action) {
                ->execute([$to, $kid, $tid]);
 
             $db->commit();
-            hqAudit($db, $tid, $uid, 'mutasi_karyawan', "karyawan=$kid from=$from to=$to note=$note");
+            hqAudit($db, $tid, $uid, 'mutasi_karyawan', "karyawan=$kid from=$from to=$to efektif=$efektif note=$note");
             echo json_encode(['success'=>true]);
         } catch (Throwable $e) {
             $db->rollBack();
@@ -357,8 +490,15 @@ $csrf       = getCsrfToken();
 
   .toolbar{background:#fff;border-radius:12px;padding:14px 18px;display:flex;gap:10px;align-items:center;
            flex-wrap:wrap;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
-  .toolbar input{flex:1;min-width:200px;padding:9px 14px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:14px;outline:none}
-  .toolbar input:focus{border-color:#35E8D5}
+  .toolbar input,.toolbar select{padding:9px 14px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:14px;outline:none;font-family:inherit}
+  .toolbar input{flex:1;min-width:200px}
+  .toolbar select{min-width:140px;background:#fff;cursor:pointer}
+  .toolbar input:focus,.toolbar select:focus{border-color:#35E8D5}
+  .kr-card.inactive{opacity:.6;background:#F9FAFB}
+  .perf-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+  .perf-card{background:#F9FAFB;border-radius:8px;padding:10px 14px;font-size:12px}
+  .perf-card strong{display:block;font-size:1.05rem;color:#0F1C3A;font-family:monospace;font-weight:800}
+  .perf-card small{color:#6B7280}
 
   .karyawan-grid{display:grid;grid-template-columns:1fr;gap:10px}
   .kr-card{background:#fff;border-radius:12px;padding:16px 18px;display:grid;
@@ -470,7 +610,18 @@ $csrf       = getCsrfToken();
   </div>
 
   <div class="toolbar">
-    <input type="search" id="searchInput" placeholder="🔍 Cari nama, username, atau nomor HP…" oninput="loadList()">
+    <input type="search" id="searchInput" placeholder="🔍 Cari nama, username, HP…" oninput="loadList()">
+    <select id="filterOutlet" onchange="loadList()">
+      <option value="">📍 Semua Outlet</option>
+    </select>
+    <select id="filterStatus" onchange="loadList()">
+      <option value="">⚪ Semua Status</option>
+      <option value="active">✓ Aktif</option>
+      <option value="inactive">✕ Non-aktif</option>
+    </select>
+    <select id="filterJabatan" onchange="loadList()">
+      <option value="">💼 Semua Jabatan</option>
+    </select>
     <span id="totalCount" style="font-size:12px;color:#6B7280;font-weight:600"></span>
   </div>
 
@@ -507,8 +658,15 @@ $csrf       = getCsrfToken();
         <select id="mutTo"></select>
       </div>
       <div>
-        <label>Catatan (opsional)</label>
-        <textarea id="mutNotes" rows="2" placeholder="Alasan mutasi, dst…"></textarea>
+        <label>Tanggal Efektif</label>
+        <input type="date" id="mutTanggal">
+        <small style="color:#9CA3AF;font-size:11px;display:block;margin-top:3px">
+          Default: hari ini. Histori akan dicatat dengan tanggal ini.
+        </small>
+      </div>
+      <div>
+        <label>Catatan / Alasan</label>
+        <textarea id="mutNotes" rows="2" placeholder="cth: rotasi tim, kebutuhan operasional, request karyawan…"></textarea>
       </div>
       <button class="btn btn-primary" style="padding:12px;font-size:14px" onclick="submitMutasi()">
         ✓ Konfirmasi Mutasi
@@ -612,9 +770,31 @@ function escapeHtml(s){
 
 function roleClass(role){return 'role-'+(role||'staff').replace(/\s/g,'');}
 
+async function loadFilterOptions(){
+  const r = await fetch('/ERP/harpy/hq/karyawan.php?action=filter_options');
+  const d = await r.json();
+  const outletSel = document.getElementById('filterOutlet');
+  const jabSel = document.getElementById('filterJabatan');
+  if (d.outlets) {
+    outletSel.innerHTML = '<option value="">📍 Semua Outlet</option>' +
+      d.outlets.map(o => `<option value="${o.id}">📍 ${escapeHtml(o.nama_outlet)}</option>`).join('');
+  }
+  if (d.jabatan) {
+    jabSel.innerHTML = '<option value="">💼 Semua Jabatan</option>' +
+      d.jabatan.map(j => `<option value="${escapeHtml(j)}">${escapeHtml(j)}</option>`).join('');
+  }
+}
+
 async function loadList(){
   const q = document.getElementById('searchInput').value;
-  const r = await fetch('/ERP/harpy/hq/karyawan.php?action=list&q=' + encodeURIComponent(q));
+  const fOid  = document.getElementById('filterOutlet').value;
+  const fStat = document.getElementById('filterStatus').value;
+  const fJab  = document.getElementById('filterJabatan').value;
+  const url = '/ERP/harpy/hq/karyawan.php?action=list&q=' + encodeURIComponent(q)
+    + '&outlet_id=' + encodeURIComponent(fOid)
+    + '&status=' + encodeURIComponent(fStat)
+    + '&jabatan=' + encodeURIComponent(fJab);
+  const r = await fetch(url);
   const rows = await r.json();
   const grid = document.getElementById('karyawanGrid');
   document.getElementById('totalCount').textContent = rows.length + ' karyawan';
@@ -629,18 +809,21 @@ async function loadList(){
     const outlets = r.assignments && r.assignments.length
       ? r.assignments.map(a => `<span class="kr-outlet-badge">📍 ${escapeHtml(a.nama_outlet)}</span>`).join('')
       : '<span class="kr-outlet-empty">⚠️ Belum ditugaskan ke outlet manapun</span>';
+    const inactiveBadge = r.is_active == 0
+      ? '<span class="kr-role" style="background:#FEE2E2;color:#991B1B;margin-left:4px">NON-AKTIF</span>'
+      : '';
     return `
-      <div class="kr-card">
+      <div class="kr-card ${r.is_active==0?'inactive':''}">
         <div>
           <div class="kr-name">${escapeHtml(r.nama)}
-            <small>@${escapeHtml(r.username)}${r.telepon?' · '+escapeHtml(r.telepon):''}</small>
+            <small>@${escapeHtml(r.username)}${r.telepon?' · '+escapeHtml(r.telepon):''}${r.jabatan?' · 💼 '+escapeHtml(r.jabatan):''}</small>
           </div>
-          <span class="kr-role ${roleClass(r.role)}">${escapeHtml(r.role||'staff')}</span>
+          <span class="kr-role ${roleClass(r.role)}">${escapeHtml(r.role||'staff')}</span>${inactiveBadge}
         </div>
         <div class="kr-outlets">${outlets}</div>
         <div class="kr-actions">
           <button class="btn btn-light" onclick="showDetail(${r.id})">Detail</button>
-          <button class="btn btn-primary" onclick="openMutasi(${r.id}, '${escapeHtml(r.nama)}', ${JSON.stringify(r.assignments||[]).replace(/'/g, '&apos;')})">🔄 Mutasi</button>
+          ${r.is_active==1 ? `<button class="btn btn-primary" onclick="openMutasi(${r.id}, '${escapeHtml(r.nama)}', ${JSON.stringify(r.assignments||[]).replace(/'/g, '&apos;')})">🔄 Mutasi</button>` : ''}
         </div>
       </div>
     `;
@@ -677,11 +860,15 @@ async function showDetail(id){
         </div>
       `).join('');
 
+  const toggleBtn = k.is_active == 1
+    ? `<button class="btn btn-danger" onclick="toggleActive(${k.id}, '${escapeHtml(k.nama)}', false)">⛔ Nonaktifkan Karyawan</button>`
+    : `<button class="btn btn-primary" onclick="toggleActive(${k.id}, '${escapeHtml(k.nama)}', true)">✓ Aktifkan Kembali</button>`;
+
   document.getElementById('detailContent').innerHTML = `
     <div class="modal-header">
       <div>
         <div class="modal-title">${escapeHtml(k.nama)}</div>
-        <div style="font-size:12px;color:#6B7280;margin-top:3px">@${escapeHtml(k.username)} · <span class="kr-role ${roleClass(k.role)}">${escapeHtml(k.role)}</span></div>
+        <div style="font-size:12px;color:#6B7280;margin-top:3px">@${escapeHtml(k.username)} · <span class="kr-role ${roleClass(k.role)}">${escapeHtml(k.role)}</span>${k.is_active==0?' · <span style="color:#991B1B;font-weight:700">NON-AKTIF</span>':''}</div>
       </div>
       <button class="modal-close" onclick="closeModal('detailModal')">×</button>
     </div>
@@ -691,28 +878,90 @@ async function showDetail(id){
       <div class="info-row"><span class="lbl">Email</span><span class="val">${escapeHtml(k.email || '-')}</span></div>
       <div class="info-row"><span class="lbl">Telepon</span><span class="val">${escapeHtml(k.telepon || '-')}</span></div>
       <div class="info-row"><span class="lbl">Jabatan</span><span class="val">${escapeHtml(k.jabatan || '-')}</span></div>
-      <div class="info-row"><span class="lbl">Status</span><span class="val">${k.is_active==1?'Aktif':'Non-aktif'}</span></div>
+      <div class="info-row"><span class="lbl">Status</span><span class="val">${k.is_active==1?'✓ Aktif':'⛔ Non-aktif'}</span></div>
       <div class="info-row"><span class="lbl">Bergabung</span><span class="val">${k.created_at ? new Date(k.created_at).toLocaleDateString('id-ID') : '-'}</span></div>
     </div>
 
     <div class="section">
       <div class="section-label">📍 Outlet Aktif Saat Ini (${ass.length})</div>
       ${assHtml}
-      <button class="btn btn-light" style="margin-top:8px;width:100%" onclick="openAdd(${k.id}, '${escapeHtml(k.nama)}')">+ Tambah Penugasan Outlet</button>
+      ${k.is_active==1 ? `<button class="btn btn-light" style="margin-top:8px;width:100%" onclick="openAdd(${k.id}, '${escapeHtml(k.nama)}')">+ Tambah Penugasan Outlet</button>` : ''}
     </div>
 
     <div class="section">
       <div class="section-label">📜 Riwayat Mutasi</div>
       ${histHtml}
     </div>
+
+    <div class="section">
+      <div class="section-label">📊 Performa & Absensi — 30 Hari Terakhir</div>
+      <div id="perfBox" style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Memuat…</div>
+    </div>
+
+    <div class="section" style="border-top:1px dashed #E5E7EB;padding-top:14px">
+      ${toggleBtn}
+    </div>
   `;
   openModal('detailModal');
+  loadPerformance(k.id);
+}
+
+async function loadPerformance(kid){
+  const box = document.getElementById('perfBox');
+  if (!box) return;
+  try {
+    const r = await fetch('/ERP/harpy/hq/karyawan.php?action=performance&id=' + kid);
+    const d = await r.json();
+    if (d.error) { box.innerHTML = '<span style="color:#9CA3AF">Tidak ada data performa</span>'; return; }
+    const abs = d.absensi || [];
+    const ord = d.orders  || [];
+    if (abs.length === 0 && ord.length === 0) {
+      box.innerHTML = '<span style="color:#9CA3AF">Belum ada aktivitas dalam 30 hari terakhir.</span>';
+      return;
+    }
+    // Gabung per outlet
+    const byOutlet = {};
+    abs.forEach(a => { byOutlet[a.outlet_id] = { nama: a.nama_outlet, hadir:+a.hadir, izin:+a.izin, sakit:+a.sakit, alpha:+a.alpha, total:+a.total, order:0, omset:0 }; });
+    ord.forEach(o => {
+      if (!byOutlet[o.outlet_id]) byOutlet[o.outlet_id] = { nama: o.nama_outlet, hadir:0, izin:0, sakit:0, alpha:0, total:0, order:0, omset:0 };
+      byOutlet[o.outlet_id].order = +o.total_order;
+      byOutlet[o.outlet_id].omset = +o.total_omset;
+    });
+    box.innerHTML = Object.values(byOutlet).map(b => `
+      <div style="margin-bottom:10px;padding:10px 12px;background:#F9FAFB;border-radius:8px">
+        <div style="font-weight:700;color:#0F1C3A;margin-bottom:6px;font-size:13px">📍 ${escapeHtml(b.nama || '-')}</div>
+        <div class="perf-grid">
+          <div class="perf-card"><strong>${b.hadir}/${b.total}</strong><small>Hadir (izin: ${b.izin}, sakit: ${b.sakit}, alpha: ${b.alpha})</small></div>
+          <div class="perf-card"><strong>${b.order}</strong><small>Order Ditangani · Rp ${Number(b.omset).toLocaleString('id-ID')}</small></div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<span style="color:#9CA3AF">Gagal memuat performa</span>';
+  }
+}
+
+async function toggleActive(id, nama, activate){
+  const msg = activate
+    ? `Aktifkan kembali "${nama}"?`
+    : `Nonaktifkan "${nama}"?\n\nKaryawan tidak bisa login. Semua penugasan outlet akan dicabut.\nHistori data tidak dihapus.`;
+  if (!confirm(msg)) return;
+  const r = await fetch('/ERP/harpy/hq/karyawan.php?action=toggle_active', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
+    body: JSON.stringify({karyawan_id: id, activate: activate ? 1 : 0}),
+  });
+  const j = await r.json();
+  if (j.error) { alert(j.error); return; }
+  closeModal('detailModal');
+  loadList();
 }
 
 function openMutasi(id, nama, currentAssignments){
   document.getElementById('mutKaryawanId').value = id;
   document.getElementById('mutKaryawanName').value = nama;
   document.getElementById('mutNotes').value = '';
+  document.getElementById('mutTanggal').value = new Date().toISOString().slice(0,10);
   document.getElementById('mutasiAlert').innerHTML = '';
 
   // Populate FROM dropdown (from current assignments)
@@ -736,6 +985,7 @@ async function submitMutasi(){
     karyawan_id: document.getElementById('mutKaryawanId').value,
     from_outlet_id: document.getElementById('mutFrom').value,
     to_outlet_id: document.getElementById('mutTo').value,
+    tanggal_efektif: document.getElementById('mutTanggal').value,
     notes: document.getElementById('mutNotes').value,
   };
   if (!data.from_outlet_id) { alertEl.innerHTML = '<div class="alert error">Pilih outlet asal</div>'; return; }
@@ -847,6 +1097,7 @@ async function submitCreate(){
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 
+loadFilterOptions();
 loadList();
 </script>
 </body>
