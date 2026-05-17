@@ -328,6 +328,7 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
     <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
     <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>
     <a href="/ERP/harpy/hq/laporan.php">📈 Laporan</a>
+    <a href="/ERP/harpy/hq/roles.php">🔐 Role</a>
     <a href="/ERP/harpy/hq/settings.php">⚙️ Settings</a>
     <a href="/ERP/harpy/dashboard.php?to=outlet" title="Kembali ke outlet view">← Outlet View</a>
     <a href="/ERP/harpy/logout.php" class="hq-logout" onclick="return confirm('Yakin logout?')">Logout</a>
@@ -473,7 +474,8 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
     <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/pelanggan.php" class="btn btn-light" style="justify-content:center">🧑‍🤝‍🧑 Pelanggan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/laporan.php" class="btn btn-light" style="justify-content:center">📈 Laporan Konsolidasi</a>
-      <a href="/ERP/harpy/hq/settings.php" class="btn btn-light" style="justify-content:center">⚙️ Pengaturan Akun</a>
+      <a href="/ERP/harpy/hq/roles.php">🔐 Role</a>
+    <a href="/ERP/harpy/hq/settings.php" class="btn btn-light" style="justify-content:center">⚙️ Pengaturan Akun</a>
     </div>
   </div>
 

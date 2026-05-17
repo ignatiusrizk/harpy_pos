@@ -592,6 +592,7 @@ $csrf       = getCsrfToken();
     <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
     <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>
     <a href="/ERP/harpy/hq/laporan.php">📈 Laporan</a>
+    <a href="/ERP/harpy/hq/roles.php">🔐 Role</a>
     <a href="/ERP/harpy/hq/settings.php">⚙️ Settings</a>
     <span><?= htmlspecialchars($ownerNama) ?></span>
     <a href="/ERP/harpy/dashboard.php?to=outlet">← Outlet View</a>
