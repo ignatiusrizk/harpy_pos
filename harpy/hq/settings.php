@@ -34,6 +34,14 @@ function logAcc(PDO $db, int $tid, int $uid, string $what): void {
 $profileSuccess = false; $profileError = '';
 $pwSuccess = false; $pwError = '';
 
+// Cek kolom deskripsi exist
+$hasDeskripsi = true;
+try { $db->query("SELECT deskripsi FROM tenants LIMIT 1"); } catch (Throwable) { $hasDeskripsi = false; }
+$hasNotifSettings = true;
+try { $db->query("SELECT notif_settings FROM tenants LIMIT 1"); } catch (Throwable) { $hasNotifSettings = false; }
+
+$notifSuccess = false; $notifError = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
     if (!hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
         $profileError = 'CSRF mismatch';
@@ -43,13 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
         $ownerWa    = preg_replace('/\D/', '', $_POST['owner_wa'] ?? '');
         if (substr($ownerWa, 0, 2) === '08') $ownerWa = '628' . substr($ownerWa, 2);
         if (substr($ownerWa, 0, 1) === '8')  $ownerWa = '62' . $ownerWa;
-        $kota = substr(trim(strip_tags($_POST['kota'] ?? '')), 0, 100);
+        $kota      = substr(trim(strip_tags($_POST['kota'] ?? '')), 0, 100);
+        $deskripsi = substr(trim(strip_tags($_POST['deskripsi'] ?? '')), 0, 500);
 
         if (!$namaOutlet) {
             $profileError = 'Nama brand wajib diisi';
         } else {
             try {
-                // Cek duplicate WA (kecuali tenant ini sendiri)
                 if ($ownerWa) {
                     $chk = $db->prepare("SELECT id FROM tenants WHERE owner_wa=? AND id!=? LIMIT 1");
                     $chk->execute([$ownerWa, $tid]);
@@ -58,11 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
                     }
                 }
                 if (!$profileError) {
-                    $db->prepare("UPDATE tenants SET nama_outlet=?, owner_name=?, owner_wa=?, kota=? WHERE id=?")
-                       ->execute([$namaOutlet, $ownerName ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
+                    if ($hasDeskripsi) {
+                        $db->prepare("UPDATE tenants SET nama_outlet=?, owner_name=?, owner_wa=?, kota=?, deskripsi=? WHERE id=?")
+                           ->execute([$namaOutlet, $ownerName ?: null, $ownerWa ?: null, $kota ?: null, $deskripsi ?: null, $tid]);
+                    } else {
+                        $db->prepare("UPDATE tenants SET nama_outlet=?, owner_name=?, owner_wa=?, kota=? WHERE id=?")
+                           ->execute([$namaOutlet, $ownerName ?: null, $ownerWa ?: null, $kota ?: null, $tid]);
+                    }
                     logAcc($db, $tid, $uid, "profile updated");
                     $profileSuccess = true;
-                    // Refresh tenant data
                     $r = $db->prepare("SELECT * FROM tenants WHERE id=?");
                     $r->execute([$tid]);
                     $hqTenant = $r->fetch();
@@ -70,6 +82,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
             } catch (Throwable $e) {
                 $profileError = 'Gagal: ' . $e->getMessage();
             }
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notif'])) {
+    if (!hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
+        $notifError = 'CSRF mismatch';
+    } elseif (!$hasNotifSettings) {
+        $notifError = 'Kolom notif_settings belum ada. Jalankan SQL migration dulu.';
+    } else {
+        $alerts = ['coin_low', 'trial_ending', 'daily_report'];
+        $channels = ['email', 'wa'];
+        $prefs = [];
+        foreach ($alerts as $a) {
+            foreach ($channels as $c) {
+                $prefs[$a][$c] = !empty($_POST['notif'][$a][$c]) ? 1 : 0;
+            }
+        }
+        try {
+            $db->prepare("UPDATE tenants SET notif_settings=? WHERE id=?")
+               ->execute([json_encode($prefs), $tid]);
+            logAcc($db, $tid, $uid, "notif preferences updated");
+            $notifSuccess = true;
+            $r = $db->prepare("SELECT * FROM tenants WHERE id=?");
+            $r->execute([$tid]);
+            $hqTenant = $r->fetch();
+        } catch (Throwable $e) {
+            $notifError = 'Gagal: ' . $e->getMessage();
         }
     }
 }
@@ -104,6 +144,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
             }
         }
     }
+}
+
+// ── AJAX action: histori topup (payments) ─────────────
+if ($action === 'topup_history') {
+    header('Content-Type: application/json');
+    try {
+        $stmt = $db->prepare(
+            "SELECT id, amount, coin_amount, type, status, payment_method, paid_at, created_at, notes
+               FROM payments
+              WHERE tenant_id=? AND (type='coin_topup' OR type IS NULL)
+              ORDER BY COALESCE(paid_at, created_at) DESC LIMIT 50"
+        );
+        $stmt->execute([$tid]);
+        echo json_encode($stmt->fetchAll());
+    } catch (Throwable $e) {
+        // Table payments mungkin belum ada
+        echo json_encode([]);
+    }
+    exit;
+}
+
+// ── AJAX action: histori pemakaian coin per outlet ────
+if ($action === 'coin_usage') {
+    header('Content-Type: application/json');
+    try {
+        $stmt = $db->prepare(
+            "SELECT cl.id, cl.outlet_id, cl.amount, cl.feature_used, cl.description,
+                    cl.balance_after, cl.created_at,
+                    (SELECT nama_outlet FROM outlets WHERE id=cl.outlet_id) AS nama_outlet
+               FROM coin_ledger cl
+              WHERE cl.tenant_id=? AND cl.type='debit'
+              ORDER BY cl.created_at DESC LIMIT 50"
+        );
+        $stmt->execute([$tid]);
+        echo json_encode($stmt->fetchAll());
+    } catch (Throwable $e) {
+        echo json_encode(['error'=>$e->getMessage()]);
+    }
+    exit;
 }
 
 // ── AJAX action: ambil saldo coin ─────────────────────
@@ -148,6 +227,37 @@ $outletCnt = (int)$db->query("SELECT COUNT(*) FROM outlets WHERE tenant_id=$tid 
 // Saldo tenant
 $tenantCoin = (int)($hqTenant['coin_balance'] ?? 0);
 $coinMode   = $hqTenant['coin_mode'] ?? 'shared';
+
+// Parse notif preferences
+$notifDefaults = [
+    'coin_low'      => ['email'=>1, 'wa'=>0],
+    'trial_ending'  => ['email'=>1, 'wa'=>1],
+    'daily_report'  => ['email'=>0, 'wa'=>0],
+];
+$notifPrefs = $notifDefaults;
+if (!empty($hqTenant['notif_settings'])) {
+    $parsed = json_decode($hqTenant['notif_settings'], true);
+    if (is_array($parsed)) {
+        foreach ($notifDefaults as $k => $v) {
+            $notifPrefs[$k] = [
+                'email' => (int)!empty($parsed[$k]['email']),
+                'wa'    => (int)!empty($parsed[$k]['wa']),
+            ];
+        }
+    }
+}
+
+// Aktivasi info (paket aktif)
+$firstActivated = null;
+$outletStatusCount = ['trial'=>0,'grace'=>0,'active'=>0,'suspended'=>0,'closed'=>0];
+try {
+    $r = $db->prepare("SELECT MIN(activated_at) FROM outlets WHERE tenant_id=? AND activated_at IS NOT NULL");
+    $r->execute([$tid]);
+    $firstActivated = $r->fetchColumn();
+    $rs = $db->prepare("SELECT status, COUNT(*) c FROM outlets WHERE tenant_id=? GROUP BY status");
+    $rs->execute([$tid]);
+    foreach ($rs->fetchAll() as $row) { $outletStatusCount[$row['status']] = (int)$row['c']; }
+} catch (Throwable) {}
 
 $csrf = getCsrfToken();
 $supportWa = '6281234567890';
@@ -307,6 +417,24 @@ $supportWa = '6281234567890';
         </div>
       </div>
 
+      <?php if ($hasDeskripsi): ?>
+      <div>
+        <label>Deskripsi Singkat <small>(opsional, max 500 karakter)</small></label>
+        <textarea name="deskripsi" rows="2" maxlength="500"
+                  style="width:100%;padding:10px 13px;border:1.5px solid #E5E7EB;border-radius:8px;
+                         font-size:14px;outline:none;font-family:inherit;box-sizing:border-box"
+                  placeholder="cth: Laundry kiloan & satuan, 5 cabang di Jakarta"><?= htmlspecialchars($hqTenant['deskripsi'] ?? '') ?></textarea>
+      </div>
+      <?php endif; ?>
+
+      <div>
+        <label>Logo Brand <small>(coming soon — upload via support sementara)</small></label>
+        <div style="padding:14px;background:#F9FAFB;border:1.5px dashed #D1D5DB;border-radius:8px;
+                    color:#9CA3AF;font-size:13px;text-align:center">
+          🖼️ Upload logo akan tersedia di update berikutnya
+        </div>
+      </div>
+
       <div>
         <button type="submit" class="btn btn-primary">💾 Simpan Profil</button>
       </div>
@@ -399,9 +527,145 @@ $supportWa = '6281234567890';
         💬 Request Topup via WhatsApp
       </a>
     </div>
+
+    <!-- Histori Topup -->
+    <div style="margin-top:22px;padding-top:18px;border-top:1px dashed #E5E7EB">
+      <div class="panel-title" style="font-size:14px;margin-bottom:10px">📜 Histori Topup Coin</div>
+      <div id="topupHistory">
+        <div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Memuat…</div>
+      </div>
+    </div>
+
+    <!-- Histori Pemakaian -->
+    <div style="margin-top:22px;padding-top:18px;border-top:1px dashed #E5E7EB">
+      <div class="panel-title" style="font-size:14px;margin-bottom:10px">🔥 Histori Pemakaian Coin per Outlet</div>
+      <div id="coinUsage">
+        <div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Memuat…</div>
+      </div>
+    </div>
   </div>
 
-  <!-- ④ INFO AKUN -->
+  <!-- ④ NOTIFIKASI PREFERENCE -->
+  <div class="panel">
+    <div class="panel-title">🔔 Preferensi Notifikasi</div>
+    <div class="panel-sub">Pilih channel mana yang menerima alert untuk tiap jenis kejadian.</div>
+
+    <?php if ($notifSuccess): ?>
+    <div class="alert success">✓ Preferensi notifikasi tersimpan.</div>
+    <?php elseif ($notifError): ?>
+    <div class="alert error">❌ <?= htmlspecialchars($notifError) ?></div>
+    <?php endif; ?>
+
+    <?php if (!$hasNotifSettings): ?>
+    <div class="alert" style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A">
+      ⚠️ Field <code>notif_settings</code> belum tersedia. Jalankan SQL:
+      <code style="display:block;margin-top:6px;background:rgba(0,0,0,.06);padding:6px 10px;border-radius:4px">
+        ALTER TABLE tenants ADD COLUMN notif_settings TEXT NULL;
+      </code>
+    </div>
+    <?php else: ?>
+
+    <form method="POST">
+      <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
+      <input type="hidden" name="save_notif" value="1">
+
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#F9FAFB">
+              <th style="text-align:left;padding:10px 12px;font-size:11px;color:#6B7280;font-weight:800;text-transform:uppercase;letter-spacing:.04em">Jenis Alert</th>
+              <th style="padding:10px;font-size:11px;color:#6B7280;font-weight:800;text-transform:uppercase">📧 Email</th>
+              <th style="padding:10px;font-size:11px;color:#6B7280;font-weight:800;text-transform:uppercase">💬 WhatsApp</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php
+            $alertRows = [
+                'coin_low'     => ['🪙 Coin Hampir Habis', 'Kirim alert kalau saldo coin <1000'],
+                'trial_ending' => ['⏰ Trial Mau Berakhir', 'Reminder H-3 dan H-1 sebelum trial habis'],
+                'daily_report' => ['📊 Laporan Harian', 'Ringkasan omset & order tiap pagi'],
+            ];
+            foreach ($alertRows as $key => [$lbl, $desc]):
+            ?>
+            <tr style="border-top:1px solid #F3F4F6">
+              <td style="padding:11px 12px">
+                <div style="font-weight:700;color:#0F1C3A"><?= $lbl ?></div>
+                <div style="font-size:11px;color:#9CA3AF;margin-top:2px"><?= $desc ?></div>
+              </td>
+              <td style="padding:11px 10px;text-align:center">
+                <input type="checkbox" name="notif[<?= $key ?>][email]" value="1"
+                       <?= $notifPrefs[$key]['email'] ? 'checked' : '' ?>
+                       style="width:18px;height:18px;accent-color:#35E8D5;cursor:pointer">
+              </td>
+              <td style="padding:11px 10px;text-align:center">
+                <input type="checkbox" name="notif[<?= $key ?>][wa]" value="1"
+                       <?= $notifPrefs[$key]['wa'] ? 'checked' : '' ?>
+                       style="width:18px;height:18px;accent-color:#25D366;cursor:pointer">
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:14px">
+        <button type="submit" class="btn btn-primary">💾 Simpan Preferensi</button>
+        <span style="font-size:11px;color:#9CA3AF;margin-left:10px">
+          ℹ️ Notifikasi WhatsApp memerlukan integrasi yang sedang dalam development
+        </span>
+      </div>
+    </form>
+    <?php endif; ?>
+  </div>
+
+  <!-- ⑤ PAKET AKTIF -->
+  <div class="panel">
+    <div class="panel-title">📦 Paket Aktif</div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+      <div class="info-card" style="background:linear-gradient(135deg,#F0FDF4,#fff);border-color:rgba(52,211,153,.3)">
+        <div class="info-num"><?= ucfirst(htmlspecialchars($hqTenant['status'] ?? '-')) ?></div>
+        <div class="info-label">Status Akun</div>
+      </div>
+      <div class="info-card">
+        <div class="info-num"><?= $outletStatusCount['active'] + $outletStatusCount['trial'] + $outletStatusCount['grace'] ?></div>
+        <div class="info-label">Outlet Aktif</div>
+      </div>
+      <div class="info-card" style="background:linear-gradient(135deg,#EFF6FF,#fff);border-color:rgba(59,130,246,.3)">
+        <div class="info-num"><?= $outletStatusCount['trial'] ?></div>
+        <div class="info-label">Outlet Trial</div>
+      </div>
+      <div class="info-card" style="background:linear-gradient(135deg,#FEF2F2,#fff);border-color:rgba(239,68,68,.3)">
+        <div class="info-num"><?= $outletStatusCount['suspended'] ?></div>
+        <div class="info-label">Outlet Suspended</div>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;background:#F9FAFB;border-radius:10px;padding:14px 18px;font-size:13px;color:#374151">
+      <div style="display:flex;justify-content:space-between;padding:5px 0">
+        <span style="color:#6B7280">Sumber Pendaftaran</span>
+        <strong><?= htmlspecialchars($hqTenant['registration_source'] ?? '-') ?></strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0">
+        <span style="color:#6B7280">Tanggal Aktivasi Outlet Pertama</span>
+        <strong><?= $firstActivated ? date('d M Y', strtotime($firstActivated)) : '<span style="color:#9CA3AF;font-weight:400">(belum ada)</span>' ?></strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0">
+        <span style="color:#6B7280">Email Terverifikasi</span>
+        <strong style="color:<?= $hqTenant['verified_at'] ? '#34D399' : '#F59E0B' ?>">
+          <?= $hqTenant['verified_at'] ? '✓ ' . date('d M Y', strtotime($hqTenant['verified_at'])) : '⚠️ Belum' ?>
+        </strong>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">🏪 Tambah Outlet Baru</a>
+      <a href="https://wa.me/<?= $supportWa ?>?text=<?= urlencode('Halo Tim LAMASY, saya mau upgrade paket / tambah outlet untuk akun '.($hqTenant['email'] ?? '-').'.') ?>"
+         target="_blank" rel="noopener" class="btn btn-wa">💬 Upgrade via WhatsApp</a>
+    </div>
+  </div>
+
+  <!-- ⑥ INFO AKUN -->
   <div class="panel">
     <div class="panel-title">ℹ️ Info Akun</div>
     <div class="form-grid">
@@ -470,7 +734,99 @@ async function loadCoin(){
   `).join('');
 }
 
+async function loadTopupHistory(){
+  const box = document.getElementById('topupHistory');
+  try {
+    const r = await fetch('/ERP/harpy/hq/settings.php?action=topup_history');
+    const rows = await r.json();
+    if (!rows || rows.length === 0) {
+      box.innerHTML = '<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Belum ada histori topup</div>';
+      return;
+    }
+    box.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#F9FAFB">
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Tanggal</th>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Tipe</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Jumlah</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Coin</th>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr style="border-top:1px solid #F3F4F6">
+                <td style="padding:9px 10px">${new Date(r.paid_at || r.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                <td style="padding:9px 10px">${escapeHtml(r.type || 'topup')}</td>
+                <td style="padding:9px 10px;text-align:right;font-family:monospace;font-weight:700">Rp ${Number(r.amount||0).toLocaleString('id-ID')}</td>
+                <td style="padding:9px 10px;text-align:right;font-family:monospace">${Number(r.coin_amount||0).toLocaleString('id-ID')}</td>
+                <td style="padding:9px 10px">
+                  <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;
+                              background:${r.status==='success'?'#D1FAE5':'#FEF3C7'};
+                              color:${r.status==='success'?'#065F46':'#92400E'};text-transform:uppercase">
+                    ${escapeHtml(r.status || 'pending')}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = '<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Tabel histori topup belum tersedia</div>';
+  }
+}
+
+async function loadCoinUsage(){
+  const box = document.getElementById('coinUsage');
+  try {
+    const r = await fetch('/ERP/harpy/hq/settings.php?action=coin_usage');
+    const rows = await r.json();
+    if (rows.error || !rows.length) {
+      box.innerHTML = '<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Belum ada riwayat pemakaian coin</div>';
+      return;
+    }
+    box.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#F9FAFB">
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Waktu</th>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Outlet</th>
+              <th style="text-align:left;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Fitur</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Coin</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;color:#6B7280;font-weight:800;text-transform:uppercase">Saldo Setelah</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr style="border-top:1px solid #F3F4F6">
+                <td style="padding:9px 10px">${new Date(r.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+                <td style="padding:9px 10px">📍 ${escapeHtml(r.nama_outlet || '?')}</td>
+                <td style="padding:9px 10px">
+                  <div style="font-weight:600">${escapeHtml(r.feature_used || '-')}</div>
+                  ${r.description ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px">${escapeHtml(r.description)}</div>` : ''}
+                </td>
+                <td style="padding:9px 10px;text-align:right;font-family:monospace;font-weight:700;color:#EF4444">
+                  -${Number(Math.abs(r.amount||0)).toLocaleString('id-ID')}
+                </td>
+                <td style="padding:9px 10px;text-align:right;font-family:monospace;color:#6B7280">${Number(r.balance_after||0).toLocaleString('id-ID')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    box.innerHTML = '<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:14px">Gagal memuat</div>';
+  }
+}
+function escapeHtml(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
 loadCoin();
+loadTopupHistory();
+loadCoinUsage();
 </script>
 </body>
 </html>
