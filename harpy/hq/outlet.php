@@ -367,7 +367,7 @@ function fmtDate(s){if(!s)return null;const d=new Date(s);return d.toLocaleDateS
 function daysUntil(s){if(!s)return null;const diff=new Date(s).getTime()-Date.now();return Math.ceil(diff/86400000)}
 
 async function loadList(){
-  const r = await fetch('hq/outlet.php?action=list');
+  const r = await fetch('/ERP/harpy/hq/outlet.php?action=list');
   const rows = await r.json();
   document.getElementById('outletCountInfo').innerHTML =
     `<strong>${rows.length}</strong> total outlet (` +
@@ -439,7 +439,7 @@ async function loadList(){
 }
 
 async function openEdit(id){
-  const r = await fetch('hq/outlet.php?action=detail&id=' + id);
+  const r = await fetch('/ERP/harpy/hq/outlet.php?action=detail&id=' + id);
   const d = await r.json();
   if (d.error) { alert(d.error); return; }
   const o = d.outlet;
@@ -468,7 +468,7 @@ async function submitEdit(){
   if (hasOpHours) data.operating_hours = document.getElementById('edOpHours').value.trim();
   if (!data.nama_outlet) { alertEl.innerHTML = '<div class="alert error">Nama outlet wajib diisi</div>'; return; }
 
-  const r = await fetch('hq/outlet.php?action=update', {
+  const r = await fetch('/ERP/harpy/hq/outlet.php?action=update', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
     body: JSON.stringify(data),

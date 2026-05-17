@@ -434,7 +434,7 @@ function escapeHtml(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&am
 function fmt(n){return Number(n||0).toLocaleString('id-ID')}
 
 async function loadCoin(){
-  const r = await fetch('hq/settings.php?action=coin_balance');
+  const r = await fetch('/ERP/harpy/hq/settings.php?action=coin_balance');
   const d = await r.json();
   if (d.error) {
     document.getElementById('outletCoinList').innerHTML = `<div style="color:#EF4444;font-size:12px">Error: ${escapeHtml(d.error)}</div>`;

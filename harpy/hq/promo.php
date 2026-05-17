@@ -486,7 +486,7 @@ function periodeText(p){
 
 async function loadList(){
   const q = document.getElementById('searchInput').value;
-  const r = await fetch('hq/promo.php?action=list&q=' + encodeURIComponent(q));
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=list&q=' + encodeURIComponent(q));
   const rows = await r.json();
   if (rows.error) { document.getElementById('promoGrid').innerHTML =
     `<div class="alert error">${escapeHtml(rows.error)}</div>`; return; }
@@ -559,7 +559,7 @@ function openCreate(){
 }
 
 async function openEdit(id){
-  const r = await fetch('hq/promo.php?action=detail&id=' + id);
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=detail&id=' + id);
   const d = await r.json();
   if (d.error) { alert(d.error); return; }
   const p = d.promo;
@@ -597,7 +597,7 @@ async function loadOutletPicker(checkedIds){
   if (allOutletsCache.length === 0) {
     // First load
     try {
-      const r = await fetch('hq/promo.php?action=detail&id=0');
+      const r = await fetch('/ERP/harpy/hq/promo.php?action=detail&id=0');
       // ignore - this won't work
     } catch {}
   }
@@ -659,7 +659,7 @@ async function submitForm(){
     alertEl.innerHTML = '<div class="alert error">Pilih minimal 1 outlet target</div>'; return;
   }
 
-  const r = await fetch('hq/promo.php?action=save', {
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=save', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
     body: JSON.stringify(data),
@@ -672,7 +672,7 @@ async function submitForm(){
 
 async function deletePromo(id, nama){
   if (!confirm(`Non-aktifkan promo "${nama}"?\n(Promo akan tetap di history, tidak terhapus permanen)`)) return;
-  const r = await fetch('hq/promo.php?action=delete', {
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=delete', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
     body: JSON.stringify({id}),
