@@ -245,6 +245,7 @@ $supportWa = '6281234567890';
   </div>
   <div class="hq-topbar-right">
     <a href="/ERP/harpy/dashboard.php?to=hq">📊 Dashboard</a>
+    <a href="/ERP/harpy/hq/outlet.php">🏪 Outlet</a>
     <a href="/ERP/harpy/hq/karyawan.php">👥 Karyawan</a>
     <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
     <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>

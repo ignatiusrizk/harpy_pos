@@ -323,6 +323,7 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   <div class="hq-topbar-right">
     <div class="coin">🪙 <?= number_format($tenantCoin, 0, ',', '.') ?></div>
     <span><?= htmlspecialchars($ownerNama) ?></span>
+    <a href="/ERP/harpy/hq/outlet.php">🏪 Outlet</a>
     <a href="/ERP/harpy/hq/karyawan.php">👥 Karyawan</a>
     <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
     <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>
@@ -468,7 +469,8 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
     <div class="panel-title">⚡ Aksi Cepat</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
       <a href="/ERP/harpy/add-outlet.php" class="btn btn-light" style="justify-content:center">🏪 Tambah Outlet</a>
-      <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
+      <a href="/ERP/harpy/hq/outlet.php">🏪 Outlet</a>
+    <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/pelanggan.php" class="btn btn-light" style="justify-content:center">🧑‍🤝‍🧑 Pelanggan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/laporan.php" class="btn btn-light" style="justify-content:center">📈 Laporan Konsolidasi</a>
       <a href="/ERP/harpy/hq/settings.php" class="btn btn-light" style="justify-content:center">⚙️ Pengaturan Akun</a>
