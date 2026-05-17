@@ -24,15 +24,23 @@ if ($action) {
                     AND (
                       (COALESCE(p.scope,'outlet')='outlet' AND p.outlet_id=?)
                       OR (
-                        p.scope='account' AND EXISTS (
+                        p.scope='account' AND COALESCE(p.target_mode,'all')='all'
+                      )
+                      OR (
+                        p.scope='account' AND p.target_mode='include' AND EXISTS (
                           SELECT 1 FROM hl_promo_outlets po
-                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id
-                            AND po.outlet_id IN (0, ?)
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id AND po.outlet_id=?
+                        )
+                      )
+                      OR (
+                        p.scope='account' AND p.target_mode='exclude' AND NOT EXISTS (
+                          SELECT 1 FROM hl_promo_outlets po
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id AND po.outlet_id=?
                         )
                       )
                     )
                   ORDER BY p.created_at DESC",
-                [$tid, $oid, $oid]
+                [$tid, $oid, $oid, $oid]
             );
         } catch (Throwable $e) {
             // Fallback kalau kolom scope / tabel hl_promo_outlets belum ada (migration belum)
@@ -182,14 +190,22 @@ if ($action) {
                     AND (
                       (COALESCE(p.scope,'outlet')='outlet' AND p.outlet_id=?)
                       OR (
-                        p.scope='account' AND EXISTS (
+                        p.scope='account' AND COALESCE(p.target_mode,'all')='all'
+                      )
+                      OR (
+                        p.scope='account' AND p.target_mode='include' AND EXISTS (
                           SELECT 1 FROM hl_promo_outlets po
-                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id
-                            AND po.outlet_id IN (0, ?)
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id AND po.outlet_id=?
+                        )
+                      )
+                      OR (
+                        p.scope='account' AND p.target_mode='exclude' AND NOT EXISTS (
+                          SELECT 1 FROM hl_promo_outlets po
+                          WHERE po.tenant_id=p.tenant_id AND po.promo_id=p.id AND po.outlet_id=?
                         )
                       )
                     )",
-                [$tid, $kode, $kode, $oid, $oid]
+                [$tid, $kode, $kode, $oid, $oid, $oid]
             );
         } catch (Throwable) {
             $pRows = TenantQuery::raw(

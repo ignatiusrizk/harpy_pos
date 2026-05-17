@@ -35,11 +35,15 @@ if ($action) {
         }
 
         try {
+            // Defensive: cek target_mode kolom
+            $hasTM = true;
+            try { $db->query("SELECT target_mode FROM hl_promo LIMIT 1"); } catch (Throwable) { $hasTM = false; }
+            $tmCol = $hasTM ? "p.target_mode," : "'all' AS target_mode,";
             $stmt = $db->prepare(
                 "SELECT p.id, p.nama, p.deskripsi, p.tipe, p.nilai,
                         p.min_transaksi, p.maks_diskon, p.kuota, p.terpakai,
                         p.berlaku_dari, p.berlaku_sampai, p.is_active,
-                        p.scope, p.outlet_id AS source_outlet_id,
+                        p.scope, $tmCol p.outlet_id AS source_outlet_id,
                         p.created_at,
                         (SELECT nama_outlet FROM outlets WHERE id=p.outlet_id) AS source_outlet_name
                    FROM hl_promo p
@@ -56,7 +60,8 @@ if ($action) {
         // Untuk account scope, ambil outlet assignment
         foreach ($rows as &$r) {
             $r['target_outlets'] = [];
-            $r['target_all'] = false;
+            $r['target_all']     = false;
+            $r['exclude_outlets'] = [];
             if ($r['scope'] === 'account') {
                 try {
                     $a = $db->prepare(
@@ -67,13 +72,16 @@ if ($action) {
                     );
                     $a->execute([$tid, $r['id']]);
                     $assigns = $a->fetchAll();
-                    if (empty($assigns)) {
-                        $r['target_all'] = true; // tidak ada assignment = berlaku semua
+                    $mode = $r['target_mode'] ?? 'all';
+
+                    if ($mode === 'all' || empty($assigns) || ($assigns[0]['outlet_id'] ?? null) == 0) {
+                        $r['target_all'] = true;
+                        $r['target_mode'] = 'all';
+                    } elseif ($mode === 'exclude') {
+                        $r['exclude_outlets'] = array_filter($assigns, fn($x) => (int)$x['outlet_id'] !== 0);
                     } else {
-                        foreach ($assigns as $x) {
-                            if ((int)$x['outlet_id'] === 0) { $r['target_all'] = true; break; }
-                            $r['target_outlets'][] = $x;
-                        }
+                        $r['target_outlets'] = array_filter($assigns, fn($x) => (int)$x['outlet_id'] !== 0);
+                        $r['target_mode'] = 'include';
                     }
                 } catch (Throwable) {}
             }
@@ -103,6 +111,8 @@ if ($action) {
         );
         $allOutlets->execute([$tid]);
 
+        // Pastikan field target_mode ada di response (default 'all')
+        if (!isset($p['target_mode'])) $p['target_mode'] = 'all';
         echo json_encode([
             'promo'       => $p,
             'assigned'    => $assigned,
@@ -127,14 +137,17 @@ if ($action) {
         $kuota = intval($d['kuota'] ?? 0);
         $active= (int)(!empty($d['is_active']) ? 1 : 0);
 
-        // Target mode: 'all' = semua outlet, 'specific' = pilih outlet
-        $targetMode    = $d['target_mode']    ?? 'all';
+        // Target mode: 'all' | 'include' | 'exclude'
+        $targetMode    = in_array($d['target_mode'] ?? '', ['all','include','exclude'], true) ? $d['target_mode'] : 'all';
         $targetOutlets = array_map('intval', $d['target_outlets'] ?? []);
 
         if (!$nama)  { echo json_encode(['error'=>'Nama promo wajib diisi']); exit; }
         if ($nilai <= 0) { echo json_encode(['error'=>'Nilai promo harus > 0']); exit; }
-        if ($targetMode === 'specific' && empty($targetOutlets)) {
+        if ($targetMode === 'include' && empty($targetOutlets)) {
             echo json_encode(['error'=>'Pilih minimal 1 outlet target']); exit;
+        }
+        if ($targetMode === 'exclude' && empty($targetOutlets)) {
+            echo json_encode(['error'=>'Pilih minimal 1 outlet yang dikecualikan']); exit;
         }
 
         // Validasi outlet ownership
@@ -149,44 +162,59 @@ if ($action) {
         }
 
         $db->beginTransaction();
+        // Cek kolom target_mode exist (graceful kalau migration belum)
+        $hasTargetModeCol = true;
+        try { $db->query("SELECT target_mode FROM hl_promo LIMIT 1"); }
+        catch (Throwable) { $hasTargetModeCol = false; }
+
         try {
             if ($id) {
-                // Update existing — pastikan promo milik tenant + scope=account
                 $vP = $db->prepare("SELECT scope FROM hl_promo WHERE id=? AND tenant_id=?");
                 $vP->execute([$id, $tid]);
                 $exScope = $vP->fetchColumn();
                 if (!$exScope) { throw new Exception('Promo tidak ditemukan'); }
                 if ($exScope !== 'account') { throw new Exception('Hanya promo HQ yang bisa diedit dari sini'); }
 
-                $db->prepare(
-                    "UPDATE hl_promo
-                        SET nama=?, deskripsi=?, tipe=?, nilai=?, min_transaksi=?, maks_diskon=?,
-                            berlaku_dari=?, berlaku_sampai=?, kuota=?, is_active=?
-                      WHERE id=? AND tenant_id=? AND scope='account'"
-                )->execute([$nama, $desk, $tipe, $nilai, $minTx, $maks, $dari, $sampai, $kuota, $active, $id, $tid]);
+                $cols = ['nama=?', 'deskripsi=?', 'tipe=?', 'nilai=?', 'min_transaksi=?', 'maks_diskon=?',
+                         'berlaku_dari=?', 'berlaku_sampai=?', 'kuota=?', 'is_active=?'];
+                $args = [$nama, $desk, $tipe, $nilai, $minTx, $maks, $dari, $sampai, $kuota, $active];
+                if ($hasTargetModeCol) { $cols[] = 'target_mode=?'; $args[] = $targetMode; }
+                $args[] = $id; $args[] = $tid;
+                $db->prepare("UPDATE hl_promo SET " . implode(',', $cols) .
+                             " WHERE id=? AND tenant_id=? AND scope='account'")->execute($args);
 
                 $db->prepare("DELETE FROM hl_promo_outlets WHERE tenant_id=? AND promo_id=?")
                    ->execute([$tid, $id]);
 
                 $promoId = $id;
             } else {
-                // INSERT new — scope=account, outlet_id=0 (sentinel)
-                $db->prepare(
-                    "INSERT INTO hl_promo
-                       (tenant_id, outlet_id, scope, nama, deskripsi, tipe, nilai,
-                        min_transaksi, maks_diskon, berlaku_dari, berlaku_sampai,
-                        kuota, terpakai, is_active, created_at)
-                     VALUES (?, 0, 'account', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW())"
-                )->execute([$tid, $nama, $desk, $tipe, $nilai, $minTx, $maks, $dari, $sampai, $kuota, $active]);
+                if ($hasTargetModeCol) {
+                    $db->prepare(
+                        "INSERT INTO hl_promo
+                           (tenant_id, outlet_id, scope, target_mode, nama, deskripsi, tipe, nilai,
+                            min_transaksi, maks_diskon, berlaku_dari, berlaku_sampai,
+                            kuota, terpakai, is_active, created_at)
+                         VALUES (?, 0, 'account', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW())"
+                    )->execute([$tid, $targetMode, $nama, $desk, $tipe, $nilai, $minTx, $maks, $dari, $sampai, $kuota, $active]);
+                } else {
+                    $db->prepare(
+                        "INSERT INTO hl_promo
+                           (tenant_id, outlet_id, scope, nama, deskripsi, tipe, nilai,
+                            min_transaksi, maks_diskon, berlaku_dari, berlaku_sampai,
+                            kuota, terpakai, is_active, created_at)
+                         VALUES (?, 0, 'account', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW())"
+                    )->execute([$tid, $nama, $desk, $tipe, $nilai, $minTx, $maks, $dari, $sampai, $kuota, $active]);
+                }
                 $promoId = (int)$db->lastInsertId();
             }
 
-            // Insert outlet assignment
+            // Insert outlet pivot
             if ($targetMode === 'all') {
-                // Tidak insert apapun → fallback: berlaku semua. Tapi explicit insert outlet_id=0 lebih clear.
+                // Sentinel outlet_id=0 untuk semua (kompat dengan logic POS lama)
                 $db->prepare("INSERT INTO hl_promo_outlets (tenant_id, promo_id, outlet_id) VALUES (?,?,0)")
                    ->execute([$tid, $promoId]);
             } else {
+                // include: outlets diizinkan; exclude: outlets dikecualikan
                 $ins = $db->prepare("INSERT INTO hl_promo_outlets (tenant_id, promo_id, outlet_id) VALUES (?,?,?)");
                 foreach ($targetOutlets as $oid) {
                     $ins->execute([$tid, $promoId, $oid]);
@@ -438,15 +466,23 @@ catch (Throwable) { $migrationOk = false; }
 
       <div>
         <label style="margin-bottom:8px">🎯 Target Outlet</label>
-        <div class="target-radio">
+        <div class="target-radio" style="grid-template-columns:1fr 1fr 1fr">
           <label>
             <input type="radio" name="targetMode" value="all" checked onchange="toggleTarget()">
-            <span>📍 Semua Outlet</span>
+            <span>🌐 Semua Outlet</span>
           </label>
           <label>
-            <input type="radio" name="targetMode" value="specific" onchange="toggleTarget()">
-            <span>✓ Pilih Outlet Tertentu</span>
+            <input type="radio" name="targetMode" value="include" onchange="toggleTarget()">
+            <span>✓ Pilih Tertentu</span>
           </label>
+          <label>
+            <input type="radio" name="targetMode" value="exclude" onchange="toggleTarget()">
+            <span>❌ Semua Kecuali</span>
+          </label>
+        </div>
+        <div id="pickerLabel" style="display:none;font-size:11px;color:#6B7280;margin-bottom:6px">
+          <span class="lbl-include">Centang outlet yang BOLEH pakai promo:</span>
+          <span class="lbl-exclude" style="display:none">Centang outlet yang DIKECUALIKAN (tidak boleh pakai):</span>
         </div>
         <div id="outletPicker" style="display:none;background:#F9FAFB;border:1.5px solid #E5E7EB;
              border-radius:8px;padding:10px;max-height:160px;overflow-y:auto"></div>
@@ -509,6 +545,9 @@ async function loadList(){
       target = `<strong>📍 ${escapeHtml(r.source_outlet_name || '?')}</strong><span style="font-size:11px;color:#9CA3AF">Dibuat di outlet view</span>`;
     } else if (r.target_all) {
       target = `<strong>🌐 Semua Outlet</strong><span class="target-tag target-all">SEMUA</span>`;
+    } else if (r.target_mode === 'exclude' && r.exclude_outlets && r.exclude_outlets.length > 0) {
+      target = `<strong>🌐 Semua kecuali ${r.exclude_outlets.length} outlet</strong>` +
+        r.exclude_outlets.map(o => `<span class="target-tag" style="background:#FEE2E2;color:#991B1B">❌ ${escapeHtml(o.nama_outlet || '?')}</span>`).join('');
     } else if (r.target_outlets.length > 0) {
       target = `<strong>${r.target_outlets.length} outlet</strong>` +
         r.target_outlets.map(o => `<span class="target-tag">📍 ${escapeHtml(o.nama_outlet || '?')}</span>`).join('');
@@ -577,13 +616,14 @@ async function openEdit(id){
   document.getElementById('fKuota').value = p.kuota || 0;
   document.getElementById('fActive').checked = p.is_active == 1;
 
-  // Set target mode
-  const hasAll = d.assigned.includes(0);
-  const hasSpecific = d.assigned.filter(o => o > 0).length > 0;
-  if (hasAll || d.assigned.length === 0) {
+  // Set target mode dari kolom DB (kalau ada), atau infer dari assigned
+  const tm = p.target_mode || 'all';
+  if (d.assigned.includes(0) || d.assigned.length === 0 || tm === 'all') {
     document.querySelector('input[name="targetMode"][value="all"]').checked = true;
+  } else if (tm === 'exclude') {
+    document.querySelector('input[name="targetMode"][value="exclude"]').checked = true;
   } else {
-    document.querySelector('input[name="targetMode"][value="specific"]').checked = true;
+    document.querySelector('input[name="targetMode"][value="include"]').checked = true;
   }
 
   allOutletsCache = d.all_outlets;
@@ -630,7 +670,11 @@ async function loadAllOutlets(){
 
 function toggleTarget(){
   const mode = document.querySelector('input[name="targetMode"]:checked').value;
-  document.getElementById('outletPicker').style.display = mode === 'specific' ? 'block' : 'none';
+  const showPicker = mode !== 'all';
+  document.getElementById('outletPicker').style.display = showPicker ? 'block' : 'none';
+  document.getElementById('pickerLabel').style.display = showPicker ? 'block' : 'none';
+  document.querySelector('.lbl-include').style.display = mode === 'include' ? 'inline' : 'none';
+  document.querySelector('.lbl-exclude').style.display = mode === 'exclude' ? 'inline' : 'none';
 }
 
 async function submitForm(){
@@ -655,8 +699,11 @@ async function submitForm(){
 
   if (!data.nama)     { alertEl.innerHTML = '<div class="alert error">Nama wajib diisi</div>'; return; }
   if (!(data.nilai > 0)) { alertEl.innerHTML = '<div class="alert error">Nilai harus lebih dari 0</div>'; return; }
-  if (targetMode === 'specific' && data.target_outlets.length === 0) {
+  if (targetMode === 'include' && data.target_outlets.length === 0) {
     alertEl.innerHTML = '<div class="alert error">Pilih minimal 1 outlet target</div>'; return;
+  }
+  if (targetMode === 'exclude' && data.target_outlets.length === 0) {
+    alertEl.innerHTML = '<div class="alert error">Pilih minimal 1 outlet yang dikecualikan</div>'; return;
   }
 
   const r = await fetch('/ERP/harpy/hq/promo.php?action=save', {
