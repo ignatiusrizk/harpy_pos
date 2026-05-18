@@ -314,25 +314,7 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
 </head>
 <body>
 
-<div class="hq-topbar">
-  <div class="hq-brand">
-    <img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:28px">
-    LAMASY <span class="hq-brand-sub">by Harpy</span>
-    <span class="hq-badge">🏢 HQ</span>
-  </div>
-  <div class="hq-topbar-right">
-    <div class="coin">🪙 <?= number_format($tenantCoin, 0, ',', '.') ?></div>
-    <span><?= htmlspecialchars($ownerNama) ?></span>
-    <a href="/ERP/harpy/hq/outlet.php">🏪 Outlet</a>
-    <a href="/ERP/harpy/hq/karyawan.php">👥 Karyawan</a>
-    <a href="/ERP/harpy/hq/pelanggan.php">🧑‍🤝‍🧑 Pelanggan</a>
-    <a href="/ERP/harpy/hq/promo.php">🎟️ Promo</a>
-    <a href="/ERP/harpy/hq/laporan.php">📈 Laporan</a>
-    <a href="/ERP/harpy/hq/roles.php">🔐 Role</a>
-    <a href="/ERP/harpy/hq/settings.php">⚙️ Settings</a>
-    <a href="/ERP/harpy/dashboard.php?to=outlet" title="Kembali ke outlet view">← Outlet View</a>
-    <a href="/ERP/harpy/logout.php" class="hq-logout" onclick="return confirm('Yakin logout?')">Logout</a>
-  </div>
+<?php require __DIR__ . '/_topbar.php'; ?>
 </div>
 
 <div class="container">
