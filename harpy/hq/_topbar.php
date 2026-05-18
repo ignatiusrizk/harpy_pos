@@ -112,6 +112,9 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
     <a href="/ERP/harpy/hq/laporan.php"
        class="hq-link <?= $_aPage === 'hq-laporan' ? 'active' : '' ?>">📈 Laporan</a>
 
+    <a href="/ERP/harpy/hq/audit.php"
+       class="hq-link <?= $_aPage === 'hq-audit' ? 'active' : '' ?>">📋 Audit</a>
+
     <a href="/ERP/harpy/hq/settings.php"
        class="hq-link <?= $_aPage === 'hq-settings' ? 'active' : '' ?>">⚙️ Settings</a>
   </nav>
