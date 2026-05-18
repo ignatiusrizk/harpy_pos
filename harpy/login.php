@@ -201,20 +201,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $oCount = (int)$outletCount->fetchColumn();
 
                 if ($isOwnerOrAdmin) {
-                    // OWNER / MANAGER: punya akses semua outlet tenant
+                    // OWNER / MANAGER: default landing ke HQ view (sesuai brief
+                    // 'Owner yang punya 1 outlet pun tetap dapat benefit HQ view')
                     if ($oCount === 0) {
+                        // Belum punya outlet → dashboard.php yang otomatis render
+                        // no-outlet onboarding state (hero CTA daftar outlet)
                         $_SESSION['outlet_id'] = 0;
-                        $redirectTo = 'add-outlet.php';
-                    } elseif ($oCount === 1) {
+                        $_SESSION['hq_mode']   = false;
+                        $redirectTo = 'dashboard.php';
+                    } else {
+                        // Sudah punya outlet → masuk HQ. Set juga outlet_id default
+                        // (main outlet) supaya kalau switch ke outlet view tidak perlu pilih.
                         $outletRow = $db->prepare(
-                            "SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') LIMIT 1"
+                            "SELECT id FROM outlets
+                              WHERE tenant_id=? AND status IN ('trial','grace','active')
+                              ORDER BY is_main DESC, nama_outlet ASC LIMIT 1"
                         );
                         $outletRow->execute([$user['tenant_id']]);
                         $_SESSION['outlet_id'] = (int)$outletRow->fetchColumn();
-                        $redirectTo = 'dashboard.php';
-                    } else {
-                        // Multi-outlet owner → select-outlet (bisa juga loncat ke HQ nanti)
-                        $redirectTo = 'select-outlet.php';
+                        $_SESSION['hq_mode']   = true;
+                        $redirectTo = 'dashboard.php'; // dashboard.php route ke HQ via hq_mode
                     }
                 } else {
                     // KASIR / STAFF / KURIR: scope ke hl_karyawan_outlet
@@ -242,9 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Multi-assignment → select-outlet (scoped sesuai assignment)
                         $redirectTo = 'select-outlet.php';
                     }
+                    $_SESSION['hq_mode'] = false; // non-owner selalu outlet view
                 }
-
-                $_SESSION['hq_mode'] = false;
 
                 // Audit log
                 try {
