@@ -70,6 +70,16 @@ if (!in_array($hqRole, ['owner', 'manager', 'superadmin'])) {
 // ── Set HQ mode flag di session ───────────────────────
 $_SESSION['hq_mode'] = true;
 
+// ── Permission helpers untuk HQ (brief 3.2 & 6.8) ─────
+// Manager: bisa akses HQ tapi terbatas — tidak boleh billing,
+// tidak boleh manage outlets, tidak boleh ubah account settings sensitif.
+$hqIsOwner   = in_array($hqRole, ['owner','superadmin'], true);
+$hqIsManager = $hqRole === 'manager';
+$hqCanBilling      = $hqIsOwner;   // topup, coin mode, paket, settings password
+$hqCanManageOutlet = $hqIsOwner;   // tambah outlet, edit outlet, set main
+$hqCanManageRole   = $hqIsOwner;   // create/edit/delete role
+$hqCanViewAudit    = true;          // owner + manager boleh lihat audit
+
 // ── Helpers (compatible dengan components.php) ────────
 if (!function_exists('currentUser')) {
     function currentUser(): ?array {

@@ -269,7 +269,7 @@ $supportWa  = '6281234567890';
     <h1>🏪 Manajemen Outlet
       <small>Kelola semua cabang · <?= htmlspecialchars($tenantNm) ?></small>
     </h1>
-    <a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">+ Tambah Outlet Baru</a>
+    <?php if ($hqCanManageOutlet): ?><a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">+ Tambah Outlet Baru</a><?php endif; ?>
   </div>
 
   <div class="summary-bar">

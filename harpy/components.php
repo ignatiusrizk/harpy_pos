@@ -321,6 +321,15 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
         <?php if (!$minimalMode): ?>
         <span class="hl-user-role"><?= strtoupper($user['role_nama'] ?? $user['role']) ?></span>
         <?php endif; ?>
+        <?php if (!$minimalMode && in_array($user['role'] ?? '', ['owner','manager','superadmin','admin'], true)): ?>
+        <a href="/ERP/harpy/dashboard.php?to=hq"
+           style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:700;
+                  font-size:12px;padding:6px 12px;border-radius:8px;text-decoration:none;
+                  display:inline-flex;align-items:center;gap:5px;margin-right:4px"
+           title="Kembali ke HQ konsolidasi">
+          🏢 HQ
+        </a>
+        <?php endif; ?>
         <a href="logout.php" class="hl-btn-logout"
            onclick="return confirm('Yakin logout?')">Logout</a>
       </div>

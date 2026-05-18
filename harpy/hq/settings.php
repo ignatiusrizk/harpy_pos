@@ -466,7 +466,8 @@ $supportWa = '6281234567890';
     </form>
   </div>
 
-  <!-- ③ COIN & BILLING -->
+  <!-- ③ COIN & BILLING — owner only (brief 3.2: manager tidak akses billing) -->
+  <?php if ($hqCanBilling): ?>
   <div class="panel">
     <div class="panel-title">🪙 Coin & Billing</div>
     <div class="panel-sub">
@@ -527,6 +528,8 @@ $supportWa = '6281234567890';
       </div>
     </div>
   </div>
+
+  <?php endif; // hqCanBilling — coin & billing ?>
 
   <!-- ④ NOTIFIKASI PREFERENCE -->
   <div class="panel">
@@ -601,7 +604,8 @@ $supportWa = '6281234567890';
     <?php endif; ?>
   </div>
 
-  <!-- ⑤ PAKET AKTIF -->
+  <!-- ⑤ PAKET AKTIF — owner only (manager tidak akses) -->
+  <?php if ($hqCanBilling): ?>
   <div class="panel">
     <div class="panel-title">📦 Paket Aktif</div>
 
@@ -647,6 +651,8 @@ $supportWa = '6281234567890';
          target="_blank" rel="noopener" class="btn btn-wa">💬 Upgrade via WhatsApp</a>
     </div>
   </div>
+
+  <?php endif; // paket aktif (owner only) ?>
 
   <!-- ⑥ INFO AKUN -->
   <div class="panel">

@@ -325,7 +325,7 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
       <p>HQ <strong style="color:#35E8D5"><?= htmlspecialchars($tenantNm) ?></strong>
          · <?= $outletCnt ?> outlet aktif · <?= date('l, d F Y') ?></p>
     </div>
-    <a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">🏪 Tambah Outlet</a>
+    <?php if ($hqCanManageOutlet): ?><a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">🏪 Tambah Outlet</a><?php endif; ?>
   </div>
 
   <!-- 4 METRIC CARDS -->
@@ -451,7 +451,7 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   <div class="panel" style="margin-top:8px">
     <div class="panel-title">⚡ Aksi Cepat</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
-      <a href="/ERP/harpy/add-outlet.php" class="btn btn-light" style="justify-content:center">🏪 Tambah Outlet</a>
+      <?php if ($hqCanManageOutlet): ?><a href="/ERP/harpy/add-outlet.php" class="btn btn-light" style="justify-content:center">🏪 Tambah Outlet</a><?php endif; ?>
       <a href="/ERP/harpy/hq/outlet.php" class="btn btn-light" style="justify-content:center">🏢 Manajemen Outlet</a>
       <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/pelanggan.php" class="btn btn-light" style="justify-content:center">🧑‍🤝‍🧑 Pelanggan Lintas Outlet</a>
