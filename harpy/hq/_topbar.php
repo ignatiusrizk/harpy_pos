@@ -78,7 +78,7 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
     <div class="hq-group">
       <button type="button"
               class="hq-link hq-group-btn <?= $_inTim ? 'active' : '' ?>"
-              onclick="this.parentElement.classList.toggle('open')">
+              onclick="toggleHqGroup(this, event)">
         👥 Tim & Akses <span class="arr">▼</span>
       </button>
       <div class="hq-dropdown">
@@ -96,7 +96,7 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
     <div class="hq-group">
       <button type="button"
               class="hq-link hq-group-btn <?= $_inCrm ? 'active' : '' ?>"
-              onclick="this.parentElement.classList.toggle('open')">
+              onclick="toggleHqGroup(this, event)">
         🛍️ Pelanggan & Promo <span class="arr">▼</span>
       </button>
       <div class="hq-dropdown">
@@ -124,6 +124,15 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
 </div>
 
 <script>
+// Toggle satu dropdown — selalu tutup yang lain dulu
+function toggleHqGroup(btn, ev){
+  ev.stopPropagation();
+  const target = btn.parentElement;
+  const isOpen = target.classList.contains('open');
+  document.querySelectorAll('.hq-group.open').forEach(g => g.classList.remove('open'));
+  if (!isOpen) target.classList.add('open');
+}
+
 // Tutup dropdown saat klik di luar
 document.addEventListener('click', function(e){
   if (!e.target.closest('.hq-group')) {
