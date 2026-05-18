@@ -31,7 +31,9 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
             padding:3px 10px;border-radius:100px;letter-spacing:.06em}
   .hq-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
   .hq-nav .hq-link{color:rgba(255,255,255,.6);text-decoration:none;padding:7px 11px;border-radius:6px;
-                   transition:all .15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+                   transition:all .15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+                   background:transparent;border:none;font-family:inherit;font-size:13px;font-weight:400;cursor:pointer}
+  .hq-nav button.hq-link{appearance:none;-webkit-appearance:none}
   .hq-nav .hq-link:hover{background:rgba(255,255,255,.08);color:#fff}
   .hq-nav .hq-link.active{background:rgba(53,232,213,.15);color:#35E8D5}
   .hq-group{position:relative}
