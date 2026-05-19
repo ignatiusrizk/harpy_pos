@@ -2,6 +2,7 @@
 $activePage = 'laporan';
 define('ROOT', __DIR__);
 require_once ROOT . '/middleware/tenant_guard.php';
+require_once ROOT . '/core/AIInsight.php';
 require_once __DIR__ . '/components.php';
 $user = currentUser();
 requirePermission('laporan.view_harian');
@@ -197,6 +198,89 @@ if ($action) {
             'trend'            => $trendData,
             'periode'          => ['dari'=>$dari,'sampai'=>$sampai],
         ]); exit;
+    }
+
+    // ── AI INSIGHT ────────────────────────────────────
+    if ($action === 'ai_insight') {
+        if (!CoinLedger::canAfford('ai_insight_laporan')) {
+            echo json_encode(['error' => 'Coin tidak cukup. Butuh 100 coin, saldo: ' . TenantResolver::coinBalance()]);
+            exit;
+        }
+
+        $dari   = substr(trim($_GET['dari']   ?? date('Y-m-01')), 0, 10);
+        $sampai = substr(trim($_GET['sampai'] ?? date('Y-m-d')), 0, 10);
+        $periodeLabel = date('d M Y', strtotime($dari)) . ' — ' . date('d M Y', strtotime($sampai));
+
+        // Summary
+        $sum = TenantQuery::rawOne(
+            "SELECT COUNT(*) total_order, COALESCE(SUM(total),0) omset
+              FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?",
+            [$tid, $oid, $dari, $sampai]
+        );
+        $omset = (int)($sum['omset'] ?? 0);
+        $orderCnt = (int)($sum['total_order'] ?? 0);
+        $avgTicket = $orderCnt > 0 ? (int)round($omset / $orderCnt) : 0;
+
+        // Omset periode sebelumnya
+        $days = max(1, (int)((strtotime($sampai) - strtotime($dari)) / 86400) + 1);
+        $prevSampai = date('Y-m-d', strtotime($dari . ' -1 day'));
+        $prevDari   = date('Y-m-d', strtotime($prevSampai . " -" . ($days - 1) . " days"));
+        $omsetPrev = 0;
+        try {
+            $prev = TenantQuery::rawOne(
+                "SELECT COALESCE(SUM(total),0) omset FROM hl_transaksi
+                  WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?",
+                [$tid, $oid, $prevDari, $prevSampai]
+            );
+            $omsetPrev = (int)($prev['omset'] ?? 0);
+        } catch (Throwable) {}
+
+        // Top layanan
+        $topLayanan = [];
+        try {
+            $rows = TenantQuery::raw(
+                "SELECT ti.nama_layanan AS nama, COUNT(*) qty, COALESCE(SUM(ti.subtotal),0) total
+                  FROM hl_transaksi_item ti
+                  JOIN hl_transaksi t ON t.id = ti.transaksi_id
+                 WHERE t.tenant_id=? AND t.outlet_id=? AND DATE(t.tanggal) BETWEEN ? AND ?
+                 GROUP BY ti.nama_layanan ORDER BY total DESC LIMIT 5",
+                [$tid, $oid, $dari, $sampai]
+            );
+            $topLayanan = $rows;
+        } catch (Throwable) {}
+
+        $aiData = [
+            'periode_label' => $periodeLabel,
+            'scope'         => 'outlet',
+            'omset'         => $omset,
+            'omset_prev'    => $omsetPrev,
+            'order_count'   => $orderCnt,
+            'avg_ticket'    => $avgTicket,
+            'top_layanan'   => $topLayanan,
+            'top_karyawan'  => [],
+            'per_outlet'    => [],
+        ];
+
+        try {
+            $insight = AIInsight::analyzeLaporan($aiData, $tid, $oid);
+            if (empty($insight['from_cache'])) {
+                try { CoinLedger::deduct('ai_insight_laporan'); } catch (Throwable) {}
+                try { logAudit('ai_insight', 'laporan', "AI insight outlet $periodeLabel"); } catch (Throwable) {}
+            }
+            echo json_encode([
+                'ok'              => true,
+                'summary'         => $insight['summary'],
+                'highlights'      => $insight['highlights'],
+                'recommendations' => $insight['recommendations'],
+                'from_cache'      => $insight['from_cache'] ?? false,
+                'tokens_used'     => $insight['tokens_used'] ?? 0,
+                'generated_at'    => $insight['generated_at'] ?? date('Y-m-d H:i:s'),
+            ]);
+        } catch (Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'AI Insight gagal: ' . $e->getMessage()]);
+        }
+        exit;
     }
 
     echo json_encode(['error'=>'Unknown']); exit;
@@ -454,9 +538,57 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
         <label>s/d</label>
         <input type="date" id="lrSampai"/>
         <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="loadLR()">🔍 Hitung L/R</button>
+        <button class="hl-btn hl-btn-sm" onclick="loadAiInsightOutlet()"
+                style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none">
+          ✨ AI Insight
+        </button>
         <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="window.print()">🖨️ Print</button>
       </div>
     </div>
+
+    <!-- AI INSIGHT PANEL -->
+    <div id="aiInsightPanel" style="display:none;margin-bottom:18px;background:linear-gradient(135deg,#0F1C3A,#1a2d52);
+         border-radius:14px;padding:24px 28px;color:#fff;position:relative;overflow:hidden">
+      <div style="position:absolute;top:-30px;right:-30px;width:200px;height:200px;
+                  background:radial-gradient(circle,rgba(53,232,213,.15),transparent);border-radius:50%"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;position:relative">
+        <div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#35E8D5;margin-bottom:4px">
+            ✨ AI INSIGHT
+          </div>
+          <div id="aiInsightTitle" style="font-size:14px;color:rgba(255,255,255,.6)">Analisa periode L/R</div>
+        </div>
+        <button onclick="document.getElementById('aiInsightPanel').style.display='none'"
+                style="background:rgba(255,255,255,.08);border:none;color:#fff;width:28px;height:28px;
+                       border-radius:6px;cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div id="aiInsightLoading" style="display:none;text-align:center;padding:30px 20px">
+        <div style="font-size:32px;animation:aiSpin 1.5s linear infinite">⏳</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.6);margin-top:8px">Claude sedang menganalisa…</div>
+      </div>
+      <div id="aiInsightContent" style="display:none">
+        <div id="aiSummary" style="font-size:14px;line-height:1.65;color:rgba(255,255,255,.92);
+             background:rgba(255,255,255,.05);padding:14px 16px;border-radius:10px;
+             border-left:3px solid #35E8D5;margin-bottom:18px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <div style="font-size:11px;font-weight:800;color:#35E8D5;letter-spacing:.08em;margin-bottom:8px">📊 HIGHLIGHTS</div>
+            <ul id="aiHighlights" style="list-style:none;padding:0;margin:0;font-size:13px;color:rgba(255,255,255,.85);line-height:1.7"></ul>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:800;color:#F59E0B;letter-spacing:.08em;margin-bottom:8px">💡 REKOMENDASI</div>
+            <ul id="aiRecommendations" style="list-style:none;padding:0;margin:0;font-size:13px;color:rgba(255,255,255,.85);line-height:1.7"></ul>
+          </div>
+        </div>
+        <div id="aiMeta" style="margin-top:14px;font-size:10px;color:rgba(255,255,255,.4);letter-spacing:.05em"></div>
+      </div>
+      <div id="aiInsightError" style="display:none;padding:20px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+           border-radius:10px;font-size:13px;color:#FCA5A5"></div>
+    </div>
+    <style>@keyframes aiSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    #aiHighlights li, #aiRecommendations li{padding:5px 0 5px 16px;position:relative}
+    #aiHighlights li:before{content:'▸';position:absolute;left:0;color:#35E8D5}
+    #aiRecommendations li:before{content:'→';position:absolute;left:0;color:#F59E0B}</style>
 
     <div id="lrContent"><div class="empty">Pilih periode lalu klik "Hitung L/R"</div></div>
   </div>
@@ -701,6 +833,57 @@ async function loadBulanan() {
       }).join('')
     : '<tr><td colspan="3" class="empty">Tidak ada pengeluaran</td></tr>';
   document.getElementById('bPengeluaranTotal').textContent = 'Rp ' + totalPeng.toLocaleString('id-ID');
+}
+
+// ── AI INSIGHT ────────────────────────────────────────
+async function loadAiInsightOutlet(){
+  const dari   = document.getElementById('lrDari').value;
+  const sampai = document.getElementById('lrSampai').value;
+  if (!dari || !sampai) { showToast('Pilih periode dulu', 'error'); return; }
+
+  const panel    = document.getElementById('aiInsightPanel');
+  const loading  = document.getElementById('aiInsightLoading');
+  const content  = document.getElementById('aiInsightContent');
+  const errBox   = document.getElementById('aiInsightError');
+  const titleEl  = document.getElementById('aiInsightTitle');
+
+  panel.style.display = 'block';
+  loading.style.display = 'block';
+  content.style.display = 'none';
+  errBox.style.display = 'none';
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+  titleEl.textContent = `Periode ${dari} → ${sampai}`;
+
+  try {
+    const r = await fetch(`/ERP/harpy/laporan.php?action=ai_insight&dari=${dari}&sampai=${sampai}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (d.error) {
+      errBox.textContent = d.error;
+      errBox.style.display = 'block';
+      return;
+    }
+
+    document.getElementById('aiSummary').textContent = d.summary || '(Tidak ada ringkasan)';
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    document.getElementById('aiHighlights').innerHTML =
+      (d.highlights || []).map(h => `<li>${esc(h)}</li>`).join('') || '<li>—</li>';
+    document.getElementById('aiRecommendations').innerHTML =
+      (d.recommendations || []).map(h => `<li>${esc(h)}</li>`).join('') || '<li>—</li>';
+
+    const meta = [];
+    if (d.from_cache) meta.push('⚡ Dari cache (24 jam)');
+    else meta.push(`💬 ${d.tokens_used || 0} tokens · 100 coin terpotong`);
+    if (d.generated_at) meta.push(`🕒 ${d.generated_at}`);
+    document.getElementById('aiMeta').textContent = meta.join(' · ');
+
+    content.style.display = 'block';
+  } catch (e) {
+    loading.style.display = 'none';
+    errBox.textContent = 'Gagal koneksi: ' + e.message;
+    errBox.style.display = 'block';
+  }
 }
 
 // ── LABA RUGI ─────────────────────────────────────────

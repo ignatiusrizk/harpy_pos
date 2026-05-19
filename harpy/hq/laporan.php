@@ -16,6 +16,7 @@
 $activePage = 'hq-laporan';
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/middleware/hq_guard.php';
+require_once ROOT . '/core/AIInsight.php';
 
 $db   = Database::get();
 $tid  = (int)$hqTenant['id'];
@@ -258,6 +259,154 @@ if ($action === 'data') {
     exit;
 }
 
+// ══════════════════════════════════════════════════════
+// AI INSIGHT — analisa laporan dengan Claude
+// ══════════════════════════════════════════════════════
+if ($action === 'ai_insight') {
+    header('Content-Type: application/json');
+
+    // Coin check
+    $coinBalance = (int)($hqTenant['coin_balance'] ?? 0);
+    if ($coinBalance < AIInsight::COIN_PER_INSIGHT) {
+        echo json_encode(['error' => 'Coin tidak cukup. Butuh ' . AIInsight::COIN_PER_INSIGHT . ' coin per insight, saldo: ' . $coinBalance]);
+        exit;
+    }
+
+    $start  = sanitizeDate($_GET['start'] ?? null, $defaultStart);
+    $end    = sanitizeDate($_GET['end']   ?? null, $defaultEnd);
+    $oidArg = (int)($_GET['outlet_id'] ?? 0);
+
+    $outletFilter = $oidArg > 0 ? " AND outlet_id=?" : "";
+    $extraParams  = $oidArg > 0 ? [$oidArg] : [];
+
+    // Periode label
+    $periodeLabel = date('d M Y', strtotime($start)) . ' — ' . date('d M Y', strtotime($end));
+
+    // Summary
+    $sumStmt = $db->prepare(
+        "SELECT COUNT(*) total_order, COALESCE(SUM(total),0) omset
+           FROM hl_transaksi WHERE tenant_id=? AND DATE(tanggal) BETWEEN ? AND ? $outletFilter"
+    );
+    $sumStmt->execute(array_merge([$tid,$start,$end], $extraParams));
+    $summary = $sumStmt->fetch() ?: ['total_order'=>0,'omset'=>0];
+
+    $omsetInt = (int)$summary['omset'];
+    $orderCnt = (int)$summary['total_order'];
+    $avgTicket = $orderCnt > 0 ? (int)round($omsetInt / $orderCnt) : 0;
+
+    // Omset periode sebelumnya
+    $startTs = strtotime($start);
+    $endTs   = strtotime($end);
+    $periodDays = max(1, (int)round(($endTs - $startTs) / 86400) + 1);
+    $prevEnd   = date('Y-m-d', strtotime($start . ' -1 day'));
+    $prevStart = date('Y-m-d', strtotime($prevEnd . " -" . ($periodDays - 1) . " days"));
+    $omsetPrev = 0;
+    try {
+        $s = $db->prepare("SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+                            WHERE tenant_id=? AND DATE(tanggal) BETWEEN ? AND ? $outletFilter");
+        $s->execute(array_merge([$tid,$prevStart,$prevEnd], $extraParams));
+        $omsetPrev = (int)$s->fetchColumn();
+    } catch (Throwable) {}
+
+    // Top layanan
+    $topLayanan = [];
+    try {
+        $sql = "SELECT ti.nama_layanan AS nama, COUNT(*) qty, COALESCE(SUM(ti.subtotal),0) total
+                  FROM hl_transaksi_item ti
+                  JOIN hl_transaksi t ON t.id = ti.transaksi_id
+                 WHERE t.tenant_id=? AND DATE(t.tanggal) BETWEEN ? AND ?
+                 " . ($oidArg > 0 ? " AND t.outlet_id=?" : "") . "
+                 GROUP BY ti.nama_layanan ORDER BY total DESC LIMIT 5";
+        $s = $db->prepare($sql);
+        $s->execute(array_merge([$tid,$start,$end], $extraParams));
+        $topLayanan = $s->fetchAll();
+    } catch (Throwable) {}
+
+    // Top karyawan
+    $topKaryawan = [];
+    try {
+        $sql = "SELECT u.nama, COUNT(*) order_count
+                  FROM hl_transaksi t
+                  LEFT JOIN hl_users u ON u.id = t.user_id
+                 WHERE t.tenant_id=? AND DATE(t.tanggal) BETWEEN ? AND ? AND t.user_id IS NOT NULL
+                 " . ($oidArg > 0 ? " AND t.outlet_id=?" : "") . "
+                 GROUP BY u.nama ORDER BY order_count DESC LIMIT 3";
+        $s = $db->prepare($sql);
+        $s->execute(array_merge([$tid,$start,$end], $extraParams));
+        $rows = $s->fetchAll();
+        foreach ($rows as $r) {
+            $topKaryawan[] = ['nama' => $r['nama'] ?? '?', 'order' => (int)$r['order_count']];
+        }
+    } catch (Throwable) {}
+
+    // Per outlet (HQ only)
+    $perOutlet = [];
+    if ($oidArg === 0) {
+        try {
+            $sql = "SELECT o.nama_outlet, COUNT(t.id) order_count, COALESCE(SUM(t.total),0) omset
+                      FROM outlets o
+                      LEFT JOIN hl_transaksi t ON t.outlet_id=o.id AND DATE(t.tanggal) BETWEEN ? AND ?
+                     WHERE o.tenant_id=? AND o.status IN ('trial','grace','active')
+                     GROUP BY o.id, o.nama_outlet ORDER BY omset DESC";
+            $s = $db->prepare($sql);
+            $s->execute([$start,$end,$tid]);
+            $rows = $s->fetchAll();
+            foreach ($rows as $r) {
+                $perOutlet[] = [
+                    'nama'  => $r['nama_outlet'],
+                    'order' => (int)$r['order_count'],
+                    'omset' => (int)$r['omset'],
+                ];
+            }
+        } catch (Throwable) {}
+    }
+
+    // Build data untuk AI
+    $aiData = [
+        'periode_label' => $periodeLabel,
+        'scope'         => $oidArg ? 'outlet' : 'hq',
+        'omset'         => $omsetInt,
+        'omset_prev'    => $omsetPrev,
+        'order_count'   => $orderCnt,
+        'avg_ticket'    => $avgTicket,
+        'top_layanan'   => $topLayanan,
+        'top_karyawan'  => $topKaryawan,
+        'per_outlet'    => $perOutlet,
+    ];
+
+    try {
+        $insight = AIInsight::analyzeLaporan($aiData, $tid, $oidArg ?: null);
+
+        // Deduct coin kalau bukan dari cache
+        if (empty($insight['from_cache'])) {
+            try {
+                CoinLedger::deduct('ai_insight_laporan', AIInsight::COIN_PER_INSIGHT,
+                    "AI Insight laporan: $periodeLabel");
+            } catch (Throwable $e) {
+                error_log('[ai_insight coin deduct] ' . $e->getMessage());
+            }
+
+            try {
+                logAudit('ai_insight', 'laporan', "Generate AI insight laporan $periodeLabel");
+            } catch (Throwable) {}
+        }
+
+        echo json_encode([
+            'ok'              => true,
+            'summary'         => $insight['summary'],
+            'highlights'      => $insight['highlights'],
+            'recommendations' => $insight['recommendations'],
+            'from_cache'      => $insight['from_cache'] ?? false,
+            'tokens_used'     => $insight['tokens_used'] ?? 0,
+            'generated_at'    => $insight['generated_at'] ?? date('Y-m-d H:i:s'),
+        ]);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'AI Insight gagal: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
 $allOutlets = $db->prepare("SELECT id, nama_outlet FROM outlets
                               WHERE tenant_id=? AND status IN ('trial','grace','active')
                               ORDER BY is_main DESC, nama_outlet ASC");
@@ -359,8 +508,60 @@ require __DIR__ . '/_layout_open.php';
       <?php endforeach; ?>
     </select>
     <button class="preset-btn" onclick="loadData()" style="background:#F0FDFB;color:#0891B2">↻ Refresh</button>
+    <button class="preset-btn" onclick="loadAiInsight()"
+            style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-color:transparent">
+      ✨ AI Insight
+    </button>
     <a id="exportBtn" href="#" class="btn-export">⬇️ Export CSV</a>
   </div>
+
+  <!-- AI INSIGHT PANEL -->
+  <div id="aiInsightPanel" style="display:none;margin-bottom:18px;background:linear-gradient(135deg,#0F1C3A,#1a2d52);
+       border-radius:14px;padding:24px 28px;color:#fff;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-30px;right:-30px;width:200px;height:200px;
+                background:radial-gradient(circle,rgba(53,232,213,.15),transparent);border-radius:50%"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;position:relative">
+      <div>
+        <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#35E8D5;margin-bottom:4px">
+          ✨ AI INSIGHT
+        </div>
+        <div id="aiInsightTitle" style="font-size:14px;color:rgba(255,255,255,.6)">Analisa periode terpilih</div>
+      </div>
+      <button onclick="document.getElementById('aiInsightPanel').style.display='none'"
+              style="background:rgba(255,255,255,.08);border:none;color:#fff;width:28px;height:28px;
+                     border-radius:6px;cursor:pointer;font-size:14px">✕</button>
+    </div>
+    <div id="aiInsightLoading" style="display:none;text-align:center;padding:30px 20px">
+      <div style="font-size:32px;animation:aiSpin 1.5s linear infinite">⏳</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.6);margin-top:8px">Claude sedang menganalisa data…</div>
+    </div>
+    <div id="aiInsightContent" style="display:none">
+      <div id="aiSummary" style="font-size:14px;line-height:1.65;color:rgba(255,255,255,.92);
+           background:rgba(255,255,255,.05);padding:14px 16px;border-radius:10px;
+           border-left:3px solid #35E8D5;margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#35E8D5;letter-spacing:.08em;margin-bottom:8px">
+            📊 HIGHLIGHTS
+          </div>
+          <ul id="aiHighlights" style="list-style:none;padding:0;margin:0;font-size:13px;color:rgba(255,255,255,.85);line-height:1.7"></ul>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#F59E0B;letter-spacing:.08em;margin-bottom:8px">
+            💡 REKOMENDASI
+          </div>
+          <ul id="aiRecommendations" style="list-style:none;padding:0;margin:0;font-size:13px;color:rgba(255,255,255,.85);line-height:1.7"></ul>
+        </div>
+      </div>
+      <div id="aiMeta" style="margin-top:14px;font-size:10px;color:rgba(255,255,255,.4);letter-spacing:.05em"></div>
+    </div>
+    <div id="aiInsightError" style="display:none;padding:20px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+         border-radius:10px;font-size:13px;color:#FCA5A5"></div>
+  </div>
+  <style>@keyframes aiSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  #aiHighlights li, #aiRecommendations li{padding:5px 0 5px 16px;position:relative}
+  #aiHighlights li:before{content:'▸';position:absolute;left:0;color:#35E8D5}
+  #aiRecommendations li:before{content:'→';position:absolute;left:0;color:#F59E0B}</style>
 
   <!-- METRIC ROW 1 -->
   <div class="metrics">
@@ -434,6 +635,59 @@ function setPreset(p, ev){
   document.getElementById('dStart').value = start;
   document.getElementById('dEnd').value   = end;
   loadData();
+}
+
+async function loadAiInsight(){
+  const start = document.getElementById('dStart').value;
+  const end   = document.getElementById('dEnd').value;
+  const oid   = document.getElementById('dOutlet').value;
+
+  const panel    = document.getElementById('aiInsightPanel');
+  const loading  = document.getElementById('aiInsightLoading');
+  const content  = document.getElementById('aiInsightContent');
+  const errBox   = document.getElementById('aiInsightError');
+  const titleEl  = document.getElementById('aiInsightTitle');
+
+  panel.style.display = 'block';
+  loading.style.display = 'block';
+  content.style.display = 'none';
+  errBox.style.display = 'none';
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+
+  const oidName = document.getElementById('dOutlet').options[document.getElementById('dOutlet').selectedIndex].text;
+  titleEl.textContent = `Periode ${start} → ${end} · ${oidName}`;
+
+  try {
+    const r = await fetch(`/ERP/harpy/hq/laporan.php?action=ai_insight&start=${start}&end=${end}&outlet_id=${oid}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (d.error) {
+      errBox.textContent = d.error;
+      errBox.style.display = 'block';
+      return;
+    }
+
+    document.getElementById('aiSummary').textContent = d.summary || '(Tidak ada ringkasan)';
+
+    const hlUl = document.getElementById('aiHighlights');
+    hlUl.innerHTML = (d.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('') || '<li>—</li>';
+
+    const recUl = document.getElementById('aiRecommendations');
+    recUl.innerHTML = (d.recommendations || []).map(h => `<li>${escapeHtml(h)}</li>`).join('') || '<li>—</li>';
+
+    const meta = [];
+    if (d.from_cache) meta.push('⚡ Dari cache (24 jam)');
+    else meta.push(`💬 ${d.tokens_used || 0} tokens · 100 coin terpotong`);
+    if (d.generated_at) meta.push(`🕒 ${d.generated_at}`);
+    document.getElementById('aiMeta').textContent = meta.join(' · ');
+
+    content.style.display = 'block';
+  } catch (e) {
+    loading.style.display = 'none';
+    errBox.textContent = 'Gagal koneksi: ' + e.message;
+    errBox.style.display = 'block';
+  }
 }
 
 async function loadData(){

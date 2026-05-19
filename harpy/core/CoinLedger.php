@@ -16,16 +16,17 @@ class CoinLedger
 {
     // ── Biaya per fitur (dalam coin) ──────────────────
     const COSTS = [
-        'generate_nota'    =>  50,
-        'send_wa_notif'    => 100,
-        'send_wa_nota'     => 150,
-        'ai_briefing'      => 500,
-        'ai_upselling'     =>  50,
-        'ai_analyst'       => 200,
-        'ai_review'        => 300,
-        'generate_invoice' => 200,
-        'wa_blast'         => 100,
-        'export_pdf'       => 500,
+        'generate_nota'      =>  50,
+        'send_wa_notif'      => 100,
+        'send_wa_nota'       => 150,
+        'ai_briefing'        => 500,
+        'ai_upselling'       =>  50,
+        'ai_analyst'         => 200,
+        'ai_review'          => 300,
+        'ai_insight_laporan' => 100,
+        'generate_invoice'   => 200,
+        'wa_blast'           => 100,
+        'export_pdf'         => 500,
     ];
 
     // ── Cek saldo (dari cache, tanpa query DB) ─────────
