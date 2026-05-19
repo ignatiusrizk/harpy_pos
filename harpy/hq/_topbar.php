@@ -19,7 +19,7 @@ $_aPage     = $activePage ?? '';
 $_ownerNama = $hqUser['nama'] ?? ($ownerNama ?? 'Owner');
 
 // Tentukan kelompok aktif (untuk highlight dropdown parent)
-$_inTim = in_array($_aPage, ['hq-karyawan','hq-roles'], true);
+$_inTim = in_array($_aPage, ['hq-karyawan','hq-mutasi','hq-roles'], true);
 $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
 ?>
 <style>
@@ -85,6 +85,9 @@ $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
         <a href="/ERP/harpy/hq/karyawan.php" class="<?= $_aPage === 'hq-karyawan' ? 'active' : '' ?>">
           👥 Karyawan
           <small style="margin-left:4px">·</small>
+        </a>
+        <a href="/ERP/harpy/hq/mutasi.php" class="<?= $_aPage === 'hq-mutasi' ? 'active' : '' ?>">
+          🔄 Riwayat Mutasi
         </a>
         <a href="/ERP/harpy/hq/roles.php" class="<?= $_aPage === 'hq-roles' ? 'active' : '' ?>">
           🔐 Role & Akses
