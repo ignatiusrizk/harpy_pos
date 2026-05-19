@@ -100,279 +100,166 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
     }
     ?>
 
-    <?php if (!$minimalMode): ?>
-    <!-- MOBILE DRAWER OVERLAY -->
-    <div class="hl-nav-drawer-overlay" id="navOverlay" onclick="closeDrawer()"></div>
+    <?php
+    // ════════════════════════════════════════════════════════
+    // Outlet Shell — sidebar + topbar tipis (Section 11.3)
+    // ════════════════════════════════════════════════════════
+    $outletNama = $tenant['nama_outlet'] ?? 'Outlet';
+    $emphasisKeys = ['pos','orders']; // nav yang ditandai (POS/Order)
+    $iconMap = [
+      'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
+      'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
+      'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
+    ];
+    ?>
+    <div class="ol-shell" id="olShell">
 
-    <!-- MOBILE DRAWER -->
-    <div class="hl-nav-drawer" id="navDrawer">
-      <div class="hl-nav-drawer-header">
-        <span class="hl-nav-drawer-brand"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:28px; vertical-align:middle; margin-right:8px;">LAMASY <span>by Harpy</span></span>
-        <button class="hl-nav-drawer-close" onclick="closeDrawer()">✕</button>
-      </div>
-      <div class="hl-nav-drawer-user">
-        <div class="hl-nav-drawer-user-info">
-          <div class="hl-nav-drawer-user-nama"><?= htmlspecialchars($user['nama']) ?></div>
-          <div class="hl-nav-drawer-user-role"><?= htmlspecialchars($tenant['nama_outlet'] ?? '') ?> · <?= strtoupper($user['role_nama'] ?? $user['role']) ?></div>
+      <!-- ── SIDEBAR ── -->
+      <aside class="ol-side">
+        <div class="ol-side-brand">
+          <div class="ol-side-logo">LAMASY</div>
+          <div class="ol-side-sub" title="<?= htmlspecialchars($outletNama) ?>">
+            <?= htmlspecialchars($outletNama) ?>
+          </div>
         </div>
-      </div>
-      <div class="hl-nav-drawer-body">
-        <?php
-        $drawerIcons = [
-          'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
-          'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
-          'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
-        ];
-        foreach ($navGroups as $groupKey => $group):
-          if (!groupVisible($group, $user['role'])) continue;
-          $visibleItems = array_filter($group['items'], fn($i) => in_array($user['role'], $i['roles']));
-          if (!$visibleItems) continue;
-        ?>
-        <div class="hl-nav-drawer-section"><?= $group['label'] ?></div>
-        <?php foreach ($visibleItems as $key => $item): ?>
-        <a href="<?= $item['url'] ?>"
-           class="hl-nav-drawer-item <?= $activePage === $key ? 'active' : '' ?>">
-          <?= $drawerIcons[$key] ?? '•' ?> <?= $item['label'] ?>
-        </a>
-        <?php endforeach; ?>
-        <?php endforeach; ?>
-      </div>
-      <div class="hl-nav-drawer-footer">
-        <a href="logout.php" class="hl-nav-drawer-logout"
-           onclick="return confirm('Yakin logout?')">🚪 Logout</a>
-      </div>
-    </div>
-    <?php endif; // !$minimalMode — end drawer ?>
 
-    <!-- TOPBAR -->
-    <div class="hl-topbar">
-      <div class="hl-topbar-left">
         <?php if (!$minimalMode): ?>
-        <button class="hl-nav-hamburger" onclick="openDrawer()">☰</button>
-        <?php endif; ?>
-        <a href="dashboard.php" class="hl-brand"><img src="/ERP/harpy/assets/logo.png" alt="LAMASY" style="height:32px; vertical-align:middle; margin-right:8px;">LAMASY <span>by Harpy</span></a>
-        <?php if (!$minimalMode): ?>
-        <nav class="hl-nav">
+        <nav class="ol-side-nav">
           <?php foreach ($navGroups as $groupKey => $group):
             if (!groupVisible($group, $user['role'])) continue;
-            $items        = $group['items'];
-            $hasActive    = groupHasActive($group, $activePage);
-            $isSingleItem = count(array_filter($items, fn($i) => in_array($user['role'], $i['roles']))) === 1;
-            if ($isSingleItem):
-              foreach ($items as $key => $item):
-                if (!in_array($user['role'], $item['roles'])) continue;
-              ?>
-              <a href="<?= $item['url'] ?>"
-                 class="hl-nav-link <?= $activePage === $key ? 'active' : '' ?>">
-                <?= $item['label'] ?>
-              </a>
-              <?php endforeach;
-            else: ?>
-            <div class="hl-nav-group <?= $hasActive ? 'active' : '' ?>">
-              <button class="hl-nav-group-btn <?= $hasActive ? 'active' : '' ?>">
-                <?= $group['label'] ?> <span class="hl-nav-arrow">&#9660;</span>
-              </button>
-              <div class="hl-nav-dropdown">
-                <?php foreach ($items as $key => $item):
-                  if (!in_array($user['role'], $item['roles'])) continue;
-                ?>
-                <a href="<?= $item['url'] ?>"
-                   class="hl-nav-dropdown-item <?= $activePage === $key ? 'active' : '' ?>">
-                  <?= $item['label'] ?>
-                </a>
-                <?php endforeach; ?>
-              </div>
-            </div>
-            <?php endif; ?>
+            $visibleItems = array_filter($group['items'], fn($i) => in_array($user['role'], $i['roles']));
+            if (!$visibleItems) continue;
+          ?>
+          <div class="ol-side-label"><?= htmlspecialchars($group['label']) ?></div>
+          <?php foreach ($visibleItems as $key => $item):
+            $isEmph = in_array($key, $emphasisKeys, true);
+            $isActive = $activePage === $key;
+          ?>
+          <a href="<?= $item['url'] ?>"
+             class="ol-side-link <?= $isEmph ? 'emphasis' : '' ?> <?= $isActive ? 'active' : '' ?>">
+            <span class="ico"><?= $iconMap[$key] ?? '•' ?></span> <?= htmlspecialchars($item['label']) ?>
+          </a>
+          <?php endforeach; ?>
           <?php endforeach; ?>
         </nav>
         <?php endif; ?>
-      </div>
-      <div class="hl-topbar-right">
-        <?php
-        // ── Trial countdown + Coin balance (hanya jika ada outlet aktif) ──
-        if (!$minimalMode && TenantResolver::hasOutlet()):
-          $isTrial   = TenantResolver::isTrial();
-          $trialDays = $isTrial ? TenantResolver::trialDaysLeft() : 0;
-          $coin      = TenantResolver::coinBalance();
-          $isGrace   = TenantResolver::isGraceMode();
-          $coinFmt   = number_format($coin, 0, ',', '.');
-        ?>
-          <?php if ($isTrial): ?>
-          <div title="Trial outlet aktif"
-               style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);
-                      color:#F59E0B;font-size:12px;font-weight:700;padding:5px 11px;
-                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
-            ⏰ Trial: <?= $trialDays ?>h
-          </div>
-          <?php elseif ($isGrace): ?>
-          <div title="Outlet dalam grace period"
-               style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);
-                      color:#EF4444;font-size:12px;font-weight:700;padding:5px 11px;
-                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
-            ⚠️ Grace: <?= TenantResolver::graceDaysLeft() ?>h
-          </div>
-          <?php endif; ?>
-          <div title="Saldo coin"
-               style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
-                      color:#fff;font-size:12px;font-weight:700;padding:5px 11px;
-                      border-radius:8px;display:flex;align-items:center;gap:5px;white-space:nowrap">
-            🪙 <?= $coinFmt ?><?= $isTrial ? ' <span style="font-size:10px;opacity:.6;font-weight:600">trial</span>' : '' ?>
-          </div>
-        <?php endif; ?>
+      </aside>
 
-        <?php
-        // ── Outlet indicator + switcher (hanya jika ada outlet aktif) ──
-        if (!$minimalMode && TenantResolver::hasOutlet()):
-          $currentOutletId = TenantResolver::outletId();
-          $currentOutletNm = TenantResolver::namaOutlet();
-
-          $tdb = Database::get();
-          $stmt = $tdb->prepare(
-            "SELECT id, nama_outlet, status FROM outlets
-             WHERE tenant_id = ? AND status IN ('trial','grace','active')
-             ORDER BY is_main DESC, nama_outlet ASC"
-          );
-          $stmt->execute([TenantResolver::id()]);
-          $allOutlets = $stmt->fetchAll();
-          $hasMulti   = count($allOutlets) > 1;
-        ?>
-        <div class="hl-outlet-switch" style="position:relative">
-          <button class="hl-outlet-btn" type="button"
-                  onclick="this.nextElementSibling.classList.toggle('open')"
-                  style="background:rgba(53,232,213,.1);border:1px solid rgba(53,232,213,.25);
-                         color:#35E8D5;font-size:13px;font-weight:600;padding:6px 12px;
-                         border-radius:8px;cursor:pointer;
-                         display:flex;align-items:center;gap:6px;font-family:inherit">
-            <span>📍</span>
-            <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-              <?= htmlspecialchars($currentOutletNm) ?>
-            </span>
-            <span style="font-size:10px;opacity:.7">▼</span>
-          </button>
-          <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);
-                       right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;
-                       box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:260px;z-index:1000;
-                       padding:6px;max-height:380px;overflow-y:auto">
-            <?php if ($hasMulti): ?>
-            <div style="font-size:11px;color:#9CA3AF;font-weight:600;padding:8px 12px 4px;
-                        text-transform:uppercase;letter-spacing:.05em">Pilih Outlet</div>
-            <?php else: ?>
-            <div style="font-size:11px;color:#9CA3AF;font-weight:600;padding:8px 12px 4px;
-                        text-transform:uppercase;letter-spacing:.05em">Outlet Aktif</div>
+      <!-- ── MAIN AREA ── -->
+      <div class="ol-main">
+        <header class="ol-top">
+          <div class="ol-top-left">
+            <?php if (!$minimalMode): ?>
+            <button class="ol-side-toggle" type="button"
+                    onclick="document.getElementById('olShell').classList.toggle('open')">☰</button>
             <?php endif; ?>
-            <?php foreach ($allOutlets as $o):
-              $isActive  = (int)$o['id'] === $currentOutletId;
-              $statusBg  = $o['status'] === 'active' ? '#D1FAE5' : ($o['status'] === 'trial' ? '#DBEAFE' : '#FEF3C7');
-              $statusFg  = $o['status'] === 'active' ? '#065F46' : ($o['status'] === 'trial' ? '#1E40AF' : '#92400E');
+            <span class="ol-top-badge">📍 OUTLET</span>
+            <span class="ol-top-title"><?= htmlspecialchars($outletNama) ?></span>
+          </div>
+          <div class="ol-top-right">
+            <?php
+            // ── Trial / Grace / Coin chip ──
+            if (!$minimalMode && TenantResolver::hasOutlet()):
+              $isTrial   = TenantResolver::isTrial();
+              $trialDays = $isTrial ? TenantResolver::trialDaysLeft() : 0;
+              $coin      = TenantResolver::coinBalance();
+              $isGrace   = TenantResolver::isGraceMode();
+              $coinFmt   = number_format($coin, 0, ',', '.');
             ?>
-            <a href="switch-outlet.php?id=<?= (int)$o['id'] ?>"
-               style="display:flex;align-items:center;justify-content:space-between;gap:8px;
-                      padding:8px 12px;border-radius:6px;text-decoration:none;
-                      background:<?= $isActive ? '#F0FDFB' : 'transparent' ?>;
-                      color:<?= $isActive ? '#0F1C3A' : '#374151' ?>;font-size:13px;
-                      <?= $isActive ? 'font-weight:700' : '' ?>"
-               onmouseover="if(this.dataset.active!=='1')this.style.background='#F9FAFB'"
-               onmouseout ="if(this.dataset.active!=='1')this.style.background='transparent'"
-               data-active="<?= $isActive ? '1' : '0' ?>">
-              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                <?= $isActive ? '✓ ' : '' ?><?= htmlspecialchars($o['nama_outlet']) ?>
-              </span>
-              <span style="background:<?= $statusBg ?>;color:<?= $statusFg ?>;font-size:10px;
-                           font-weight:700;padding:2px 7px;border-radius:100px;text-transform:uppercase">
-                <?= $o['status'] ?>
-              </span>
-            </a>
-            <?php endforeach; ?>
-            <!-- Divider + Mode HQ + Tambah outlet -->
-            <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
-            <?php if (in_array($user['role'] ?? '', ['owner','manager','superadmin'], true)): ?>
-            <a href="/ERP/harpy/dashboard.php?to=hq"
-               style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
-                      text-decoration:none;color:#0F1C3A;font-size:13px;font-weight:700;
-                      background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08))"
-               onmouseover="this.style.background='linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15))'"
-               onmouseout ="this.style.background='linear-gradient(135deg,rgba(102,126,234,.08),rgba(118,75,162,.08))'">
-              🏢 Mode HQ (konsolidasi semua outlet)
-            </a>
+              <?php if ($isTrial): ?>
+                <span class="ol-top-chip warn" title="Trial outlet">⏰ Trial: <?= $trialDays ?>h</span>
+              <?php elseif ($isGrace): ?>
+                <span class="ol-top-chip danger" title="Grace period">⚠️ Grace: <?= TenantResolver::graceDaysLeft() ?>h</span>
+              <?php endif; ?>
+              <span class="ol-top-chip" title="Saldo coin">🪙 <?= $coinFmt ?></span>
             <?php endif; ?>
-            <?php if (in_array($user['role'] ?? '', ['owner','superadmin'], true)): ?>
-            <a href="add-outlet.php"
-               style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:6px;
-                      text-decoration:none;color:#0891B2;font-size:13px;font-weight:700"
-               onmouseover="this.style.background='#F0F9FF'"
-               onmouseout ="this.style.background='transparent'">
-              <span style="font-size:16px;line-height:1">+</span> Tambah Outlet Baru
-            </a>
+
+            <?php
+            // ── Outlet switcher ──
+            if (!$minimalMode && TenantResolver::hasOutlet()):
+              $currentOutletId = TenantResolver::outletId();
+              $currentOutletNm = TenantResolver::namaOutlet();
+              $tdb  = Database::get();
+              $stmt = $tdb->prepare(
+                "SELECT id, nama_outlet, status FROM outlets
+                 WHERE tenant_id = ? AND status IN ('trial','grace','active')
+                 ORDER BY is_main DESC, nama_outlet ASC"
+              );
+              $stmt->execute([TenantResolver::id()]);
+              $allOutlets = $stmt->fetchAll();
+              $hasMulti = count($allOutlets) > 1;
+            ?>
+            <div class="hl-outlet-switch" style="position:relative">
+              <button class="ol-top-chip" type="button"
+                      onclick="this.nextElementSibling.classList.toggle('open')"
+                      style="border:none;cursor:pointer;font-family:inherit">
+                <span><?= htmlspecialchars($currentOutletNm) ?></span>
+                <span style="font-size:9px;opacity:.6">▼</span>
+              </button>
+              <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);
+                           right:0;background:#fff;border:1px solid #D5DAE8;border-radius:10px;
+                           box-shadow:0 8px 24px rgba(27,45,90,.12);min-width:240px;z-index:1000;
+                           padding:6px;max-height:380px;overflow-y:auto">
+                <div style="font-size:10px;color:var(--gray);font-weight:700;padding:8px 12px 4px;
+                            text-transform:uppercase;letter-spacing:.06em">
+                  <?= $hasMulti ? 'Pilih Outlet' : 'Outlet Aktif' ?>
+                </div>
+                <?php foreach ($allOutlets as $o):
+                  $isActive = (int)$o['id'] === $currentOutletId;
+                ?>
+                <a href="switch-outlet.php?id=<?= (int)$o['id'] ?>"
+                   style="display:block;padding:8px 12px;border-radius:6px;text-decoration:none;
+                          color:<?= $isActive ? 'var(--navy)' : 'var(--dark)' ?>;font-size:13px;
+                          font-weight:<?= $isActive ? '700' : '500' ?>;
+                          background:<?= $isActive ? 'var(--teal-bg)' : 'transparent' ?>">
+                  <?= $isActive ? '✓ ' : '' ?><?= htmlspecialchars($o['nama_outlet']) ?>
+                  <span style="float:right;font-size:10px;color:var(--gray);text-transform:uppercase">
+                    <?= $o['status'] ?>
+                  </span>
+                </a>
+                <?php endforeach; ?>
+                <div style="border-top:1px solid #F3F4F6;margin:6px 0 4px"></div>
+                <?php if (in_array($user['role'] ?? '', ['owner','superadmin'], true)): ?>
+                <a href="add-outlet.php"
+                   style="display:block;padding:8px 12px;border-radius:6px;text-decoration:none;
+                          color:var(--teal-d);font-size:13px;font-weight:700">
+                  + Tambah Outlet Baru
+                </a>
+                <?php endif; ?>
+              </div>
+              <script>
+              document.addEventListener('click',function(e){
+                if(!e.target.closest('.hl-outlet-switch')){
+                  document.querySelectorAll('.hl-outlet-dropdown.open').forEach(function(el){el.classList.remove('open')});
+                }
+              });
+              </script>
+              <style>.hl-outlet-dropdown.open{display:block!important}</style>
+            </div>
             <?php endif; ?>
+
+            <span class="ol-top-user"><?= htmlspecialchars($user['nama']) ?></span>
+            <?php if (!$minimalMode && in_array($user['role'] ?? '', ['owner','manager','superadmin','admin'], true)): ?>
+              <a href="/ERP/harpy/dashboard.php?to=hq" class="ol-top-switch"
+                 title="Pindah ke HQ konsolidasi">HQ →</a>
+            <?php endif; ?>
+            <a href="logout.php" class="ol-top-logout"
+               onclick="return confirm('Yakin logout?')">Logout</a>
           </div>
-          <script>
-          document.addEventListener('click',function(e){
-            if(!e.target.closest('.hl-outlet-switch')){
-              document.querySelectorAll('.hl-outlet-dropdown.open').forEach(function(el){el.classList.remove('open')});
-            }
-          });
-          </script>
-          <style>.hl-outlet-dropdown.open{display:block!important}</style>
-        </div>
-        <?php endif; ?>
+        </header>
 
-        <span class="hl-user-nama"><?= htmlspecialchars($user['nama']) ?></span>
-        <?php if (!$minimalMode): ?>
-        <span class="hl-user-role"><?= strtoupper($user['role_nama'] ?? $user['role']) ?></span>
-        <?php endif; ?>
-        <?php if (!$minimalMode && in_array($user['role'] ?? '', ['owner','manager','superadmin','admin'], true)): ?>
-        <a href="/ERP/harpy/dashboard.php?to=hq"
-           style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:700;
-                  font-size:12px;padding:6px 12px;border-radius:8px;text-decoration:none;
-                  display:inline-flex;align-items:center;gap:5px;margin-right:4px"
-           title="Kembali ke HQ konsolidasi">
-          🏢 HQ
-        </a>
-        <?php endif; ?>
-        <a href="logout.php" class="hl-btn-logout"
-           onclick="return confirm('Yakin logout?')">Logout</a>
-      </div>
-    </div>
+        <main class="ol-content">
+          <div class="ol-content-inner">
+    <?php // Konten page mulai di sini — ditutup di renderToast(). ?>
 
-    <script>
-    function openDrawer(){
-      document.getElementById('navDrawer').classList.add('open');
-      document.getElementById('navOverlay').classList.add('open');
-      document.body.style.overflow='hidden';
-    }
-    function closeDrawer(){
-      document.getElementById('navDrawer').classList.remove('open');
-      document.getElementById('navOverlay').classList.remove('open');
-      document.body.style.overflow='';
-    }
-    (function(){
-      var groups=document.querySelectorAll('.hl-nav-group');
-      groups.forEach(function(group){
-        var btn=group.querySelector('.hl-nav-group-btn');
-        var dropdown=group.querySelector('.hl-nav-dropdown');
-        if(!btn||!dropdown)return;
-        btn.addEventListener('click',function(e){
-          e.stopPropagation();
-          var isOpen=group.classList.contains('open');
-          groups.forEach(function(g){g.classList.remove('open');});
-          if(!isOpen){
-            var rect=btn.getBoundingClientRect();
-            dropdown.style.top=(rect.bottom+6)+'px';
-            dropdown.style.left=rect.left+'px';
-            group.classList.add('open');
-          }
-        });
-      });
-      document.addEventListener('click',function(){
-        groups.forEach(function(g){g.classList.remove('open');});
-      });
-    })();
-    </script>
     <?php
 }
 
 function renderToast(): void { ?>
+          </div><!-- /.ol-content-inner -->
+        </main><!-- /.ol-content -->
+      </div><!-- /.ol-main -->
+    </div><!-- /.ol-shell -->
     <div class="hl-toast" id="toast"></div>
     <script>
     function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}

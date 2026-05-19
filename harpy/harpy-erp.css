@@ -587,3 +587,168 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   .hl-stat-grid-6 { grid-template-columns: 1fr 1fr; }
   .hl-main, .hl-main-lg { padding: 10px 10px 80px; }
 }
+/* ══════════════════════════════════════════════════════
+   OUTLET SHELL — Sidebar + Topbar (Section 11.3)
+   Mood: ruang operasional — terang, bersih.
+   ══════════════════════════════════════════════════════ */
+
+.ol-shell { display: flex; min-height: 100vh; background: var(--light); }
+
+/* ── SIDEBAR (Outlet) ──────────────────────────────── */
+.ol-side {
+  width: 172px;
+  background: var(--light);
+  border-right: 1px solid #D5DAE8;
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+  flex-shrink: 0;
+}
+.ol-side-brand {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #D5DAE8;
+}
+.ol-side-logo {
+  font-size: 18px; font-weight: 800; color: var(--teal-d);
+  letter-spacing: .04em; line-height: 1; white-space: nowrap;
+}
+.ol-side-sub {
+  font-size: 11px; font-weight: 500;
+  color: var(--gray);
+  margin-top: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.ol-side-nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
+.ol-side-divider { height: 1px; background: #D5DAE8; margin: 8px 6px; }
+.ol-side-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  color: var(--gray);
+  padding: 8px 10px 4px;
+  text-transform: uppercase;
+  opacity: .65;
+}
+.ol-side-link {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  color: var(--gray);
+  text-decoration: none;
+  background: none; border: none;
+  cursor: pointer; width: 100%; text-align: left;
+  font-family: var(--font);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.ol-side-link:hover { background: rgba(27,45,90,.06); color: var(--navy); }
+.ol-side-link.active {
+  background: var(--navy);
+  color: var(--teal);
+}
+.ol-side-link.emphasis { color: var(--navy); }
+.ol-side-link.emphasis.active { color: var(--teal); }
+.ol-side-link .ico { font-size: 14px; width: 18px; text-align: center; }
+
+.ol-side-group { display: flex; flex-direction: column; }
+.ol-side-group-btn .arr { margin-left: auto; font-size: 9px; opacity: .6; transition: transform .15s; }
+.ol-side-group.open .ol-side-group-btn .arr { transform: rotate(180deg); }
+.ol-side-submenu {
+  display: none;
+  padding-left: 18px; padding-top: 2px;
+  flex-direction: column; gap: 2px;
+}
+.ol-side-group.open .ol-side-submenu { display: flex; }
+.ol-side-submenu .ol-side-link { font-size: 12px; padding: 7px 10px; }
+
+/* ── OUTLET MAIN ───────────────────────────────────── */
+.ol-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── OUTLET TOPBAR ─────────────────────────────────── */
+.ol-top {
+  height: 48px;
+  background: var(--white);
+  border-bottom: 1px solid #D5DAE8;
+  padding: 0 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 90;
+}
+.ol-top-left, .ol-top-right { display: flex; align-items: center; gap: 10px; }
+.ol-top-title {
+  font-size: 13px; font-weight: 700; color: var(--navy);
+}
+.ol-top-badge {
+  background: var(--teal-bg);
+  color: var(--navy);
+  font-size: 10px; font-weight: 800;
+  padding: 3px 10px; border-radius: 20px;
+  letter-spacing: .06em;
+}
+.ol-top-chip {
+  background: rgba(28,196,178,.12);
+  color: var(--navy);
+  font-size: 12px; font-weight: 700;
+  padding: 5px 11px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+.ol-top-chip.warn { background: rgba(245,158,11,.15); color: #92400E; }
+.ol-top-chip.danger { background: rgba(239,68,68,.15); color: #991B1B; }
+.ol-top-user {
+  font-size: 12px; color: var(--gray); font-weight: 600;
+}
+.ol-top-switch {
+  font-size: 12px; font-weight: 700;
+  color: var(--navy);
+  background: transparent;
+  border: 1px solid var(--navy);
+  padding: 5px 12px; border-radius: 8px;
+  text-decoration: none;
+  transition: all .15s;
+}
+.ol-top-switch:hover { background: var(--navy); color: var(--white); }
+.ol-top-logout {
+  font-size: 12px; color: var(--gray);
+  text-decoration: none;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid #D5DAE8;
+}
+.ol-top-logout:hover { color: var(--navy); border-color: var(--navy); }
+
+/* ── OUTLET CONTENT ────────────────────────────────── */
+.ol-content {
+  padding: 18px 22px 60px;
+  flex: 1;
+  background: var(--light);
+}
+.ol-content-inner { max-width: 1400px; margin: 0 auto; }
+
+/* Cards di outlet view */
+.ol-shell .hl-card,
+.ol-shell .hl-stat,
+.ol-content .hl-card,
+.ol-content .hl-stat {
+  background: var(--white);
+  border: 1px solid #D5DAE8;
+}
+
+/* ── RESPONSIVE ────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ol-side {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    transform: translateX(-100%);
+    transition: transform .25s;
+    z-index: 200;
+    box-shadow: 0 0 40px rgba(0,0,0,.15);
+  }
+  .ol-shell.open .ol-side { transform: translateX(0); }
+  .ol-side-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    background: transparent; border: 1px solid #D5DAE8;
+    border-radius: 6px; color: var(--navy);
+    cursor: pointer; font-size: 16px;
+  }
+  .ol-content { padding: 14px; }
+}
+@media (min-width: 901px) {
+  .ol-side-toggle { display: none; }
+}
