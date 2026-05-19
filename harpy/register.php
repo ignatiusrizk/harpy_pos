@@ -11,6 +11,7 @@ require_once ROOT . '/core/Database.php';
 require_once ROOT . '/core/EmailVerification.php';
 require_once ROOT . '/core/Mailer.php';
 require_once ROOT . '/core/RateLimiter.php';
+require_once ROOT . '/core/TenantProvisioner.php';
 
 date_default_timezone_set('Asia/Jakarta');
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -178,19 +179,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['step3_submit'])) {
                 ]);
                 $tenantId = (int)$db->lastInsertId();
 
-                // 2. User owner (outlet_id default 1 dari schema, tapi belum ada outlet nyata)
+                // 2. Seed default roles + permissions (idempotent, best-effort)
+                $ownerRoleId = TenantProvisioner::seedDefaultsForTenant($db, $tenantId);
+
+                // 3. User owner — link role_id ke 'Owner' (kalau seed sukses)
                 $db->prepare("
                     INSERT INTO hl_users
-                      (tenant_id, outlet_id, username, email, password, nama, role, email_verified)
-                    VALUES (?,0,?,?,?,?,'owner',0)
+                      (tenant_id, outlet_id, username, email, password, nama, role, role_id, email_verified)
+                    VALUES (?,0,?,?,?,?,'owner',?,0)
                 ")->execute([
                     $tenantId,
                     'owner_' . $slug,
                     $d['email'], $pwHash,
                     $d['owner_name'],
+                    $ownerRoleId,
                 ]);
 
-                // 3. Registration audit log
+                // 4. Registration audit log
                 $db->prepare("
                     INSERT INTO registration_requests
                       (source, email, nama_outlet, owner_name, owner_wa, kota,

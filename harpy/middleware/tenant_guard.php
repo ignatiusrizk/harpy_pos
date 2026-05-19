@@ -80,10 +80,15 @@ function currentUser(): ?array
 // ── Cek permission ────────────────────────────────────
 function hasPermission(string $kode): bool
 {
+    // Delegasi ke TenantResolver::can() supaya alias permission konsisten
+    if (class_exists('TenantResolver') && method_exists('TenantResolver', 'can')) {
+        return TenantResolver::can($kode);
+    }
+    // Fallback kalau resolver belum loaded
     $perms = $_SESSION['hl_permissions'] ?? [];
-    if (isset($perms['*'])) return true;                              // superadmin bypass
+    if (isset($perms['*'])) return true;
     $role = $_SESSION['hl_user']['role'] ?? '';
-    if (in_array($role, ['owner','superadmin'], true)) return true;   // owner = full access (brief 6.8)
+    if (in_array($role, ['owner','superadmin'], true)) return true;
     return isset($perms[$kode]);
 }
 

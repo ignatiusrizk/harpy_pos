@@ -101,6 +101,32 @@ class TenantProvisioner
     }
 
     // ── Internal: seed roles ──────────────────────────
+    /**
+     * Public: seed roles + permissions default untuk tenant baru.
+     * Dipanggil dari register.php (self-registration) supaya owner punya
+     * role_id terhubung ke hl_roles, dan role lain (admin/kasir/karyawan)
+     * siap di-assign tanpa setup manual.
+     *
+     * @return int|null role_id 'owner' kalau berhasil seed, null kalau gagal.
+     */
+    public static function seedDefaultsForTenant(PDO $db, int $tenantId): ?int
+    {
+        try {
+            // Cek apakah sudah pernah di-seed (idempotent)
+            $check = $db->prepare("SELECT id FROM hl_roles WHERE tenant_id=? AND nama='Owner' LIMIT 1");
+            $check->execute([$tenantId]);
+            $existingOwner = $check->fetchColumn();
+            if ($existingOwner) return (int)$existingOwner;
+
+            $roleIds = self::seedRoles($db, $tenantId);
+            self::seedPermissions($db, $tenantId, $roleIds);
+            return $roleIds['owner'] ?? null;
+        } catch (Throwable $e) {
+            error_log('[seedDefaultsForTenant] ' . $e->getMessage());
+            return null;
+        }
+    }
+
     private static function seedRoles(PDO $db, int $tenantId): array
     {
         $roles = [

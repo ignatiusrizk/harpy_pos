@@ -338,12 +338,48 @@ class TenantResolver
         return in_array(self::getRole(), ['owner', 'manager', 'superadmin'], true);
     }
 
+    /**
+     * Mapping permission key brief (Section 6.8 snake_case) ke key existing
+     * codebase (module.action dot-notation). Owner punya bypass jadi check
+     * ini hanya relevan untuk manager/kasir/staff/kurir.
+     */
+    private static array $permissionAlias = [
+        'view_dashboard'      => null,                  // null = always allowed (any login user)
+        'create_order'        => 'pos.create',
+        'view_orders'         => 'orders.view_all',
+        'update_order_status' => 'orders.update_status',
+        'view_kas'            => 'kas.view',
+        'create_kas'          => 'kas.create',
+        'view_laporan'        => 'laporan.view',
+        'export_laporan'      => 'laporan.export',
+        'manage_layanan'      => 'layanan.edit',
+        'manage_promo'        => 'promo.create',
+        'view_customer'       => 'pelanggan.view',
+        'manage_customer'     => 'pelanggan.edit',
+        'view_karyawan'       => 'karyawan.view',
+        'manage_karyawan'     => 'karyawan.edit',
+        'view_absensi'        => 'absensi.view',
+        'clock_inout'         => 'absensi.clock',
+        'manage_absensi'      => 'absensi.approve',
+        'view_settings'       => 'settings.roles',
+        'manage_settings'     => 'settings.roles',
+        'view_audit'          => 'audit.view',
+        // 'access_hq', 'manage_outlets', 'manage_coin' → role-based di hq_guard, bukan permission table
+    ];
+
     /** Cek single permission (compatible dengan hasPermission() di tenant_guard) */
     public static function can(string $perm): bool
     {
         $perms = $_SESSION['hl_permissions'] ?? [];
         if (isset($perms['*'])) return true;                   // superadmin wildcard
         if (self::isOwnerOrAdmin()) return true;               // owner = full access (brief 6.8)
+
+        // Try alias mapping (brief naming → codebase naming)
+        if (array_key_exists($perm, self::$permissionAlias)) {
+            $aliased = self::$permissionAlias[$perm];
+            if ($aliased === null) return true; // permission yang always-allowed
+            if (isset($perms[$aliased])) return true;
+        }
         return isset($perms[$perm]);
     }
 
