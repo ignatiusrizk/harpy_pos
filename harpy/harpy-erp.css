@@ -592,20 +592,21 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
    Mood: ruang operasional — terang, bersih.
    ══════════════════════════════════════════════════════ */
 
-.ol-shell { display: flex; min-height: 100vh; background: var(--light); }
+.ol-shell { display: flex; min-height: 100vh; background: var(--off); }
 
 /* ── SIDEBAR (Outlet) ──────────────────────────────── */
 .ol-side {
   width: 172px;
-  background: var(--light);
-  border-right: 1px solid #D5DAE8;
+  background: var(--white);
+  border-right: 1px solid #E5E9F2;
   display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh;
   flex-shrink: 0;
+  box-shadow: 1px 0 0 rgba(27,45,90,.02);
 }
 .ol-side-brand {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid #D5DAE8;
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid #EEF1F8;
 }
 .ol-side-logo {
   font-size: 18px; font-weight: 800; color: var(--teal-d);
@@ -618,21 +619,20 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.ol-side-nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
-.ol-side-divider { height: 1px; background: #D5DAE8; margin: 8px 6px; }
+.ol-side-nav { padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
+.ol-side-divider { height: 1px; background: #EEF1F8; margin: 10px 6px; }
 .ol-side-label {
-  font-size: 10px; font-weight: 700; letter-spacing: .1em;
-  color: var(--gray);
-  padding: 8px 10px 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: .12em;
+  color: #9AA4B8;
+  padding: 12px 10px 6px;
   text-transform: uppercase;
-  opacity: .65;
 }
 .ol-side-link {
-  display: flex; align-items: center; gap: 9px;
-  padding: 8px 10px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px;
   border-radius: 8px;
   font-size: 13px; font-weight: 600;
-  color: var(--gray);
+  color: #5A6678;
   text-decoration: none;
   background: none; border: none;
   cursor: pointer; width: 100%; text-align: left;
@@ -640,14 +640,15 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   transition: all .15s;
   white-space: nowrap;
 }
-.ol-side-link:hover { background: rgba(27,45,90,.06); color: var(--navy); }
+.ol-side-link:hover { background: #F0FDFB; color: var(--teal-d); }
 .ol-side-link.active {
   background: var(--navy);
   color: var(--teal);
+  box-shadow: 0 2px 8px rgba(27,45,90,.18);
 }
 .ol-side-link.emphasis { color: var(--navy); }
 .ol-side-link.emphasis.active { color: var(--teal); }
-.ol-side-link .ico { font-size: 14px; width: 18px; text-align: center; }
+.ol-side-link .ico { font-size: 15px; width: 18px; text-align: center; }
 
 .ol-side-group { display: flex; flex-direction: column; }
 .ol-side-group-btn .arr { margin-left: auto; font-size: 9px; opacity: .6; transition: transform .15s; }
@@ -667,10 +668,11 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 .ol-top {
   height: 48px;
   background: var(--white);
-  border-bottom: 1px solid #D5DAE8;
+  border-bottom: 1px solid #E5E9F2;
   padding: 0 18px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 90;
+  box-shadow: 0 1px 0 rgba(27,45,90,.02);
 }
 .ol-top-left, .ol-top-right { display: flex; align-items: center; gap: 10px; }
 .ol-top-title {
@@ -715,19 +717,20 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 
 /* ── OUTLET CONTENT ────────────────────────────────── */
 .ol-content {
-  padding: 18px 22px 60px;
+  padding: 20px 24px 60px;
   flex: 1;
-  background: var(--light);
+  background: var(--off);
 }
 .ol-content-inner { max-width: 1400px; margin: 0 auto; }
 
-/* Cards di outlet view */
+/* Cards di outlet view — lebih lembut, ada elevation */
 .ol-shell .hl-card,
 .ol-shell .hl-stat,
 .ol-content .hl-card,
 .ol-content .hl-stat {
   background: var(--white);
-  border: 1px solid #D5DAE8;
+  border: 1px solid #EEF1F8;
+  box-shadow: 0 1px 3px rgba(27,45,90,.04);
 }
 
 /* ── RESPONSIVE ────────────────────────────────────── */
