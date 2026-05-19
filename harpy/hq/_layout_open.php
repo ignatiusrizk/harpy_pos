@@ -41,7 +41,7 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
   <!-- ── SIDEBAR ── -->
   <aside class="hq-side">
     <div class="hq-side-brand">
-      <div class="hq-side-logo">La<span>Ma</span>Sy</div>
+      <div class="hq-side-logo">LAMASY</div>
       <div class="hq-side-sub" title="<?= htmlspecialchars($_tenantNama) ?>">
         <?= htmlspecialchars($_tenantNama) ?>
       </div>
