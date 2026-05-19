@@ -341,6 +341,11 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   .ocard-foot{display:flex;gap:6px;align-items:center;justify-content:space-between}
   .ocard-coin{font-size:11px;color:#6B7280}
   .ocard-coin strong{color:#0F1C3A;font-family:monospace}
+  .ocard-coin.low{color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;padding:4px 8px;border-radius:6px;font-weight:700}
+  .ocard-coin.low strong{color:#92400E}
+  .ocard-coin.crit{color:#991B1B;background:#FEE2E2;border:1px solid #FCA5A5;padding:4px 8px;border-radius:6px;font-weight:700;animation:coinPulse 2s ease-in-out infinite}
+  .ocard-coin.crit strong{color:#991B1B}
+  @keyframes coinPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
   .badge-trial-coin{background:rgba(245,158,11,.15);color:#92400E;font-size:9px;padding:1px 6px;
                     border-radius:4px;font-weight:700;margin-left:3px}
   .top-badge{position:absolute;top:14px;right:14px;background:#F59E0B;color:#fff;font-size:9px;
@@ -467,6 +472,15 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
       $coinShow = $o['status'] === 'trial' && (int)$o['trial_coin_balance'] > 0
         ? number_format((int)$o['trial_coin_balance']) . ' <span class="badge-trial-coin">TRIAL</span>'
         : number_format((int)$o['coin_balance']);
+      // Visual highlight saat coin tipis
+      $coinAmt = $o['status'] === 'trial' ? (int)$o['trial_coin_balance'] : (int)$o['coin_balance'];
+      $coinLowThreshold = $o['status'] === 'trial' ? 200 : 1000;
+      $coinCritThreshold = $o['status'] === 'trial' ? 50 : 300;
+      $coinClass = '';
+      if ($o['status'] === 'active' || ($o['status'] === 'trial' && $coinAmt > 0)) {
+        if ($coinAmt <= $coinCritThreshold) $coinClass = ' crit';
+        elseif ($coinAmt <= $coinLowThreshold) $coinClass = ' low';
+      }
     ?>
     <div class="ocard s-<?= $o['status'] ?> <?= $isBest ? 'is-best' : '' ?>">
       <?php if ($isBest): ?><div class="top-badge">🏆 TOP</div><?php endif; ?>
@@ -502,7 +516,9 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
       </div>
 
       <div class="ocard-foot">
-        <div class="ocard-coin">🪙 <strong><?= $coinShow ?></strong> coin</div>
+        <div class="ocard-coin<?= $coinClass ?>" <?= $coinClass ? 'title="Coin tipis — segera topup"' : '' ?>>
+          <?= $coinClass === ' crit' ? '⚠️' : '🪙' ?> <strong><?= $coinShow ?></strong> coin<?= $coinClass === ' crit' ? ' · KRITIS' : ($coinClass === ' low' ? ' · TIPIS' : '') ?>
+        </div>
         <a href="/ERP/harpy/switch-outlet.php?id=<?= (int)$o['id'] ?>" class="btn btn-primary btn-sm">Masuk →</a>
       </div>
     </div>
