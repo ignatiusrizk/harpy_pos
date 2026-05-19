@@ -1,0 +1,165 @@
+/* ══════════════════════════════════════════════════════
+   harpy-hq.css — HQ View Styles (Sidebar + Topbar)
+   Wajib di-import SETELAH harpy-erp.css.
+   Semua warna ambil dari CSS variables di harpy-erp.css.
+   ══════════════════════════════════════════════════════ */
+
+/* ── HQ LAYOUT SHELL ─────────────────────────────────── */
+.hq-shell { display: flex; min-height: 100vh; background: var(--off); }
+
+/* ── SIDEBAR (HQ) ────────────────────────────────────── */
+.hq-side {
+  width: 176px;
+  background: var(--navy-d);
+  color: var(--white);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
+  border-right: 1px solid rgba(53,232,213,.12);
+  flex-shrink: 0;
+}
+.hq-side-brand {
+  padding: 14px 16px 12px;
+  display: flex; flex-direction: column; gap: 2px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.hq-side-logo {
+  font-size: 18px; font-weight: 700; color: var(--white);
+  letter-spacing: .01em; line-height: 1;
+}
+.hq-side-logo span { color: var(--teal); }
+.hq-side-sub {
+  font-size: 11px; font-weight: 500;
+  color: rgba(255,255,255,.5);
+  margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.hq-side-nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.hq-side-divider {
+  height: 1px; background: rgba(255,255,255,.06);
+  margin: 8px 6px;
+}
+.hq-side-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  color: rgba(255,255,255,.35);
+  padding: 8px 10px 4px;
+  text-transform: uppercase;
+}
+.hq-side-link {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,.6);
+  text-decoration: none;
+  background: none; border: none;
+  cursor: pointer; width: 100%; text-align: left;
+  font-family: var(--font);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.hq-side-link:hover { background: rgba(255,255,255,.06); color: var(--white); }
+.hq-side-link.active {
+  background: rgba(53,232,213,.12);
+  color: var(--teal);
+}
+.hq-side-link .ico { font-size: 14px; width: 18px; text-align: center; }
+
+/* Submenu (untuk grup Tim & Akses, Pelanggan & Promo) */
+.hq-side-group { display: flex; flex-direction: column; }
+.hq-side-group-btn .arr { margin-left: auto; font-size: 9px; opacity: .6; transition: transform .15s; }
+.hq-side-group.open .hq-side-group-btn .arr { transform: rotate(180deg); }
+.hq-side-submenu {
+  display: none;
+  padding-left: 18px;
+  padding-top: 2px;
+  flex-direction: column; gap: 2px;
+}
+.hq-side-group.open .hq-side-submenu { display: flex; }
+.hq-side-submenu .hq-side-link {
+  font-size: 12px;
+  padding: 7px 10px;
+  color: rgba(255,255,255,.5);
+}
+.hq-side-submenu .hq-side-link.active { color: var(--teal); background: rgba(53,232,213,.08); }
+
+.hq-side-foot {
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+/* ── HQ MAIN AREA ────────────────────────────────────── */
+.hq-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── HQ TOPBAR ───────────────────────────────────────── */
+.hq-top {
+  height: 48px;
+  background: var(--navy);
+  border-bottom: 1px solid rgba(53,232,213,.15);
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 90;
+}
+.hq-top-left, .hq-top-right { display: flex; align-items: center; gap: 10px; }
+.hq-top-title {
+  font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,.85);
+}
+.hq-top-badge {
+  background: rgba(53,232,213,.15);
+  color: var(--teal);
+  font-size: 10px; font-weight: 800;
+  padding: 3px 10px; border-radius: 20px;
+  letter-spacing: .06em;
+}
+.hq-top-user {
+  font-size: 12px; color: rgba(255,255,255,.7);
+}
+.hq-top-switch {
+  font-size: 12px; font-weight: 700;
+  color: var(--teal);
+  background: transparent;
+  border: 1px solid rgba(53,232,213,.35);
+  padding: 5px 12px; border-radius: 8px;
+  text-decoration: none;
+  transition: all .15s;
+}
+.hq-top-switch:hover { background: rgba(53,232,213,.1); border-color: var(--teal); }
+.hq-top-logout {
+  font-size: 12px; color: rgba(255,255,255,.5);
+  text-decoration: none;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.12);
+}
+.hq-top-logout:hover { color: var(--white); border-color: rgba(255,255,255,.25); }
+
+/* ── HQ CONTENT ──────────────────────────────────────── */
+.hq-content {
+  padding: 22px 24px;
+  flex: 1;
+  background: var(--off);
+}
+.hq-content-inner { max-width: 1400px; margin: 0 auto; }
+
+/* ── RESPONSIVE ──────────────────────────────────────── */
+@media (max-width: 900px) {
+  .hq-side {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    transform: translateX(-100%);
+    transition: transform .25s;
+    z-index: 200;
+    box-shadow: 0 0 40px rgba(0,0,0,.4);
+  }
+  .hq-shell.open .hq-side { transform: translateX(0); }
+  .hq-side-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    background: transparent; border: 1px solid rgba(255,255,255,.15);
+    border-radius: 6px; color: var(--white);
+    cursor: pointer; font-size: 16px;
+  }
+  .hq-content { padding: 16px; }
+}
+@media (min-width: 901px) {
+  .hq-side-toggle { display: none; }
+}

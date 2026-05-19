@@ -242,32 +242,14 @@ $ownerNama  = $hqUser['nama'] ?? 'Owner';
 $tenantNm   = $hqTenant['nama_outlet'] ?? 'HQ';
 $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat siang' : (date('H') < 19 ? 'Selamat sore' : 'Selamat malam')));
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HQ Dashboard — LAMASY</title>
+<?php
+$pageTitle  = 'Dashboard Eksekutif';
+$activePage = 'hq-dashboard';
+require __DIR__ . '/_layout_open.php';
+?>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F4F7FB;color:#0F1C3A;min-height:100vh}
-  .hq-topbar{background:#0F1C3A;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;
-             align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 1px 8px rgba(0,0,0,.15)}
-  .hq-brand{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;color:#35E8D5}
-  .hq-brand-sub{color:rgba(255,255,255,.5);font-size:11px;font-weight:400;margin-left:4px}
-  .hq-badge{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:10px;font-weight:800;
-            padding:3px 10px;border-radius:100px;letter-spacing:.06em}
-  .hq-topbar-right{display:flex;align-items:center;gap:14px;font-size:13px;color:rgba(255,255,255,.85)}
-  .hq-topbar-right .coin{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
-                         padding:5px 12px;border-radius:8px;font-weight:600}
-  .hq-topbar a{color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:6px}
-  .hq-topbar a:hover{background:rgba(255,255,255,.08);color:#fff}
-  .hq-topbar a.active{background:rgba(53,232,213,.15);color:#35E8D5}
-  .hq-logout{border:1px solid rgba(255,255,255,.15);padding:6px 14px!important}
-
-  .container{max-width:1320px;margin:24px auto;padding:0 20px 60px}
-
+  /* Page-specific styles — sidebar/topbar di harpy-hq.css */
   .hero{background:linear-gradient(135deg,#0F1C3A,#1a2d52);color:#fff;border-radius:14px;
         padding:24px 28px;margin-bottom:20px;display:flex;justify-content:space-between;
         align-items:center;flex-wrap:wrap;gap:14px}
@@ -360,16 +342,8 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   }
   @media(max-width:640px){
     .metrics{grid-template-columns:1fr}
-    .container{padding:0 14px 40px}
   }
 </style>
-</head>
-<body>
-
-<?php require __DIR__ . '/_topbar.php'; ?>
-</div>
-
-<div class="container">
 
   <div class="hero">
     <div>
@@ -546,8 +520,6 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
     </div>
   </div>
 
-</div>
-
 <?php if ($hqCanBilling): ?>
 <!-- Topup Modal -->
 <div id="topupModal" style="display:none;position:fixed;inset:0;background:rgba(15,28,58,.75);z-index:1000;
@@ -678,5 +650,4 @@ async function loadChart(){
 
 loadChart();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/_layout_close.php'; ?>
