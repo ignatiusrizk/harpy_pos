@@ -33,6 +33,9 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/ERP/harpy/harpy-erp.css?v=<?= date('Ymd') ?>">
   <link rel="stylesheet" href="/ERP/harpy/harpy-hq.css?v=<?= date('Ymd') ?>">
+  <?php if (function_exists('getCsrfToken')): ?>
+  <meta name="csrf-token" content="<?= htmlspecialchars(getCsrfToken()) ?>">
+  <?php endif; ?>
 </head>
 <body>
 

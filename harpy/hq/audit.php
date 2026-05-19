@@ -159,17 +159,12 @@ if ($action === 'filter_options') {
 $ownerNama = $hqUser['nama'] ?? 'Owner';
 $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HQ Audit Log — LAMASY</title>
+<?php
+$pageTitle  = 'Audit Log';
+$activePage = 'hq-audit';
+require __DIR__ . '/_layout_open.php';
+?>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F4F7FB;color:#0F1C3A;min-height:100vh}
-
-  .container{max-width:1280px;margin:24px auto;padding:0 20px 60px}
   h1{font-size:1.4rem;font-weight:800;color:#0F1C3A;margin-bottom:6px}
   h1 small{display:block;font-size:13px;font-weight:400;color:#6B7280;margin-top:2px}
 
@@ -215,12 +210,7 @@ $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
     .log-time,.log-user{font-size:10px}
   }
 </style>
-</head>
-<body>
 
-<?php require __DIR__ . '/_topbar.php'; ?>
-
-<div class="container">
   <h1>📋 Audit Log
     <small>Aktivitas semua outlet + HQ · <?= htmlspecialchars($tenantNm) ?></small>
   </h1>
@@ -254,7 +244,6 @@ $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
   <div class="timeline" id="timeline">
     <div class="empty"><div class="ico">⏳</div><p>Memuat…</p></div>
   </div>
-</div>
 
 <script>
 function esc(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -332,5 +321,4 @@ async function loadData(){
 loadFilterOptions();
 loadData();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/_layout_close.php'; ?>

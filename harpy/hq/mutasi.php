@@ -71,16 +71,12 @@ if ($action === 'filter_options') {
 $ownerNama = $hqUser['nama'] ?? 'Owner';
 $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HQ Histori Mutasi — LAMASY</title>
+<?php
+$pageTitle  = 'Riwayat Mutasi Karyawan';
+$activePage = 'hq-mutasi';
+require __DIR__ . '/_layout_open.php';
+?>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F4F7FB;color:#0F1C3A;min-height:100vh}
-  .container{max-width:1180px;margin:24px auto;padding:0 20px 60px}
   h1{font-size:1.4rem;font-weight:800;color:#0F1C3A;margin-bottom:6px}
   h1 small{display:block;font-size:13px;font-weight:400;color:#6B7280;margin-top:2px}
 
@@ -125,12 +121,7 @@ $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
     .row-date,.row-by{text-align:left}
   }
 </style>
-</head>
-<body>
 
-<?php require __DIR__ . '/_topbar.php'; ?>
-
-<div class="container">
   <h1>🔄 Histori Mutasi Karyawan
     <small>Audit trail penugasan & mutasi · <?= htmlspecialchars($tenantNm) ?></small>
   </h1>
@@ -158,7 +149,6 @@ $tenantNm  = $hqTenant['nama_outlet'] ?? 'HQ';
   <div class="timeline" id="timeline">
     <div class="empty"><div class="ico">⏳</div><p>Memuat…</p></div>
   </div>
-</div>
 
 <script>
 function esc(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -231,5 +221,4 @@ async function loadData(){
 loadFilters();
 loadData();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/_layout_close.php'; ?>

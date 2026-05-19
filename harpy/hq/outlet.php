@@ -145,29 +145,12 @@ $tenantCoin = (int)($hqTenant['coin_balance'] ?? 0);
 $csrf       = getCsrfToken();
 $supportWa  = '6281234567890';
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HQ Manajemen Outlet — LAMASY</title>
-<meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>">
+<?php
+$pageTitle  = 'Kelola Outlet';
+$activePage = 'hq-outlet';
+require __DIR__ . '/_layout_open.php';
+?>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F4F7FB;color:#0F1C3A;min-height:100vh}
-  .hq-topbar{background:#0F1C3A;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;
-             align-items:center;flex-wrap:wrap;gap:12px;box-shadow:0 1px 8px rgba(0,0,0,.15)}
-  .hq-brand{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;color:#35E8D5}
-  .hq-brand-sub{color:rgba(255,255,255,.5);font-size:11px;font-weight:400;margin-left:4px}
-  .hq-badge{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:10px;font-weight:800;
-            padding:3px 10px;border-radius:100px;letter-spacing:.06em}
-  .hq-topbar-right{display:flex;align-items:center;gap:14px;font-size:13px;color:rgba(255,255,255,.85)}
-  .hq-topbar a{color:rgba(255,255,255,.55);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:6px}
-  .hq-topbar a:hover{background:rgba(255,255,255,.08);color:#fff}
-  .hq-topbar a.active{background:rgba(53,232,213,.15);color:#35E8D5}
-  .hq-logout{border:1px solid rgba(255,255,255,.15);padding:6px 14px!important}
-
-  .container{max-width:1280px;margin:24px auto;padding:0 20px 60px}
   .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px}
   h1{font-size:1.4rem;font-weight:800;color:#0F1C3A}
   h1 small{display:block;font-size:13px;font-weight:400;color:#6B7280;margin-top:2px}
@@ -251,13 +234,7 @@ $supportWa  = '6281234567890';
     .ocard-actions{flex-direction:row;justify-content:flex-start}
   }
 </style>
-</head>
-<body>
 
-<?php require __DIR__ . '/_topbar.php'; ?>
-</div>
-
-<div class="container">
   <?php if (!$hasOpHours): ?>
   <div class="alert warn">
     ⚠️ <strong>Migration belum dijalankan.</strong> Field "Jam Operasional" belum tersedia.
@@ -288,7 +265,6 @@ $supportWa  = '6281234567890';
   <div class="outlet-list" id="outletList">
     <div style="text-align:center;padding:40px;color:#9CA3AF">⏳ Memuat outlet…</div>
   </div>
-</div>
 
 <!-- Edit Modal -->
 <div class="modal-backdrop" id="editModal" onclick="if(event.target===this)closeModal('editModal')">
@@ -467,5 +443,4 @@ function closeModal(id){document.getElementById(id).classList.remove('open')}
 
 loadList();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/_layout_close.php'; ?>
