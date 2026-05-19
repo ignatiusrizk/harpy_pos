@@ -366,6 +366,13 @@ if ($action) {
         $role     = in_array($d['role'] ?? '', ['owner','manager','admin','kasir','staff','kurir'], true) ? $d['role'] : 'staff';
         $jabatan  = substr(trim(strip_tags($d['jabatan'] ?? '')), 0, 100);
         $telepon  = substr(preg_replace('/[^0-9+\-\s]/', '', $d['telepon'] ?? ''), 0, 20);
+        $nik      = substr(preg_replace('/\D/', '', $d['nik'] ?? ''), 0, 50);
+        $kontrakTipe = in_array($d['kontrak_tipe'] ?? '', ['tetap','kontrak','harian','partime'], true) ? $d['kontrak_tipe'] : null;
+        $kontrakMulai   = !empty($d['kontrak_mulai'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d['kontrak_mulai'])   ? $d['kontrak_mulai']   : null;
+        $kontrakSelesai = !empty($d['kontrak_selesai']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d['kontrak_selesai']) ? $d['kontrak_selesai'] : null;
+        $bankNama     = substr(trim(strip_tags($d['bank_nama'] ?? '')), 0, 100);
+        $noRekening   = substr(preg_replace('/[^0-9\-]/', '', $d['no_rekening'] ?? ''), 0, 50);
+        $bankAtasnama = substr(trim(strip_tags($d['bank_atasnama'] ?? '')), 0, 100);
         $assignOutlets = array_map('intval', $d['outlet_ids'] ?? []);
 
         if (!$nama)                  { echo json_encode(['error'=>'Nama wajib diisi']); exit; }
@@ -391,19 +398,41 @@ if ($action) {
             }
         }
 
+        // Detect kolom extra (NIK, kontrak, bank) — graceful kalau migration belum
+        $hasExtra = true;
+        try { $db->query("SELECT nik, kontrak_tipe, bank_nama FROM hl_users LIMIT 1"); }
+        catch (Throwable) { $hasExtra = false; }
+
         $db->beginTransaction();
         try {
             $primaryOid = $assignOutlets[0] ?? 0;
-            $db->prepare(
-                "INSERT INTO hl_users
-                   (tenant_id, outlet_id, username, email, password, nama, role, jabatan, telepon,
-                    is_active, email_verified)
-                 VALUES (?,?,?,?,?,?,?,?,?,1,1)"
-            )->execute([
-                $tid, $primaryOid, $username, $email ?: null,
-                password_hash($password, PASSWORD_DEFAULT),
-                $nama, $role, $jabatan ?: null, $telepon ?: null,
-            ]);
+            if ($hasExtra) {
+                $db->prepare(
+                    "INSERT INTO hl_users
+                       (tenant_id, outlet_id, username, email, password, nama, role, jabatan, telepon,
+                        nik, kontrak_tipe, kontrak_mulai, kontrak_selesai,
+                        bank_nama, no_rekening, bank_atasnama,
+                        is_active, email_verified)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,1)"
+                )->execute([
+                    $tid, $primaryOid, $username, $email ?: null,
+                    password_hash($password, PASSWORD_DEFAULT),
+                    $nama, $role, $jabatan ?: null, $telepon ?: null,
+                    $nik ?: null, $kontrakTipe, $kontrakMulai, $kontrakSelesai,
+                    $bankNama ?: null, $noRekening ?: null, $bankAtasnama ?: null,
+                ]);
+            } else {
+                $db->prepare(
+                    "INSERT INTO hl_users
+                       (tenant_id, outlet_id, username, email, password, nama, role, jabatan, telepon,
+                        is_active, email_verified)
+                     VALUES (?,?,?,?,?,?,?,?,?,1,1)"
+                )->execute([
+                    $tid, $primaryOid, $username, $email ?: null,
+                    password_hash($password, PASSWORD_DEFAULT),
+                    $nama, $role, $jabatan ?: null, $telepon ?: null,
+                ]);
+            }
             $newId = (int)$db->lastInsertId();
 
             // Assign ke outlet yang dipilih
@@ -703,10 +732,65 @@ $csrf       = getCsrfToken();
           <input type="email" id="crEmail" maxlength="150" placeholder="opsional">
         </div>
       </div>
-      <div>
-        <label>Jabatan</label>
-        <input type="text" id="crJabatan" maxlength="100" placeholder="cth: Kasir Senior">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>Jabatan</label>
+          <input type="text" id="crJabatan" maxlength="100" placeholder="cth: Kasir Senior">
+        </div>
+        <div>
+          <label>NIK <small style="font-weight:400;color:#9CA3AF">(opsional)</small></label>
+          <input type="text" id="crNik" maxlength="16" placeholder="16 digit KTP" inputmode="numeric">
+        </div>
       </div>
+
+      <!-- Kontrak section -->
+      <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;padding:12px;margin-top:4px">
+        <div style="font-size:11px;color:#6B7280;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+          📋 Kontrak
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div>
+            <label>Tipe Kontrak</label>
+            <select id="crKontrakTipe">
+              <option value="">— pilih —</option>
+              <option value="tetap">Tetap</option>
+              <option value="kontrak">Kontrak</option>
+              <option value="harian">Harian</option>
+              <option value="partime">Part-time</option>
+            </select>
+          </div>
+          <div>
+            <label>Mulai</label>
+            <input type="date" id="crKontrakMulai">
+          </div>
+          <div>
+            <label>Selesai</label>
+            <input type="date" id="crKontrakSelesai">
+          </div>
+        </div>
+      </div>
+
+      <!-- Bank section -->
+      <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#6B7280;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+          💳 Rekening Bank <small style="font-weight:400;text-transform:none">(untuk penggajian)</small>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:8px">
+          <div>
+            <label>Bank</label>
+            <input type="text" id="crBankNama" maxlength="100" placeholder="cth: BCA, Mandiri">
+          </div>
+          <div>
+            <label>No. Rekening</label>
+            <input type="text" id="crNoRek" maxlength="50" placeholder="cth: 1234567890" inputmode="numeric">
+          </div>
+        </div>
+        <div>
+          <label>Atas Nama</label>
+          <input type="text" id="crBankAtasnama" maxlength="100" placeholder="Nama sesuai buku tabungan">
+        </div>
+      </div>
+
       <div>
         <label>Tugaskan ke Outlet <span style="font-weight:400;color:#9CA3AF">(bisa pilih banyak)</span></label>
         <div id="crOutletList" style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;
@@ -861,9 +945,26 @@ async function showDetail(id){
       <div class="info-row"><span class="lbl">Email</span><span class="val">${escapeHtml(k.email || '-')}</span></div>
       <div class="info-row"><span class="lbl">Telepon</span><span class="val">${escapeHtml(k.telepon || '-')}</span></div>
       <div class="info-row"><span class="lbl">Jabatan</span><span class="val">${escapeHtml(k.jabatan || '-')}</span></div>
+      ${k.nik ? `<div class="info-row"><span class="lbl">NIK</span><span class="val">${escapeHtml(k.nik)}</span></div>` : ''}
       <div class="info-row"><span class="lbl">Status</span><span class="val">${k.is_active==1?'✓ Aktif':'⛔ Non-aktif'}</span></div>
       <div class="info-row"><span class="lbl">Bergabung</span><span class="val">${k.created_at ? new Date(k.created_at).toLocaleDateString('id-ID') : '-'}</span></div>
     </div>
+
+    ${k.kontrak_tipe ? `
+    <div class="section">
+      <div class="section-label">📋 Kontrak Kerja</div>
+      <div class="info-row"><span class="lbl">Tipe</span><span class="val" style="text-transform:capitalize">${escapeHtml(k.kontrak_tipe)}</span></div>
+      <div class="info-row"><span class="lbl">Mulai</span><span class="val">${k.kontrak_mulai ? new Date(k.kontrak_mulai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}</span></div>
+      <div class="info-row"><span class="lbl">Selesai</span><span class="val">${k.kontrak_selesai ? new Date(k.kontrak_selesai).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '<span style="color:#9CA3AF">tanpa batas</span>'}</span></div>
+    </div>` : ''}
+
+    ${k.bank_nama || k.no_rekening ? `
+    <div class="section">
+      <div class="section-label">💳 Rekening Bank <small style="color:#9CA3AF;font-weight:400;text-transform:none">(untuk penggajian)</small></div>
+      <div class="info-row"><span class="lbl">Bank</span><span class="val">${escapeHtml(k.bank_nama || '-')}</span></div>
+      <div class="info-row"><span class="lbl">No. Rekening</span><span class="val" style="font-family:monospace">${escapeHtml(k.no_rekening || '-')}</span></div>
+      <div class="info-row"><span class="lbl">Atas Nama</span><span class="val">${escapeHtml(k.bank_atasnama || '-')}</span></div>
+    </div>` : ''}
 
     <div class="section">
       <div class="section-label">📍 Outlet Aktif Saat Ini (${ass.length})</div>
@@ -1029,8 +1130,11 @@ async function removeAssignment(kid, oid, outletName){
 
 function openCreate(){
   // Reset form
-  ['crNama','crUsername','crPassword','crTelepon','crEmail','crJabatan'].forEach(id=>document.getElementById(id).value='');
+  ['crNama','crUsername','crPassword','crTelepon','crEmail','crJabatan',
+   'crNik','crKontrakMulai','crKontrakSelesai','crBankNama','crNoRek','crBankAtasnama']
+   .forEach(id=>{ const el = document.getElementById(id); if (el) el.value=''; });
   document.getElementById('crRole').value = 'kasir';
+  document.getElementById('crKontrakTipe').value = '';
   document.getElementById('createAlert').innerHTML = '';
 
   // Populate outlet checkbox list
@@ -1059,6 +1163,13 @@ async function submitCreate(){
     telepon: document.getElementById('crTelepon').value.trim(),
     email: document.getElementById('crEmail').value.trim(),
     jabatan: document.getElementById('crJabatan').value.trim(),
+    nik: document.getElementById('crNik').value.trim(),
+    kontrak_tipe: document.getElementById('crKontrakTipe').value,
+    kontrak_mulai: document.getElementById('crKontrakMulai').value,
+    kontrak_selesai: document.getElementById('crKontrakSelesai').value,
+    bank_nama: document.getElementById('crBankNama').value.trim(),
+    no_rekening: document.getElementById('crNoRek').value.trim(),
+    bank_atasnama: document.getElementById('crBankAtasnama').value.trim(),
     outlet_ids: Array.from(document.querySelectorAll('.cr-outlet-cb:checked')).map(c => parseInt(c.value)),
   };
 

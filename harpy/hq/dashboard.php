@@ -20,6 +20,53 @@ $today = date('Y-m-d');
 $thisMonth = date('Y-m');
 $startTimeline = date('Y-m-d', strtotime('-6 days'));
 
+// ── AJAX: chart data per outlet untuk N hari ─────────
+if (($_GET['action'] ?? '') === 'chart_data') {
+    header('Content-Type: application/json');
+    $days = max(1, min(365, (int)($_GET['days'] ?? 30)));
+    $start = date('Y-m-d', strtotime("-" . ($days-1) . " days"));
+    $end   = date('Y-m-d');
+
+    try {
+        $oStmt = $db->prepare("SELECT id, nama_outlet FROM outlets
+                                 WHERE tenant_id=? AND status IN ('trial','grace','active')
+                                 ORDER BY is_main DESC, nama_outlet ASC");
+        $oStmt->execute([$tid]);
+        $outlets = $oStmt->fetchAll();
+
+        $timeline = [];
+        $tStmt = $db->prepare("SELECT outlet_id, DATE(tanggal) d, COALESCE(SUM(total),0) s
+                                 FROM hl_transaksi
+                                WHERE tenant_id=? AND DATE(tanggal) BETWEEN ? AND ?
+                                GROUP BY outlet_id, DATE(tanggal)");
+        $tStmt->execute([$tid, $start, $end]);
+        foreach ($tStmt->fetchAll() as $row) {
+            $timeline[(int)$row['outlet_id']][$row['d']] = (int)$row['s'];
+        }
+
+        $labels = [];
+        for ($i = $days-1; $i >= 0; $i--) $labels[] = date('Y-m-d', strtotime("-$i days"));
+
+        $colors = ['#35E8D5','#8B5CF6','#F59E0B','#EC4899','#3B82F6','#10B981','#EF4444','#F97316','#6366F1'];
+        $datasets = [];
+        foreach ($outlets as $i => $o) {
+            $data = [];
+            foreach ($labels as $d) $data[] = $timeline[(int)$o['id']][$d] ?? 0;
+            $color = $colors[$i % count($colors)];
+            $datasets[] = ['label'=>$o['nama_outlet'], 'data'=>$data, 'color'=>$color];
+        }
+
+        echo json_encode([
+            'labels'   => array_map(fn($d) => date('d M', strtotime($d)), $labels),
+            'datasets' => $datasets,
+            'periode'  => ['start'=>$start, 'end'=>$end],
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 // ── Konsolidasi metrics hari ini ──────────────────────
 $todayStats = $db->prepare("
     SELECT COALESCE(SUM(total),0) AS omset_today,
@@ -381,13 +428,29 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   </div>
   <?php endif; ?>
 
-  <!-- CHART TREN OMZET PER OUTLET (7 hari) -->
+  <!-- CHART TREN OMZET PER OUTLET (filter periode + tipe) -->
   <div class="panel">
     <div class="panel-title">
-      📊 Tren Omzet per Outlet — 7 Hari Terakhir
-      <span style="font-size:11px;font-weight:400;color:#9CA3AF"><?= date('d M', strtotime($startTimeline)) ?> → <?= date('d M Y') ?></span>
+      <span>📊 Tren Omzet per Outlet</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:3px;background:#F3F4F6;padding:3px;border-radius:8px">
+          <button type="button" class="chart-preset" data-days="7"  onclick="setChartPeriod(7,event)"
+                  style="border:none;background:transparent;padding:5px 10px;font-size:11px;font-weight:700;border-radius:5px;cursor:pointer;color:#0F1C3A;font-family:inherit">7H</button>
+          <button type="button" class="chart-preset active" data-days="30" onclick="setChartPeriod(30,event)"
+                  style="border:none;background:#0F1C3A;color:#fff;padding:5px 10px;font-size:11px;font-weight:700;border-radius:5px;cursor:pointer;font-family:inherit">30H</button>
+          <button type="button" class="chart-preset" data-days="90" onclick="setChartPeriod(90,event)"
+                  style="border:none;background:transparent;padding:5px 10px;font-size:11px;font-weight:700;border-radius:5px;cursor:pointer;color:#0F1C3A;font-family:inherit">3 Bulan</button>
+        </div>
+        <div style="display:flex;gap:3px;background:#F3F4F6;padding:3px;border-radius:8px">
+          <button type="button" class="chart-type active" data-type="line" onclick="setChartType('line',event)"
+                  style="border:none;background:#0F1C3A;color:#fff;padding:5px 10px;font-size:11px;font-weight:700;border-radius:5px;cursor:pointer;font-family:inherit">📈 Line</button>
+          <button type="button" class="chart-type" data-type="bar" onclick="setChartType('bar',event)"
+                  style="border:none;background:transparent;padding:5px 10px;font-size:11px;font-weight:700;border-radius:5px;cursor:pointer;color:#0F1C3A;font-family:inherit">📊 Bar</button>
+        </div>
+        <span id="chartRange" style="font-size:11px;font-weight:400;color:#9CA3AF"></span>
+      </div>
     </div>
-    <div class="chart-box"><canvas id="chartOmset"></canvas></div>
+    <div class="chart-box" style="height:320px"><canvas id="chartOmset"></canvas></div>
   </div>
 
   <!-- OUTLET HEALTH CARDS -->
@@ -453,6 +516,12 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
       <?php if ($hqCanManageOutlet): ?><a href="/ERP/harpy/add-outlet.php" class="btn btn-light" style="justify-content:center">🏪 Tambah Outlet</a><?php endif; ?>
       <a href="/ERP/harpy/hq/outlet.php" class="btn btn-light" style="justify-content:center">🏢 Manajemen Outlet</a>
+      <?php if ($hqCanBilling): ?>
+      <button type="button" onclick="openTopupModal()" class="btn btn-light"
+              style="justify-content:center;cursor:pointer;font-family:inherit;font-size:13px">
+        🪙 Topup Coin Outlet
+      </button>
+      <?php endif; ?>
       <a href="/ERP/harpy/hq/karyawan.php" class="btn btn-light" style="justify-content:center">👥 Karyawan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/pelanggan.php" class="btn btn-light" style="justify-content:center">🧑‍🤝‍🧑 Pelanggan Lintas Outlet</a>
       <a href="/ERP/harpy/hq/laporan.php" class="btn btn-light" style="justify-content:center">📈 Laporan Konsolidasi</a>
@@ -462,6 +531,54 @@ $greeting   = (date('H') < 11 ? 'Selamat pagi' : (date('H') < 15 ? 'Selamat sian
   </div>
 
 </div>
+
+<?php if ($hqCanBilling): ?>
+<!-- Topup Modal -->
+<div id="topupModal" style="display:none;position:fixed;inset:0;background:rgba(15,28,58,.75);z-index:1000;
+                              align-items:center;justify-content:center;padding:20px"
+     onclick="if(event.target===this) document.getElementById('topupModal').style.display='none'">
+  <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-size:1.1rem;font-weight:800;color:#0F1C3A">🪙 Topup Coin Outlet</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:3px">Pilih outlet, kirim request via WhatsApp</div>
+      </div>
+      <button onclick="document.getElementById('topupModal').style.display='none'"
+              style="background:none;border:none;font-size:24px;cursor:pointer;color:#9CA3AF;line-height:1">×</button>
+    </div>
+    <div style="background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;padding:10px 14px;border-radius:8px;
+                font-size:12px;margin-bottom:14px;line-height:1.5">
+      🚧 Payment gateway sedang dikembangkan. Topup sementara via chat WA dengan tim LAMASY.
+    </div>
+    <?php foreach ($outlets as $o): ?>
+    <a href="https://wa.me/6281234567890?text=<?= urlencode('Halo Tim LAMASY, saya mau topup coin untuk outlet "' . $o['nama_outlet'] . '" (tenant: ' . ($hqTenant['email'] ?? '-') . ')') ?>"
+       target="_blank" rel="noopener"
+       style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;
+              background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;margin-bottom:6px;
+              text-decoration:none;color:#0F1C3A;transition:all .15s"
+       onmouseover="this.style.background='#F0FDFB';this.style.borderColor='#35E8D5'"
+       onmouseout="this.style.background='#F9FAFB';this.style.borderColor='#E5E7EB'">
+      <div>
+        <div style="font-weight:700;font-size:13px">📍 <?= htmlspecialchars($o['nama_outlet']) ?></div>
+        <div style="font-size:11px;color:#6B7280;margin-top:2px">
+          🪙 <strong><?= $o['status']==='trial' && (int)$o['trial_coin_balance']>0
+                ? number_format((int)$o['trial_coin_balance']) . ' (trial)'
+                : number_format((int)$o['coin_balance']) ?></strong>
+          · <?= $o['status'] ?>
+        </div>
+      </div>
+      <span style="background:#25D366;color:#fff;font-size:11px;font-weight:700;padding:6px 12px;border-radius:6px">
+        💬 Topup
+      </span>
+    </a>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<script>
+function openTopupModal(){ document.getElementById('topupModal').style.display='flex'; }
+</script>
+<?php endif; ?>
 
 <script>
 function fmtRp(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
@@ -473,14 +590,60 @@ function fmtShort(n){
   return n;
 }
 
-// Render multi-line chart
-(function(){
-  const labels = <?= json_encode(array_map(fn($d) => date('d M', strtotime($d)), $dayLabels)) ?>;
-  const datasets = <?= json_encode($chartDatasets) ?>;
+let chartInstance = null;
+let currentDays = 30;
+let currentChartType = 'line';
+
+function setChartPeriod(days, ev){
+  document.querySelectorAll('.chart-preset').forEach(b => {
+    b.style.background = 'transparent'; b.style.color = '#0F1C3A'; b.classList.remove('active');
+  });
+  if (ev && ev.target) {
+    ev.target.style.background = '#0F1C3A'; ev.target.style.color = '#fff';
+    ev.target.classList.add('active');
+  }
+  currentDays = days;
+  loadChart();
+}
+
+function setChartType(type, ev){
+  document.querySelectorAll('.chart-type').forEach(b => {
+    b.style.background = 'transparent'; b.style.color = '#0F1C3A'; b.classList.remove('active');
+  });
+  if (ev && ev.target) {
+    ev.target.style.background = '#0F1C3A'; ev.target.style.color = '#fff';
+    ev.target.classList.add('active');
+  }
+  currentChartType = type;
+  loadChart();
+}
+
+async function loadChart(){
+  const r = await fetch(`/ERP/harpy/hq/dashboard.php?action=chart_data&days=${currentDays}`);
+  const d = await r.json();
+  if (d.error) return;
+
+  document.getElementById('chartRange').textContent =
+    new Date(d.periode.start).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})
+    + ' → ' + new Date(d.periode.end).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+
+  const isBar = currentChartType === 'bar';
+  const datasets = d.datasets.map(ds => ({
+    label: ds.label,
+    data:  ds.data,
+    borderColor: ds.color,
+    backgroundColor: isBar ? ds.color : ds.color + '22',
+    tension: 0.3,
+    pointRadius: currentDays > 60 ? 0 : 3,
+    fill: false,
+    borderRadius: 4, // hanya untuk bar
+  }));
+
+  if (chartInstance) chartInstance.destroy();
   const ctx = document.getElementById('chartOmset').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets },
+  chartInstance = new Chart(ctx, {
+    type: currentChartType,
+    data: { labels: d.labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -491,11 +654,13 @@ function fmtShort(n){
       },
       scales: {
         y: { beginAtZero: true, ticks: { callback: v => 'Rp ' + fmtShort(v) } },
-        x: { ticks: { font: { size: 11 } } }
+        x: { ticks: { font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: currentDays > 60 ? 12 : 15 } }
       }
     }
   });
-})();
+}
+
+loadChart();
 </script>
 </body>
 </html>

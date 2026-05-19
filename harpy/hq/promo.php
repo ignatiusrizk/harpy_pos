@@ -254,6 +254,64 @@ if ($action) {
         exit;
     }
 
+    if ($action === 'voucher_list') {
+        $promoId = (int)($_GET['promo_id'] ?? 0);
+        try {
+            $sql = "SELECT v.id, v.kode, v.is_used, v.used_at, v.nama_penerima, v.telepon,
+                           v.expired_at, v.created_at, v.promo_id,
+                           (SELECT nama FROM hl_promo WHERE id=v.promo_id) AS promo_nama
+                      FROM hl_voucher v
+                     WHERE v.tenant_id=?";
+            $params = [$tid];
+            if ($promoId > 0) { $sql .= " AND v.promo_id=?"; $params[] = $promoId; }
+            $sql .= " ORDER BY v.created_at DESC LIMIT 200";
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            echo json_encode($stmt->fetchAll());
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>$e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($action === 'voucher_generate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $d = json_decode(file_get_contents('php://input'), true);
+        verifyCsrf();
+        $promoId = (int)($d['promo_id'] ?? 0);
+        $jumlah  = max(1, min(100, (int)($d['jumlah'] ?? 1)));
+        $prefix  = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($d['prefix'] ?? 'HQ')), 0, 6));
+        $expired = !empty($d['expired_at']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d['expired_at']) ? $d['expired_at'] : null;
+        $nama    = substr(trim(strip_tags($d['nama_penerima'] ?? '')), 0, 100) ?: null;
+        $telp    = substr(preg_replace('/[^0-9+\-\s]/', '', $d['telepon'] ?? ''), 0, 20) ?: null;
+
+        $v = $db->prepare("SELECT id FROM hl_promo WHERE id=? AND tenant_id=? LIMIT 1");
+        $v->execute([$promoId, $tid]);
+        if (!$v->fetchColumn()) { echo json_encode(['error'=>'Promo tidak ditemukan']); exit; }
+
+        $generated = [];
+        try {
+            $chk = $db->prepare("SELECT id FROM hl_voucher WHERE kode=? LIMIT 1");
+            $ins = $db->prepare("INSERT INTO hl_voucher
+                                   (tenant_id, outlet_id, promo_id, kode, is_used, nama_penerima, telepon, expired_at, created_at)
+                                 VALUES (?,0,?,?,0,?,?,?,NOW())");
+            for ($i = 0; $i < $jumlah; $i++) {
+                $kode = null;
+                for ($try = 0; $try < 5; $try++) {
+                    $cand = $prefix . '-' . strtoupper(substr(md5(uniqid((string)mt_rand(), true)), 0, 6));
+                    $chk->execute([$cand]);
+                    if (!$chk->fetchColumn()) { $kode = $cand; break; }
+                }
+                if (!$kode) continue;
+                $ins->execute([$tid, $promoId, $kode, $nama, $telp, $expired]);
+                $generated[] = $kode;
+            }
+            echo json_encode(['success'=>true, 'generated'=>$generated]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>'Gagal: '.$e->getMessage()]);
+        }
+        exit;
+    }
+
     echo json_encode(['error'=>'Unknown action']); exit;
 }
 
@@ -397,6 +455,64 @@ catch (Throwable) { $migrationOk = false; }
 </div>
 
 <!-- Create/Edit Modal -->
+<!-- Voucher Modal -->
+<div class="modal-backdrop" id="voucherModal" onclick="if(event.target===this)closeModal('voucherModal')">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🎫 Voucher untuk: <span id="vcPromoNama"></span></div>
+        <div style="font-size:12px;color:#6B7280;margin-top:3px">Generate kode voucher untuk dibagi ke pelanggan</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('voucherModal')">×</button>
+    </div>
+    <input type="hidden" id="vcPromoId">
+    <div id="vcAlert"></div>
+
+    <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:800;color:#6B7280;text-transform:uppercase;margin-bottom:8px">Generate Voucher Baru</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;margin-bottom:8px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;display:block">Jumlah</label>
+          <input type="number" id="vcJumlah" value="1" min="1" max="100"
+                 style="width:100%;padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:6px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;display:block">Prefix</label>
+          <input type="text" id="vcPrefix" value="HQ" maxlength="6" placeholder="cth: VIP"
+                 style="width:100%;padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:6px;font-size:13px;font-family:inherit;outline:none;text-transform:uppercase">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;display:block">Expired</label>
+          <input type="date" id="vcExpired"
+                 style="width:100%;padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:6px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;display:block">Nama Penerima <small style="font-weight:400;color:#9CA3AF">(opsional)</small></label>
+          <input type="text" id="vcNama" maxlength="100" placeholder="kosongkan kalau bebas"
+                 style="width:100%;padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:6px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;display:block">Telepon <small style="font-weight:400;color:#9CA3AF">(opsional)</small></label>
+          <input type="tel" id="vcTelp" maxlength="20" placeholder="08xxx"
+                 style="width:100%;padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:6px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <button class="btn btn-primary" style="padding:9px 16px;font-size:13px" onclick="generateVoucher()">
+        ✨ Generate Voucher
+      </button>
+    </div>
+
+    <div style="font-size:11px;font-weight:800;color:#6B7280;text-transform:uppercase;margin-bottom:8px">
+      📜 Voucher Terdaftar (200 terakhir)
+    </div>
+    <div id="vcList" style="max-height:300px;overflow-y:auto;font-size:12px">
+      <div style="text-align:center;color:#9CA3AF;padding:14px">Memuat…</div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="formModal" onclick="if(event.target===this)closeModal('formModal')">
   <div class="modal">
     <div class="modal-header">
@@ -538,10 +654,12 @@ async function loadList(){
       target = `<strong style="color:#9CA3AF">Belum ada target</strong>`;
     }
 
+    const voucherBtn = `<button class="btn btn-light" onclick="openVoucherModal(${r.id},'${escapeHtml(r.nama)}')">🎫 Voucher</button>`;
     const editBtn = r.scope === 'account'
       ? `<button class="btn btn-light" onclick="openEdit(${r.id})">✏️ Edit</button>
+         ${voucherBtn}
          <button class="btn btn-danger" onclick="deletePromo(${r.id},'${escapeHtml(r.nama)}')">🗑️</button>`
-      : `<span style="font-size:11px;color:#9CA3AF;padding:6px 0">Edit di outlet view</span>`;
+      : `${voucherBtn}<span style="font-size:11px;color:#9CA3AF;padding:6px 4px">Edit di outlet view</span>`;
 
     return `
       <div class="pm-card ${r.is_active==0?'inactive':''}">
@@ -714,6 +832,72 @@ async function deletePromo(id, nama){
 
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
+
+// ── Voucher modal ──────────────────────────────────
+async function openVoucherModal(promoId, promoNama){
+  document.getElementById('vcPromoId').value = promoId;
+  document.getElementById('vcPromoNama').textContent = promoNama;
+  document.getElementById('vcAlert').innerHTML = '';
+  document.getElementById('vcJumlah').value = 1;
+  document.getElementById('vcPrefix').value = 'HQ';
+  document.getElementById('vcExpired').value = '';
+  document.getElementById('vcNama').value = '';
+  document.getElementById('vcTelp').value = '';
+  openModal('voucherModal');
+  await loadVoucherList(promoId);
+}
+
+async function loadVoucherList(promoId){
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=voucher_list&promo_id=' + promoId);
+  const rows = await r.json();
+  const box = document.getElementById('vcList');
+  if (rows.error || !rows.length) {
+    box.innerHTML = '<div style="text-align:center;color:#9CA3AF;padding:14px">Belum ada voucher untuk promo ini.</div>';
+    return;
+  }
+  box.innerHTML = rows.map(v => `
+    <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+                padding:9px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:7px;margin-bottom:5px">
+      <code style="background:#0F1C3A;color:#35E8D5;padding:5px 9px;border-radius:5px;font-size:12px;font-weight:700;cursor:copy"
+            onclick="navigator.clipboard.writeText('${escapeHtml(v.kode)}');this.textContent='✓ copied'"
+            title="Klik untuk copy">${escapeHtml(v.kode)}</code>
+      <div style="font-size:11px;color:#6B7280">
+        ${v.nama_penerima ? '👤 '+escapeHtml(v.nama_penerima) : '<span style="color:#9CA3AF">bebas</span>'}
+        ${v.telepon ? ' · 📞 '+escapeHtml(v.telepon) : ''}
+        ${v.expired_at ? '<br>⏰ Exp: '+new Date(v.expired_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : ''}
+      </div>
+      <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:100px;
+            background:${v.is_used==1?'#FEE2E2':'#D1FAE5'};color:${v.is_used==1?'#991B1B':'#065F46'}">
+        ${v.is_used==1 ? '✓ TERPAKAI' : '○ AKTIF'}
+      </span>
+    </div>
+  `).join('');
+}
+
+async function generateVoucher(){
+  const alertEl = document.getElementById('vcAlert');
+  alertEl.innerHTML = '';
+  const promoId = document.getElementById('vcPromoId').value;
+  const data = {
+    promo_id: parseInt(promoId),
+    jumlah:   parseInt(document.getElementById('vcJumlah').value || 1),
+    prefix:   document.getElementById('vcPrefix').value.trim().toUpperCase(),
+    expired_at: document.getElementById('vcExpired').value,
+    nama_penerima: document.getElementById('vcNama').value.trim(),
+    telepon: document.getElementById('vcTelp').value.trim(),
+  };
+  if (data.jumlah < 1 || data.jumlah > 100) { alertEl.innerHTML = '<div class="alert error">Jumlah 1-100</div>'; return; }
+
+  const r = await fetch('/ERP/harpy/hq/promo.php?action=voucher_generate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf},
+    body: JSON.stringify(data),
+  });
+  const j = await r.json();
+  if (j.error) { alertEl.innerHTML = '<div class="alert error">'+escapeHtml(j.error)+'</div>'; return; }
+  alertEl.innerHTML = `<div class="alert success">✓ ${j.generated.length} voucher digenerate: <code>${j.generated.join(', ')}</code></div>`;
+  await loadVoucherList(promoId);
+}
 
 // Pre-load semua outlet untuk picker
 (async () => {

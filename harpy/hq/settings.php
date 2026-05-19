@@ -34,11 +34,57 @@ function logAcc(PDO $db, int $tid, int $uid, string $what): void {
 $profileSuccess = false; $profileError = '';
 $pwSuccess = false; $pwError = '';
 
-// Cek kolom deskripsi exist
+require_once ROOT . '/core/FileUpload.php';
+
+// Cek kolom deskripsi & logo & notif exist
 $hasDeskripsi = true;
 try { $db->query("SELECT deskripsi FROM tenants LIMIT 1"); } catch (Throwable) { $hasDeskripsi = false; }
+$hasLogo = true;
+try { $db->query("SELECT logo_path FROM tenants LIMIT 1"); } catch (Throwable) { $hasLogo = false; }
 $hasNotifSettings = true;
 try { $db->query("SELECT notif_settings FROM tenants LIMIT 1"); } catch (Throwable) { $hasNotifSettings = false; }
+
+$logoSuccess = false; $logoError = '';
+
+// ── Logo upload handler ──────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_logo'])) {
+    if (!hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
+        $logoError = 'CSRF mismatch';
+    } elseif (!$hasLogo) {
+        $logoError = 'Kolom logo_path belum ada. Jalankan SQL migration dulu.';
+    } elseif (empty($_FILES['logo']['tmp_name'])) {
+        $logoError = 'Tidak ada file yang diupload.';
+    } else {
+        $up = FileUpload::uploadImage($_FILES['logo'], 'uploads/logos', 'tenant_' . $tid);
+        if ($up['error']) {
+            $logoError = $up['error'];
+        } else {
+            try {
+                $old = $hqTenant['logo_path'] ?? null;
+                $db->prepare("UPDATE tenants SET logo_path=? WHERE id=?")->execute([$up['path'], $tid]);
+                if ($old) FileUpload::deleteIfExists($old);
+                logAcc($db, $tid, $uid, "logo updated: {$up['path']}");
+                $logoSuccess = true;
+                $r = $db->prepare("SELECT * FROM tenants WHERE id=?");
+                $r->execute([$tid]); $hqTenant = $r->fetch();
+            } catch (Throwable $e) { $logoError = 'Gagal simpan: ' . $e->getMessage(); }
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_logo']) && $hasLogo) {
+    if (hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
+        try {
+            $old = $hqTenant['logo_path'] ?? null;
+            $db->prepare("UPDATE tenants SET logo_path=NULL WHERE id=?")->execute([$tid]);
+            if ($old) FileUpload::deleteIfExists($old);
+            logAcc($db, $tid, $uid, "logo removed");
+            $logoSuccess = true;
+            $r = $db->prepare("SELECT * FROM tenants WHERE id=?");
+            $r->execute([$tid]); $hqTenant = $r->fetch();
+        } catch (Throwable $e) { $logoError = 'Gagal hapus: ' . $e->getMessage(); }
+    }
+}
 
 $notifSuccess = false; $notifError = '';
 
@@ -411,14 +457,6 @@ $supportWa = '6281234567890';
       <?php endif; ?>
 
       <div>
-        <label>Logo Brand <small>(coming soon — upload via support sementara)</small></label>
-        <div style="padding:14px;background:#F9FAFB;border:1.5px dashed #D1D5DB;border-radius:8px;
-                    color:#9CA3AF;font-size:13px;text-align:center">
-          🖼️ Upload logo akan tersedia di update berikutnya
-        </div>
-      </div>
-
-      <div>
         <button type="submit" class="btn btn-primary">💾 Simpan Profil</button>
       </div>
 
@@ -427,6 +465,57 @@ $supportWa = '6281234567890';
         Hubungi tim LAMASY via WhatsApp untuk proses verifikasi keamanan.
       </div>
     </form>
+
+    <?php if ($hasLogo): ?>
+    <!-- Logo upload (terpisah karena multipart) -->
+    <div style="margin-top:18px;padding-top:18px;border-top:1px dashed #E5E7EB">
+      <label style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;display:block">
+        🖼️ Logo Brand <small style="font-weight:400;color:#9CA3AF">(max 2MB, JPG/PNG/WebP)</small>
+      </label>
+
+      <?php if ($logoSuccess): ?>
+      <div class="alert success">✓ Logo berhasil diperbarui.</div>
+      <?php elseif ($logoError): ?>
+      <div class="alert error">❌ <?= htmlspecialchars($logoError) ?></div>
+      <?php endif; ?>
+
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <?php if (!empty($hqTenant['logo_path'])): ?>
+        <div style="position:relative">
+          <img src="<?= htmlspecialchars(FileUpload::publicUrl($hqTenant['logo_path'])) ?>?v=<?= time() ?>"
+               alt="Logo" style="width:96px;height:96px;object-fit:cover;border-radius:10px;
+                                  border:1.5px solid #E5E7EB;background:#fff">
+          <form method="POST" style="margin-top:6px">
+            <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
+            <input type="hidden" name="remove_logo" value="1">
+            <button type="submit"
+                    onclick="return confirm('Hapus logo brand?')"
+                    style="background:transparent;color:#EF4444;border:1px solid #FCA5A5;
+                           padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;
+                           cursor:pointer;font-family:inherit">
+              🗑️ Hapus Logo
+            </button>
+          </form>
+        </div>
+        <?php else: ?>
+        <div style="width:96px;height:96px;border-radius:10px;border:1.5px dashed #D1D5DB;
+                    background:#F9FAFB;display:flex;align-items:center;justify-content:center;
+                    color:#9CA3AF;font-size:32px;flex-shrink:0">🏢</div>
+        <?php endif; ?>
+
+        <form method="POST" enctype="multipart/form-data" style="flex:1;min-width:240px">
+          <input type="hidden" name="_csrf" value="<?= htmlspecialchars($csrf) ?>">
+          <input type="hidden" name="upload_logo" value="1">
+          <input type="file" name="logo" accept="image/jpeg,image/png,image/webp,image/gif" required
+                 style="width:100%;padding:10px;border:1.5px solid #E5E7EB;border-radius:8px;
+                        font-size:13px;background:#fff;font-family:inherit;margin-bottom:8px">
+          <button type="submit" class="btn btn-primary" style="font-size:13px;padding:8px 18px">
+            ⬆️ Upload Logo
+          </button>
+        </form>
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <!-- ② GANTI PASSWORD -->
