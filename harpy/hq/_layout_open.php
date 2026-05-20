@@ -116,6 +116,10 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
          class="hq-side-link <?= $_aPage === 'hq-ai-chat' ? 'active' : '' ?>">
         <span class="ico">✨</span> AI Chat
       </a>
+      <a href="/ERP/harpy/hq/ai-churning.php"
+         class="hq-side-link <?= $_aPage === 'hq-ai-churning' ? 'active' : '' ?>">
+        <span class="ico">🎯</span> Smart Notif
+      </a>
 
       <div class="hq-side-divider"></div>
 
