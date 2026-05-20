@@ -110,6 +110,14 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
       </a>
 
       <div class="hq-side-divider"></div>
+      <div class="hq-side-label">AI Tools</div>
+
+      <a href="/ERP/harpy/hq/ai-chat.php"
+         class="hq-side-link <?= $_aPage === 'hq-ai-chat' ? 'active' : '' ?>">
+        <span class="ico">✨</span> AI Chat
+      </a>
+
+      <div class="hq-side-divider"></div>
 
       <a href="/ERP/harpy/hq/settings.php"
          class="hq-side-link <?= $_aPage === 'hq-settings' ? 'active' : '' ?>">

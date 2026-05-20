@@ -24,6 +24,7 @@ class CoinLedger
         'ai_analyst'         => 200,
         'ai_review'          => 300,
         'ai_insight_laporan' => 100,
+        'ai_chat_data'       =>  50,
         'generate_invoice'   => 200,
         'wa_blast'           => 100,
         'export_pdf'         => 500,
