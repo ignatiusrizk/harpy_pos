@@ -531,6 +531,22 @@ require __DIR__ . '/_layout_open.php';
   h1{font-size:1.4rem;font-weight:800;color:#0F1C3A;margin-bottom:6px}
   h1 small{display:block;font-size:13px;font-weight:400;color:#6B7280;margin-top:2px}
 
+  /* Print header (hanya tampil saat cetak) */
+  .print-header{display:none}
+
+  @media print{
+    /* Sembunyikan kerangka HQ + kontrol interaktif */
+    .hq-side, .hq-top, .filter-bar, #exportBtn, .preset-btn, .drill-btn,
+    .btn-export, #aiInsightPanel { display:none !important; }
+    .hq-content, .hq-content-inner { padding:0 !important; margin:0 !important; max-width:100% !important; }
+    body, .hq-shell, .hq-main { background:#fff !important; }
+    .panel, .wk-card { box-shadow:none !important; border:1px solid #ddd !important; break-inside:avoid; }
+    .print-header{display:block;margin-bottom:14px;border-bottom:2px solid #0F1C3A;padding-bottom:8px}
+    .print-header h2{font-size:18px;font-weight:800;color:#0F1C3A}
+    .print-header p{font-size:12px;color:#444;margin-top:2px}
+    @page{margin:1.2cm}
+  }
+
   .filter-bar{background:#fff;border-radius:12px;padding:14px 18px;display:flex;gap:10px;
               flex-wrap:wrap;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05);align-items:center}
   .filter-bar label{font-size:12px;color:#6B7280;font-weight:600;display:flex;align-items:center;gap:6px}
@@ -606,6 +622,12 @@ require __DIR__ . '/_layout_open.php';
     <small>Lintas outlet · <?= htmlspecialchars($tenantNama) ?></small>
   </h1>
 
+  <!-- Print-only header -->
+  <div class="print-header">
+    <h2>Laporan Keuangan Konsolidasi — <?= htmlspecialchars($tenantNama) ?></h2>
+    <p id="printPeriode">Periode: -</p>
+  </div>
+
   <div class="filter-bar">
     <label>📅 <input type="date" id="dStart" value="<?= $defaultStart ?>"></label>
     <label>– <input type="date" id="dEnd" value="<?= $defaultEnd ?>"></label>
@@ -625,6 +647,7 @@ require __DIR__ . '/_layout_open.php';
       ✨ AI Insight
     </button>
     <a id="exportBtn" href="#" class="btn-export">⬇️ Export CSV</a>
+    <button class="btn-export" onclick="window.print()" style="background:#0891B2">🖨️ Cetak / PDF</button>
   </div>
 
   <!-- AI INSIGHT PANEL -->
@@ -719,6 +742,14 @@ require __DIR__ . '/_layout_open.php';
         <div class="wk-omset" id="wkWorstOmset">-</div>
       </div>
     </div>
+  </div>
+
+  <!-- P&L KONSOLIDASI -->
+  <div class="panel" id="pnlPanel">
+    <div class="panel-title">📒 Laba Rugi (P&amp;L) Konsolidasi
+      <span id="pnlScope" style="font-size:11px;font-weight:400;color:#9CA3AF"></span>
+    </div>
+    <div id="pnlBox"><div style="color:#9CA3AF;font-size:13px;text-align:center;padding:20px">-</div></div>
   </div>
 
   <!-- OMSET PER SEGMEN + KAS KONSOLIDASI -->
@@ -833,6 +864,50 @@ async function loadAiInsight(){
   }
 }
 
+// ── P&L Konsolidasi ──
+function renderPnl(d){
+  const box = document.getElementById('pnlBox');
+  const omset = Number(d.summary.omset) || 0;
+  const gaji  = Number(d.biaya.gaji) || 0;
+  const kasKeluar = (d.kas_breakdown && d.kas_breakdown.keluar) ? d.kas_breakdown.keluar : [];
+  const totalKasKeluar = Number(d.biaya.kas_keluar) || 0;
+  const totalBeban = gaji + totalKasKeluar;
+  const labaBersih = omset - totalBeban;
+  const margin = omset > 0 ? Math.round(labaBersih/omset*1000)/10 : 0;
+
+  const row = (label, val, opt={}) => `
+    <div style="display:flex;justify-content:space-between;padding:${opt.indent?'5px 0 5px 18px':'7px 0'};
+                font-size:${opt.bold?'14px':'13px'};
+                ${opt.border?'border-top:1px solid #EEF1F8;margin-top:4px;padding-top:10px':''};
+                color:${opt.color||'#374151'};font-weight:${opt.bold?'800':opt.head?'700':'400'}">
+      <span>${label}</span>
+      <span style="font-family:monospace;font-weight:${opt.bold?'800':'600'}">${fmtRp(val)}</span>
+    </div>`;
+
+  let html = '';
+  html += '<div style="font-size:11px;font-weight:800;color:#10B981;letter-spacing:.05em;margin-bottom:2px">PENDAPATAN</div>';
+  html += row('Pendapatan Jasa (Omset)', omset, {indent:true});
+  html += row('Total Pendapatan', omset, {head:true});
+
+  html += '<div style="font-size:11px;font-weight:800;color:#EF4444;letter-spacing:.05em;margin:12px 0 2px">BEBAN OPERASIONAL</div>';
+  html += row('Gaji Karyawan', gaji, {indent:true});
+  if (kasKeluar.length){
+    kasKeluar.forEach(k => html += row(escapeHtml(k.kategori), k.total, {indent:true}));
+  } else {
+    html += row('Beban operasional lain', totalKasKeluar, {indent:true});
+  }
+  html += row('Total Beban', totalBeban, {head:true});
+
+  html += row('LABA BERSIH', labaBersih,
+    {bold:true, border:true, color: labaBersih>=0 ? '#065F46' : '#991B1B'});
+  html += `<div style="display:flex;justify-content:space-between;font-size:12px;color:#6B7280;padding-top:4px">
+    <span>Margin Laba</span>
+    <span style="font-weight:700;color:${margin>=0?'#10B981':'#EF4444'}">${margin}%</span></div>`;
+  html += `<div style="font-size:10px;color:#9CA3AF;margin-top:8px">* Laba estimasi berbasis omset (accrual) − gaji − kas keluar. Kas masuk non-penjualan dilihat di panel Kas Konsolidasi.</div>`;
+
+  box.innerHTML = html;
+}
+
 // ── Omset per Segmen ──
 const SEGMEN_LABEL = {kiloan:'🧺 Kiloan', self_service:'🪙 Self-Service', b2b:'🏢 B2B', satuan:'👕 Satuan', lainnya:'📦 Lainnya'};
 function renderSegmen(seg){
@@ -908,6 +983,14 @@ async function loadData(){
 
   document.getElementById('mCoin').textContent = Number(d.coin_used).toLocaleString('id-ID');
 
+  // Print header periode
+  if (d.periode){
+    const pp = document.getElementById('printPeriode');
+    if (pp) pp.textContent = `Periode: ${d.periode.start} s/d ${d.periode.end}` +
+      (d.outlet_filter ? ' · Outlet terpilih' : ' · Semua outlet');
+  }
+  // P&L konsolidasi
+  renderPnl(d);
   // Omset per segmen
   renderSegmen(d.segmen || []);
   // Kas konsolidasi
