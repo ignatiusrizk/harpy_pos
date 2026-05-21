@@ -234,6 +234,20 @@ foreach ($outlets as &$o) {
         $o['order_today'] = (int)$r['c'];
     } catch (Throwable) { $o['omset_today']=0; $o['order_today']=0; }
 
+    // Omset KEMARIN (untuk delta ranking)
+    $o['omset_yesterday'] = 0;
+    try {
+        $stmt = $db->prepare("SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+                                WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?");
+        $stmt->execute([$tid, $oid, date('Y-m-d', strtotime('-1 day'))]);
+        $o['omset_yesterday'] = (int)$stmt->fetchColumn();
+    } catch (Throwable) {}
+    // Delta % hari ini vs kemarin
+    $oy = $o['omset_yesterday'];
+    $o['omset_delta_pct'] = $oy > 0
+        ? round((($o['omset_today'] - $oy) / $oy) * 100, 1)
+        : ($o['omset_today'] > 0 ? 100 : 0);
+
     // Order aktif
     $o['order_aktif'] = 0;
     try {
@@ -280,6 +294,30 @@ if (count($outlets) >= 2) {
         $bestOutlet = $worstOutlet = null;
     }
 }
+
+// ── Ranking HARI INI (sorted by omset_today desc, untuk delta view) ──
+$rankToday = $outlets;
+usort($rankToday, fn($a, $b) => $b['omset_today'] <=> $a['omset_today']);
+
+// ── HEATMAP aktivitas per jam per outlet (14 hari terakhir) ──
+$heatStartHour = 6;
+$heatEndHour   = 22;
+$heatmap = [];      // [outlet_id][hour] = count
+$heatMax = 0;
+try {
+    $hStmt = $db->prepare("SELECT outlet_id, HOUR(created_at) jam, COUNT(*) c
+                             FROM hl_transaksi
+                            WHERE tenant_id=? AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                            GROUP BY outlet_id, HOUR(created_at)");
+    $hStmt->execute([$tid]);
+    foreach ($hStmt->fetchAll() as $row) {
+        $oid = (int)$row['outlet_id'];
+        $jam = (int)$row['jam'];
+        $cnt = (int)$row['c'];
+        $heatmap[$oid][$jam] = $cnt;
+        if ($cnt > $heatMax) $heatMax = $cnt;
+    }
+} catch (Throwable) {}
 
 // ── Timeline data per outlet (7 hari terakhir) untuk chart multi-line ──
 $timelineByOutlet = [];
@@ -424,6 +462,22 @@ require __DIR__ . '/_layout_open.php';
   .ai-brief-loading{font-size:13px;color:rgba(255,255,255,.7)}
   .ai-brief-text{font-size:14px;line-height:1.7;color:rgba(255,255,255,.95);white-space:pre-wrap}
   .ai-brief-meta{font-size:10px;color:rgba(255,255,255,.4);margin-top:10px;letter-spacing:.04em}
+  .heatmap-wrap{overflow-x:auto}
+  .heatmap{border-collapse:collapse;width:100%;font-size:11px}
+  .heatmap th{font-weight:700;color:#9CA3AF;padding:4px 6px;text-align:center;font-size:10px}
+  .heatmap th.hm-outlet-h{text-align:left;min-width:120px}
+  .heatmap td.hm-outlet{font-weight:700;color:#0F1C3A;font-size:12px;padding:6px 8px;white-space:nowrap}
+  .hm-cell{text-align:center;padding:7px 4px;font-weight:700;font-family:monospace;border-radius:4px;min-width:26px;border:1px solid #fff}
+  .rank-today{display:flex;flex-direction:column;gap:6px}
+  .rt-row{display:grid;grid-template-columns:40px 1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border-radius:8px;background:#F9FAFB}
+  .rt-row:hover{background:#F3F4F6}
+  .rt-rank{font-size:16px;font-weight:800;text-align:center;color:#6B7280}
+  .rt-name{font-weight:700;color:#0F1C3A;font-size:13px}
+  .rt-name small{display:block;font-size:11px;font-weight:400;color:#9CA3AF;margin-top:1px}
+  .rt-omset{font-family:monospace;font-weight:800;color:#0F1C3A;font-size:14px}
+  .rt-delta{font-size:12px;font-weight:700;text-align:right;min-width:90px}
+  .rt-delta small{display:block;font-size:10px;font-weight:400;margin-top:1px}
+  @media(max-width:640px){.rt-row{grid-template-columns:32px 1fr auto}.rt-delta{grid-column:2/-1;text-align:left}}
   .pipeline{background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:18px}
   .pipeline-title{font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:14px}
   .pipeline-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -605,6 +659,78 @@ require __DIR__ . '/_layout_open.php';
         <small>Omset terendah bulan ini · review strategi cabang ini</small>
       </div>
     </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- RANKING HARI INI (delta vs kemarin) -->
+  <?php if (count($outlets) >= 1): ?>
+  <div class="panel">
+    <div class="panel-title">🏁 Ranking Hari Ini <span style="font-size:11px;font-weight:400;color:#9CA3AF">vs kemarin</span></div>
+    <div class="rank-today">
+      <?php foreach ($rankToday as $i => $o):
+        $delta = (float)($o['omset_delta_pct'] ?? 0);
+        $deltaUp = $delta > 0; $deltaFlat = abs($delta) < 0.1;
+        $deltaColor = $deltaFlat ? '#9CA3AF' : ($deltaUp ? '#10B981' : '#EF4444');
+        $deltaIcon  = $deltaFlat ? '→' : ($deltaUp ? '▲' : '▼');
+        $medal = $i === 0 ? '🥇' : ($i === 1 ? '🥈' : ($i === 2 ? '🥉' : '#'.($i+1)));
+      ?>
+      <div class="rt-row">
+        <div class="rt-rank"><?= $medal ?></div>
+        <div class="rt-name"><?= htmlspecialchars($o['nama_outlet']) ?>
+          <small><?= (int)$o['order_today'] ?> order</small>
+        </div>
+        <div class="rt-omset">Rp <?= number_format((int)$o['omset_today'], 0, ',', '.') ?></div>
+        <div class="rt-delta" style="color:<?= $deltaColor ?>">
+          <?= $deltaIcon ?> <?= $deltaFlat ? '0%' : abs($delta).'%' ?>
+          <small style="color:#9CA3AF">kmrn Rp <?= number_format((int)$o['omset_yesterday'], 0, ',', '.') ?></small>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- HEATMAP AKTIVITAS PER JAM -->
+  <?php if (!empty($heatmap)): ?>
+  <div class="panel">
+    <div class="panel-title">🔥 Heatmap Aktivitas per Jam
+      <span style="font-size:11px;font-weight:400;color:#9CA3AF">14 hari terakhir · jam tersibuk tiap outlet</span>
+    </div>
+    <div class="heatmap-wrap">
+      <table class="heatmap">
+        <thead>
+          <tr>
+            <th class="hm-outlet-h">Outlet</th>
+            <?php for ($h = $heatStartHour; $h <= $heatEndHour; $h++): ?>
+              <th><?= $h ?></th>
+            <?php endfor; ?>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($outlets as $o):
+            $oid = (int)$o['id'];
+            if (empty($heatmap[$oid])) continue;
+          ?>
+          <tr>
+            <td class="hm-outlet"><?= htmlspecialchars($o['nama_outlet']) ?></td>
+            <?php for ($h = $heatStartHour; $h <= $heatEndHour; $h++):
+              $cnt = $heatmap[$oid][$h] ?? 0;
+              $intensity = $heatMax > 0 ? $cnt / $heatMax : 0;
+              // teal scale
+              $bg = $cnt === 0 ? '#F9FAFB' : 'rgba(53,232,213,' . round(0.15 + $intensity * 0.75, 2) . ')';
+              $fg = $intensity > 0.5 ? '#0F1C3A' : '#6B7280';
+            ?>
+              <td class="hm-cell" style="background:<?= $bg ?>;color:<?= $fg ?>"
+                  title="<?= htmlspecialchars($o['nama_outlet']) ?> · jam <?= $h ?>:00 — <?= $cnt ?> order">
+                <?= $cnt > 0 ? $cnt : '' ?>
+              </td>
+            <?php endfor; ?>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:#9CA3AF;margin-top:8px">Warna lebih pekat = lebih ramai. Angka = jumlah order masuk pada jam tsb.</div>
   </div>
   <?php endif; ?>
 
