@@ -61,6 +61,10 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
          class="hq-side-link <?= $_aPage === 'hq-outlet' ? 'active' : '' ?>">
         <span class="ico">🏪</span> Outlet
       </a>
+      <a href="/ERP/harpy/hq/layanan.php"
+         class="hq-side-link <?= $_aPage === 'hq-layanan' ? 'active' : '' ?>">
+        <span class="ico">🧺</span> Layanan & Harga
+      </a>
 
       <div class="hq-side-divider"></div>
       <div class="hq-side-label">Tim & Pelanggan</div>
