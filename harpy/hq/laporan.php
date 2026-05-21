@@ -246,6 +246,36 @@ if ($action === 'data') {
     }
     unset($o);
 
+    // ── Best & Worst performer MINGGU INI (Senin s/d sekarang) ──
+    $weekRanking = null;
+    try {
+        $weekStart = date('Y-m-d', strtotime('monday this week'));
+        $weekEnd   = date('Y-m-d');
+        $wStmt = $db->prepare("SELECT o.id, o.nama_outlet,
+                                      COALESCE(SUM(t.total),0) omset,
+                                      COUNT(t.id) order_count
+                                 FROM outlets o
+                                 LEFT JOIN hl_transaksi t ON t.outlet_id=o.id
+                                      AND DATE(t.tanggal) BETWEEN ? AND ?
+                                WHERE o.tenant_id=? AND o.status IN ('trial','grace','active')
+                                GROUP BY o.id, o.nama_outlet
+                                ORDER BY omset DESC");
+        $wStmt->execute([$weekStart, $weekEnd, $tid]);
+        $weekRows = $wStmt->fetchAll();
+        if (count($weekRows) >= 2) {
+            $best  = $weekRows[0];
+            $worst = end($weekRows);
+            // Hanya tampilkan kalau best != worst (ada variasi)
+            if ((int)$best['omset'] !== (int)$worst['omset']) {
+                $weekRanking = [
+                    'periode' => ['start'=>$weekStart, 'end'=>$weekEnd],
+                    'best'  => ['nama'=>$best['nama_outlet'], 'omset'=>(int)$best['omset'], 'order'=>(int)$best['order_count']],
+                    'worst' => ['nama'=>$worst['nama_outlet'], 'omset'=>(int)$worst['omset'], 'order'=>(int)$worst['order_count']],
+                ];
+            }
+        }
+    } catch (Throwable) {}
+
     // Timeline
     $timeline = [];
     try {
@@ -293,6 +323,7 @@ if ($action === 'data') {
         'per_outlet' => $outlets,
         'timeline' => $timeline,
         'top_customers' => $topCust,
+        'week_ranking' => $weekRanking ?? null,
     ]);
     exit;
 }
@@ -491,6 +522,13 @@ require __DIR__ . '/_layout_open.php';
   .profit-neg{color:#991B1B!important}.profit-pos{color:#065F46}
 
   .panel{background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:18px}
+  .wk-card{background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+  .wk-card.best{border-left:4px solid #F59E0B;background:linear-gradient(135deg,#FFFBEB,#fff)}
+  .wk-card.worst{border-left:4px solid #6B7280;background:linear-gradient(135deg,#F9FAFB,#fff)}
+  .wk-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .wk-name{font-size:1.15rem;font-weight:800;color:#0F1C3A;margin-bottom:4px}
+  .wk-omset{font-size:1.2rem;font-weight:800;color:#0F1C3A;font-family:monospace}
+  .wk-omset small{display:block;font-size:11px;font-weight:400;color:#9CA3AF;margin-top:2px}
   .panel-title{font-size:14px;font-weight:700;color:#0F1C3A;margin-bottom:14px;
                display:flex;justify-content:space-between;align-items:center;gap:8px}
   .chart-box{height:280px;position:relative}
@@ -625,6 +663,25 @@ require __DIR__ . '/_layout_open.php';
     <div class="panel">
       <div class="panel-title">🏆 Top Pelanggan</div>
       <div id="topCustList"><div style="color:#9CA3AF;font-size:12px">Memuat…</div></div>
+    </div>
+  </div>
+
+  <!-- BEST & WORST MINGGU INI -->
+  <div id="weekRankingWrap" style="display:none;margin-bottom:18px">
+    <div class="panel-title" style="margin-bottom:10px">🗓️ Performer Minggu Ini
+      <span id="weekPeriode" style="font-size:11px;font-weight:400;color:#9CA3AF"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="wk-card best">
+        <div class="wk-label" style="color:#D97706">🏆 Terbaik Minggu Ini</div>
+        <div class="wk-name" id="wkBestName">-</div>
+        <div class="wk-omset" id="wkBestOmset">-</div>
+      </div>
+      <div class="wk-card worst">
+        <div class="wk-label" style="color:#6B7280">📉 Perlu Perhatian</div>
+        <div class="wk-name" id="wkWorstName">-</div>
+        <div class="wk-omset" id="wkWorstOmset">-</div>
+      </div>
     </div>
   </div>
 
@@ -763,6 +820,21 @@ async function loadData(){
   document.getElementById('mGaji').textContent = 'Total Gaji: ' + fmtRp(d.karyawan.gaji_total);
 
   document.getElementById('mCoin').textContent = Number(d.coin_used).toLocaleString('id-ID');
+
+  // Best/Worst minggu ini
+  const wkWrap = document.getElementById('weekRankingWrap');
+  if (d.week_ranking) {
+    const w = d.week_ranking;
+    document.getElementById('weekPeriode').textContent =
+      `${new Date(w.periode.start).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})} – ${new Date(w.periode.end).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}`;
+    document.getElementById('wkBestName').textContent = '📍 ' + w.best.nama;
+    document.getElementById('wkBestOmset').innerHTML = fmtRp(w.best.omset) + `<small>${w.best.order} order minggu ini</small>`;
+    document.getElementById('wkWorstName').textContent = '📍 ' + w.worst.nama;
+    document.getElementById('wkWorstOmset').innerHTML = fmtRp(w.worst.omset) + `<small>${w.worst.order} order minggu ini</small>`;
+    wkWrap.style.display = 'block';
+  } else {
+    wkWrap.style.display = 'none';
+  }
 
   const tbody = document.getElementById('outletBreakdown');
   if (d.per_outlet.length === 0) {
