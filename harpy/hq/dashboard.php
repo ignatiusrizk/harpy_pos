@@ -13,12 +13,103 @@
 $activePage = 'hq-dashboard';
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/middleware/hq_guard.php';
+require_once ROOT . '/core/AIInsight.php';
 
 $db    = Database::get();
 $tid   = (int)$hqTenant['id'];
 $today = date('Y-m-d');
 $thisMonth = date('Y-m');
 $startTimeline = date('Y-m-d', strtotime('-6 days'));
+
+// ── AJAX: AI Briefing HQ ─────────────────────────────
+if (($_GET['action'] ?? '') === 'ai_briefing') {
+    header('Content-Type: application/json');
+
+    // Cek cache dulu (gratis kalau sudah ada hari ini) — peek tanpa generate
+    $peekOnly = !empty($_GET['peek']);
+
+    // Kumpulkan data konsolidasi hari ini
+    $tg = $db->prepare("SELECT COALESCE(SUM(total),0) omset, COUNT(*) cnt
+                          FROM hl_transaksi WHERE tenant_id=? AND DATE(tanggal)=?");
+    $tg->execute([$tid, $today]);
+    $tgRow = $tg->fetch() ?: ['omset'=>0,'cnt'=>0];
+
+    $aktif = 0; $siap = 0; $selesai = 0;
+    try { $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses NOT IN ('siap','selesai','batal','dibatalkan')"); $s->execute([$tid]); $aktif=(int)$s->fetchColumn(); } catch (Throwable) {}
+    try { $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses='siap'"); $s->execute([$tid]); $siap=(int)$s->fetchColumn(); } catch (Throwable) {}
+    try { $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses IN ('diambil','selesai') AND DATE(tanggal)=?"); $s->execute([$tid,$today]); $selesai=(int)$s->fetchColumn(); } catch (Throwable) {}
+
+    // Per outlet ringkas
+    $outletsBrief = [];
+    try {
+        $os = $db->prepare("SELECT id, nama_outlet FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') ORDER BY is_main DESC, nama_outlet");
+        $os->execute([$tid]);
+        foreach ($os->fetchAll() as $o) {
+            $oid = (int)$o['id'];
+            $om = $db->prepare("SELECT COALESCE(SUM(total),0) s, COUNT(*) c FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?");
+            $om->execute([$tid,$oid,$today]); $omr = $om->fetch();
+            $oa = $db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND status_proses NOT IN ('siap','selesai','batal','dibatalkan')");
+            $oa->execute([$tid,$oid]);
+            $outletsBrief[] = [
+                'nama'        => $o['nama_outlet'],
+                'omset_today' => (int)$omr['s'],
+                'order_today' => (int)$omr['c'],
+                'order_aktif' => (int)$oa->fetchColumn(),
+            ];
+        }
+    } catch (Throwable) {}
+
+    // Alert operasional ringkas (untuk konteks AI)
+    $briefAlerts = [];
+    foreach ($outletsBrief as $ob) {
+        // skip — alert detail dihitung di body, briefing pakai ringkas saja
+    }
+
+    $aiData = [
+        'tanggal_label'   => date('l, d F Y'),
+        'omset_today'     => (int)$tgRow['omset'],
+        'order_today'     => (int)$tgRow['cnt'],
+        'order_aktif'     => $aktif,
+        'pipeline_siap'   => $siap,
+        'pipeline_selesai'=> $selesai,
+        'outlets'         => $outletsBrief,
+        'alerts'          => $briefAlerts,
+    ];
+
+    // Kalau peek & tidak ada cache → jangan generate (hindari auto-charge)
+    if ($peekOnly) {
+        $cached = AIInsight::peekCache($tid, AIInsight::briefingCacheKey());
+        if ($cached === null) {
+            echo json_encode(['ok'=>true, 'cached'=>false]);
+            exit;
+        }
+        echo json_encode(['ok'=>true, 'cached'=>true,
+            'briefing'=>$cached['briefing'] ?? '', 'generated_at'=>$cached['generated_at'] ?? '']);
+        exit;
+    }
+
+    if (!CoinLedger::canAfford('ai_briefing_hq')) {
+        echo json_encode(['error' => 'Coin tidak cukup. Butuh 80 coin untuk briefing.']);
+        exit;
+    }
+
+    try {
+        $b = AIInsight::briefingHQ($aiData, $tid);
+        if (empty($b['from_cache'])) {
+            try { CoinLedger::deduct('ai_briefing_hq'); } catch (Throwable) {}
+            try { logAudit('ai_briefing', 'dashboard', 'Generate briefing HQ ' . date('Y-m-d')); } catch (Throwable) {}
+        }
+        echo json_encode([
+            'ok'           => true,
+            'briefing'     => $b['briefing'],
+            'from_cache'   => $b['from_cache'] ?? false,
+            'generated_at' => $b['generated_at'] ?? date('Y-m-d H:i:s'),
+        ]);
+    } catch (Throwable $e) {
+        echo json_encode(['error' => 'Briefing gagal: ' . $e->getMessage()]);
+    }
+    exit;
+}
 
 // ── AJAX: chart data per outlet untuk N hari ─────────
 if (($_GET['action'] ?? '') === 'chart_data') {
@@ -321,6 +412,18 @@ require __DIR__ . '/_layout_open.php';
   .metric-label{font-size:12px;color:#6B7280;font-weight:600}
   .metric-sub{font-size:11px;color:#9CA3AF;margin-top:3px}
 
+  .ai-brief{background:linear-gradient(135deg,#1a1340,#2d1f5e);border-radius:14px;padding:20px 24px;margin-bottom:18px;position:relative;overflow:hidden}
+  .ai-brief:before{content:'';position:absolute;top:-40px;right:-20px;width:180px;height:180px;background:radial-gradient(circle,rgba(139,92,246,.25),transparent);border-radius:50%}
+  .ai-brief-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;position:relative}
+  .ai-brief-title{font-size:13px;font-weight:800;color:#C4B5FD;letter-spacing:.05em}
+  .ai-brief-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .ai-brief-btn:hover{opacity:.92}
+  .ai-brief-btn:disabled{opacity:.5;cursor:wait}
+  .ai-brief-body{position:relative}
+  .ai-brief-empty{font-size:13px;color:rgba(255,255,255,.6);line-height:1.5}
+  .ai-brief-loading{font-size:13px;color:rgba(255,255,255,.7)}
+  .ai-brief-text{font-size:14px;line-height:1.7;color:rgba(255,255,255,.95);white-space:pre-wrap}
+  .ai-brief-meta{font-size:10px;color:rgba(255,255,255,.4);margin-top:10px;letter-spacing:.04em}
   .pipeline{background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:18px}
   .pipeline-title{font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:14px}
   .pipeline-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -413,6 +516,22 @@ require __DIR__ . '/_layout_open.php';
          · <?= $outletCnt ?> outlet aktif · <?= date('l, d F Y') ?></p>
     </div>
     <?php if ($hqCanManageOutlet): ?><a href="/ERP/harpy/add-outlet.php" class="btn btn-primary">🏪 Tambah Outlet</a><?php endif; ?>
+  </div>
+
+  <!-- AI BRIEFING HQ -->
+  <div class="ai-brief" id="aiBrief">
+    <div class="ai-brief-head">
+      <div class="ai-brief-title">✨ AI Briefing Pagi</div>
+      <button class="ai-brief-btn" id="aiBriefBtn" onclick="generateBriefing()">Generate Briefing</button>
+    </div>
+    <div class="ai-brief-body" id="aiBriefBody">
+      <div class="ai-brief-empty" id="aiBriefEmpty">
+        Klik "Generate Briefing" untuk ringkasan kondisi semua outlet hari ini. <span style="opacity:.7">(80 coin, 1x per hari)</span>
+      </div>
+      <div class="ai-brief-loading" id="aiBriefLoading" style="display:none">⏳ Menyusun briefing…</div>
+      <div class="ai-brief-text" id="aiBriefText" style="display:none"></div>
+      <div class="ai-brief-meta" id="aiBriefMeta" style="display:none"></div>
+    </div>
   </div>
 
   <!-- 4 METRIC CARDS -->
@@ -731,5 +850,56 @@ async function loadChart(){
 }
 
 loadChart();
+
+// ── AI Briefing ──────────────────────────────────────
+function showBriefing(text, generatedAt, fromCache){
+  document.getElementById('aiBriefEmpty').style.display = 'none';
+  document.getElementById('aiBriefLoading').style.display = 'none';
+  const t = document.getElementById('aiBriefText');
+  t.textContent = text;
+  t.style.display = 'block';
+  const meta = document.getElementById('aiBriefMeta');
+  meta.textContent = (fromCache ? '⚡ Cache hari ini' : '✨ Baru di-generate') + (generatedAt ? ' · ' + generatedAt : '');
+  meta.style.display = 'block';
+  document.getElementById('aiBriefBtn').textContent = 'Re-generate';
+}
+
+async function generateBriefing(){
+  const btn = document.getElementById('aiBriefBtn');
+  btn.disabled = true;
+  document.getElementById('aiBriefEmpty').style.display = 'none';
+  document.getElementById('aiBriefText').style.display = 'none';
+  document.getElementById('aiBriefMeta').style.display = 'none';
+  document.getElementById('aiBriefLoading').style.display = 'block';
+
+  try {
+    const r = await fetch('/ERP/harpy/hq/dashboard.php?action=ai_briefing');
+    const d = await r.json();
+    btn.disabled = false;
+    if (d.error) {
+      document.getElementById('aiBriefLoading').style.display = 'none';
+      document.getElementById('aiBriefEmpty').style.display = 'block';
+      document.getElementById('aiBriefEmpty').textContent = '⚠️ ' + d.error;
+      return;
+    }
+    showBriefing(d.briefing, d.generated_at, d.from_cache);
+  } catch (e) {
+    btn.disabled = false;
+    document.getElementById('aiBriefLoading').style.display = 'none';
+    document.getElementById('aiBriefEmpty').style.display = 'block';
+    document.getElementById('aiBriefEmpty').textContent = '⚠️ Gagal: ' + e.message;
+  }
+}
+
+// Auto-peek: kalau briefing hari ini sudah ada di cache, tampilkan tanpa charge
+(async function peekBriefing(){
+  try {
+    const r = await fetch('/ERP/harpy/hq/dashboard.php?action=ai_briefing&peek=1');
+    const d = await r.json();
+    if (d.ok && d.cached && d.briefing) {
+      showBriefing(d.briefing, d.generated_at, true);
+    }
+  } catch (e) {}
+})();
 </script>
 <?php require __DIR__ . '/_layout_close.php'; ?>

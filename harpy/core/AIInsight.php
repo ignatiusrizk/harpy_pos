@@ -99,6 +99,109 @@ class AIInsight
         return $output;
     }
 
+    /**
+     * Briefing HQ harian — ringkasan kondisi semua outlet dalam 1 paragraf.
+     * Cache per HARI (key = tanggal), jadi cuma 1x hit API per hari.
+     *
+     * @param array $data {
+     *   @var string $tanggal_label  "Selasa, 19 Mei 2026"
+     *   @var int    $omset_today
+     *   @var int    $order_today
+     *   @var int    $order_aktif
+     *   @var int    $pipeline_siap
+     *   @var int    $pipeline_selesai
+     *   @var array  $outlets    [['nama'=>, 'omset_today'=>, 'order_today'=>, 'order_aktif'=>], ...]
+     *   @var array  $alerts     list string alert operasional
+     * }
+     * @return array { briefing, from_cache, tokens_used, generated_at }
+     */
+    public static function briefingHQ(array $data, int $tenantId): array
+    {
+        // Cache key per hari (tidak include data hash — biar stabil sepanjang hari,
+        // di-refresh otomatis besok)
+        $cacheKey = 'briefing_hq_' . date('Y-m-d');
+
+        $cached = self::getCache($tenantId, $cacheKey);
+        if ($cached !== null) {
+            $cached['from_cache'] = true;
+            return $cached;
+        }
+
+        $prompt = self::buildBriefingPrompt($data);
+
+        $system = "Kamu adalah asisten eksekutif yang memberikan briefing pagi singkat untuk owner "
+                . "jaringan laundry. Gaya: ringkas, to the point, seperti chief of staff melapor ke bos. "
+                . "1-2 paragraf saja (maks 5 kalimat). Sebut angka spesifik dan outlet by name. "
+                . "Kalau ada masalah operasional, tekankan. Kalau semua baik, apresiasi singkat. "
+                . "Bahasa Indonesia profesional tapi hangat. Mulai dengan sapaan singkat sesuai waktu.";
+
+        try {
+            $result = AnthropicClient::ask($prompt, [
+                'system'      => $system,
+                'max_tokens'  => 500,
+                'temperature' => 0.6,
+            ]);
+        } catch (Throwable $e) {
+            error_log('[AIInsight::briefingHQ] ' . $e->getMessage());
+            throw $e;
+        }
+
+        $output = [
+            'briefing'     => trim($result['text']),
+            'tokens_used'  => $result['tokens_in'] + $result['tokens_out'],
+            'cost_usd'     => $result['cost_usd'],
+            'generated_at' => date('Y-m-d H:i:s'),
+            'from_cache'   => false,
+        ];
+
+        self::saveCache($tenantId, null, $cacheKey, $output, $result['tokens_in'], $result['tokens_out']);
+
+        return $output;
+    }
+
+    /** Build prompt briefing HQ */
+    private static function buildBriefingPrompt(array $data): string
+    {
+        $lines = [];
+        $lines[] = "Buat briefing pagi untuk owner. Data hari ini (" . ($data['tanggal_label'] ?? date('d M Y')) . "):";
+        $lines[] = "";
+        $lines[] = "RINGKASAN GLOBAL:";
+        $lines[] = "- Omset hari ini: Rp " . number_format((int)($data['omset_today'] ?? 0), 0, ',', '.');
+        $lines[] = "- Total order hari ini: " . (int)($data['order_today'] ?? 0);
+        $lines[] = "- Order dalam proses: " . (int)($data['order_aktif'] ?? 0);
+        $lines[] = "- Order siap diambil: " . (int)($data['pipeline_siap'] ?? 0);
+        $lines[] = "- Order selesai hari ini: " . (int)($data['pipeline_selesai'] ?? 0);
+
+        if (!empty($data['outlets']) && is_array($data['outlets'])) {
+            $lines[] = "";
+            $lines[] = "PER OUTLET:";
+            foreach ($data['outlets'] as $o) {
+                $lines[] = sprintf("- %s: omset Rp %s, %d order hari ini, %d order proses",
+                    $o['nama'] ?? '?',
+                    number_format((int)($o['omset_today'] ?? 0), 0, ',', '.'),
+                    (int)($o['order_today'] ?? 0),
+                    (int)($o['order_aktif'] ?? 0)
+                );
+            }
+        }
+
+        if (!empty($data['alerts']) && is_array($data['alerts'])) {
+            $lines[] = "";
+            $lines[] = "ALERT OPERASIONAL:";
+            foreach ($data['alerts'] as $a) {
+                $lines[] = "- " . strip_tags((string)$a);
+            }
+        } else {
+            $lines[] = "";
+            $lines[] = "ALERT OPERASIONAL: tidak ada masalah.";
+        }
+
+        $lines[] = "";
+        $lines[] = "Tulis briefing pagi 1-2 paragraf. Highlight outlet terbaik, masalah yang perlu perhatian, dan saran prioritas hari ini.";
+
+        return implode("\n", $lines);
+    }
+
     /** Build prompt untuk laporan analysis */
     private static function buildLaporanPrompt(array $data): string
     {
@@ -175,6 +278,18 @@ class AIInsight
     }
 
     // ── Cache helpers ────────────────────────────────────
+
+    /** Public peek — cek cache tanpa generate (untuk auto-load tanpa charge) */
+    public static function peekCache(int $tenantId, string $cacheKey): ?array
+    {
+        return self::getCache($tenantId, $cacheKey);
+    }
+
+    /** Cache key briefing harian (dipakai dashboard untuk peek) */
+    public static function briefingCacheKey(): string
+    {
+        return 'briefing_hq_' . date('Y-m-d');
+    }
 
     private static function getCache(int $tenantId, string $cacheKey): ?array
     {
