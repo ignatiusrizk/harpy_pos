@@ -40,6 +40,8 @@ class ServiceCatalog
     public static function saveMaster(int $tenantId, array $data, ?int $id = null): int
     {
         $db = Database::get();
+        $validSegmen = ['kiloan','self_service','b2b','satuan','lainnya'];
+        $segmen = in_array($data['segmen'] ?? '', $validSegmen, true) ? $data['segmen'] : 'kiloan';
         $fields = [
             'nama'             => trim($data['nama'] ?? ''),
             'kategori'         => trim($data['kategori'] ?? 'Umum'),
@@ -49,6 +51,7 @@ class ServiceCatalog
             'is_active'        => (int)($data['is_active'] ?? 1),
             'allow_override'   => (int)($data['allow_override'] ?? 0),
             'override_max_pct' => (float)($data['override_max_pct'] ?? 0),
+            'segmen'           => $segmen,
         ];
         if ($fields['nama'] === '') {
             throw new RuntimeException('Nama layanan wajib diisi.');
@@ -56,23 +59,24 @@ class ServiceCatalog
 
         if ($id) {
             $sql = "UPDATE hl_layanan_master SET nama=?, kategori=?, satuan=?, harga_default=?,
-                       urutan=?, is_active=?, allow_override=?, override_max_pct=?
+                       urutan=?, is_active=?, allow_override=?, override_max_pct=?, segmen=?
                      WHERE id=? AND tenant_id=?";
             $stmt = $db->prepare($sql);
             $stmt->execute([
                 $fields['nama'], $fields['kategori'], $fields['satuan'], $fields['harga_default'],
                 $fields['urutan'], $fields['is_active'], $fields['allow_override'], $fields['override_max_pct'],
-                $id, $tenantId,
+                $fields['segmen'], $id, $tenantId,
             ]);
             return $id;
         } else {
             $sql = "INSERT INTO hl_layanan_master
-                      (tenant_id, nama, kategori, satuan, harga_default, urutan, is_active, allow_override, override_max_pct)
-                    VALUES (?,?,?,?,?,?,?,?,?)";
+                      (tenant_id, nama, kategori, satuan, harga_default, urutan, is_active, allow_override, override_max_pct, segmen)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)";
             $stmt = $db->prepare($sql);
             $stmt->execute([
                 $tenantId, $fields['nama'], $fields['kategori'], $fields['satuan'], $fields['harga_default'],
                 $fields['urutan'], $fields['is_active'], $fields['allow_override'], $fields['override_max_pct'],
+                $fields['segmen'],
             ]);
             return (int)$db->lastInsertId();
         }
@@ -121,26 +125,29 @@ class ServiceCatalog
                 $isOverridden = (int)$existing['harga_overridden'] === 1;
                 if ($isOverridden && !$overwriteOverrides) {
                     // Sync metadata tapi JANGAN sentuh harga
-                    $db->prepare("UPDATE hl_layanan SET nama=?, kategori=?, satuan=?, is_active=?
+                    $db->prepare("UPDATE hl_layanan SET nama=?, kategori=?, satuan=?, segmen=?, is_active=?
                                    WHERE id=? AND tenant_id=?")
-                       ->execute([$master['nama'], $master['kategori'], $master['satuan'], $master['is_active'],
+                       ->execute([$master['nama'], $master['kategori'], $master['satuan'],
+                                  $master['segmen'] ?? 'kiloan', $master['is_active'],
                                   $existing['id'], $tenantId]);
                     $skippedOverride++;
                 } else {
-                    $db->prepare("UPDATE hl_layanan SET nama=?, kategori=?, satuan=?, harga=?,
+                    $db->prepare("UPDATE hl_layanan SET nama=?, kategori=?, satuan=?, segmen=?, harga=?,
                                      is_active=?, harga_overridden=0
                                    WHERE id=? AND tenant_id=?")
                        ->execute([$master['nama'], $master['kategori'], $master['satuan'],
-                                  $master['harga_default'], $master['is_active'], $existing['id'], $tenantId]);
+                                  $master['segmen'] ?? 'kiloan', $master['harga_default'],
+                                  $master['is_active'], $existing['id'], $tenantId]);
                     $updated++;
                 }
             } else {
                 // Insert baru
                 $db->prepare("INSERT INTO hl_layanan
-                                (tenant_id, outlet_id, master_id, nama, kategori, satuan, harga, urutan, is_active, harga_overridden)
-                              VALUES (?,?,?,?,?,?,?,?,?,0)")
+                                (tenant_id, outlet_id, master_id, nama, kategori, satuan, segmen, harga, urutan, is_active, harga_overridden)
+                              VALUES (?,?,?,?,?,?,?,?,?,?,0)")
                    ->execute([$tenantId, $oid, $masterId, $master['nama'], $master['kategori'],
-                              $master['satuan'], $master['harga_default'], $master['urutan'], $master['is_active']]);
+                              $master['satuan'], $master['segmen'] ?? 'kiloan',
+                              $master['harga_default'], $master['urutan'], $master['is_active']]);
                 $created++;
             }
         }

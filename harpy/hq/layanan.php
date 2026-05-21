@@ -190,6 +190,16 @@ require __DIR__ . '/_layout_open.php';
         <input type="text" id="fSatuan" placeholder="kg" value="kg">
       </div>
     </div>
+    <div class="fld">
+      <label>Segmen</label>
+      <select id="fSegmen" style="width:100%;padding:9px 12px;border:1px solid #E5E9F2;border-radius:8px;font-family:inherit;font-size:14px">
+        <option value="kiloan">Kiloan</option>
+        <option value="self_service">Self-Service</option>
+        <option value="b2b">B2B</option>
+        <option value="satuan">Satuan</option>
+        <option value="lainnya">Lainnya</option>
+      </select>
+    </div>
     <div class="fld-row">
       <div class="fld">
         <label>Harga Default (Rp)</label>
@@ -301,6 +311,7 @@ function openForm(m){
   document.getElementById('fSatuan').value = m ? m.satuan : 'kg';
   document.getElementById('fHarga').value = m ? m.harga_default : '';
   document.getElementById('fUrutan').value = m ? m.urutan : 0;
+  document.getElementById('fSegmen').value = m ? (m.segmen || 'kiloan') : 'kiloan';
   document.getElementById('fAllowOverride').checked = m ? m.allow_override == 1 : false;
   document.getElementById('fOverridePct').value = m ? m.override_max_pct : 10;
   toggleOverridePct();
@@ -322,6 +333,7 @@ async function saveMaster(){
   fd.append('satuan', document.getElementById('fSatuan').value);
   fd.append('harga_default', document.getElementById('fHarga').value);
   fd.append('urutan', document.getElementById('fUrutan').value);
+  fd.append('segmen', document.getElementById('fSegmen').value);
   fd.append('is_active', 1);
   fd.append('allow_override', document.getElementById('fAllowOverride').checked ? 1 : 0);
   fd.append('override_max_pct', document.getElementById('fOverridePct').value);

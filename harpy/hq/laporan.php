@@ -310,6 +310,40 @@ if ($action === 'data') {
         $totalCoin = (int)$s->fetchColumn();
     } catch (Throwable) {}
 
+    // ── KAS KONSOLIDASI per kategori (masuk & keluar) ──
+    $kasBreakdown = ['masuk'=>[], 'keluar'=>[], 'total_masuk'=>0, 'total_keluar'=>0];
+    try {
+        $sql = "SELECT tipe, kategori, COALESCE(SUM(jumlah),0) total, COUNT(*) cnt
+                  FROM hl_kas
+                 WHERE tenant_id=? AND tanggal BETWEEN ? AND ? $outletFilter
+                 GROUP BY tipe, kategori ORDER BY total DESC";
+        $s = $db->prepare($sql);
+        $s->execute(array_merge([$tid,$start,$end], $extraParams));
+        foreach ($s->fetchAll() as $row) {
+            $entry = ['kategori'=>$row['kategori'] ?: '(tanpa kategori)', 'total'=>(int)$row['total'], 'cnt'=>(int)$row['cnt']];
+            if ($row['tipe'] === 'masuk') { $kasBreakdown['masuk'][] = $entry; $kasBreakdown['total_masuk'] += (int)$row['total']; }
+            else { $kasBreakdown['keluar'][] = $entry; $kasBreakdown['total_keluar'] += (int)$row['total']; }
+        }
+    } catch (Throwable) {}
+
+    // ── OMSET per SEGMEN lintas outlet ──
+    $segmenBreakdown = [];
+    try {
+        $segFilter = $oidArg > 0 ? " AND t.outlet_id=?" : "";
+        $sql = "SELECT COALESCE(l.segmen,'lainnya') segmen,
+                       COALESCE(SUM(ti.subtotal),0) total, COUNT(DISTINCT t.id) order_count
+                  FROM hl_transaksi_item ti
+                  JOIN hl_transaksi t ON t.id = ti.transaksi_id
+                  LEFT JOIN hl_layanan l ON l.id = ti.layanan_id
+                 WHERE t.tenant_id=? AND DATE(t.tanggal) BETWEEN ? AND ? $segFilter
+                 GROUP BY COALESCE(l.segmen,'lainnya') ORDER BY total DESC";
+        $s = $db->prepare($sql);
+        $s->execute(array_merge([$tid,$start,$end], $extraParams));
+        $segmenBreakdown = $s->fetchAll();
+        foreach ($segmenBreakdown as &$sg) { $sg['total']=(int)$sg['total']; $sg['order_count']=(int)$sg['order_count']; }
+        unset($sg);
+    } catch (Throwable) {}
+
     echo json_encode([
         'periode'  => ['start'=>$start,'end'=>$end,'days'=>$periodDays],
         'outlet_filter' => $oidArg,
@@ -324,6 +358,8 @@ if ($action === 'data') {
         'timeline' => $timeline,
         'top_customers' => $topCust,
         'week_ranking' => $weekRanking ?? null,
+        'kas_breakdown' => $kasBreakdown,
+        'segmen' => $segmenBreakdown,
     ]);
     exit;
 }
@@ -685,6 +721,18 @@ require __DIR__ . '/_layout_open.php';
     </div>
   </div>
 
+  <!-- OMSET PER SEGMEN + KAS KONSOLIDASI -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px" id="finGrid">
+    <div class="panel" style="margin:0">
+      <div class="panel-title">🧷 Omset per Segmen</div>
+      <div id="segmenBox"><div style="color:#9CA3AF;font-size:13px;text-align:center;padding:20px">-</div></div>
+    </div>
+    <div class="panel" style="margin:0">
+      <div class="panel-title">💵 Kas Konsolidasi per Kategori</div>
+      <div id="kasBox"><div style="color:#9CA3AF;font-size:13px;text-align:center;padding:20px">-</div></div>
+    </div>
+  </div>
+
   <div class="panel">
     <div class="panel-title">
       📍 Breakdown per Outlet
@@ -785,6 +833,45 @@ async function loadAiInsight(){
   }
 }
 
+// ── Omset per Segmen ──
+const SEGMEN_LABEL = {kiloan:'🧺 Kiloan', self_service:'🪙 Self-Service', b2b:'🏢 B2B', satuan:'👕 Satuan', lainnya:'📦 Lainnya'};
+function renderSegmen(seg){
+  const box = document.getElementById('segmenBox');
+  if (!seg.length){ box.innerHTML = '<div style="color:#9CA3AF;font-size:13px;text-align:center;padding:20px">Belum ada data segmen</div>'; return; }
+  const total = seg.reduce((a,s)=>a+Number(s.total),0) || 1;
+  box.innerHTML = seg.map(s => {
+    const pct = Math.round(Number(s.total)/total*100);
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+        <span style="font-weight:600;color:#0F1C3A">${SEGMEN_LABEL[s.segmen]||escapeHtml(s.segmen)}</span>
+        <span style="font-family:monospace;font-weight:700">${fmtRp(s.total)} <span style="color:#9CA3AF;font-weight:400">(${pct}%)</span></span>
+      </div>
+      <div style="background:#EEF1F8;border-radius:100px;height:7px;overflow:hidden">
+        <div style="background:#35E8D5;height:100%;width:${pct}%"></div>
+      </div>
+      <div style="font-size:10px;color:#9CA3AF;margin-top:2px">${s.order_count} order</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Kas Konsolidasi ──
+function renderKas(kas){
+  const box = document.getElementById('kasBox');
+  if (!kas || (!kas.masuk.length && !kas.keluar.length)){
+    box.innerHTML = '<div style="color:#9CA3AF;font-size:13px;text-align:center;padding:20px">Belum ada data kas</div>'; return;
+  }
+  const sec = (title, rows, color, total) => `
+    <div style="font-size:12px;font-weight:700;color:${color};margin:6px 0 4px">${title} · ${fmtRp(total)}</div>
+    ${rows.length ? rows.map(r=>`
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:#374151">
+        <span>${escapeHtml(r.kategori)} <span style="color:#9CA3AF">(${r.cnt})</span></span>
+        <span style="font-family:monospace">${fmtRp(r.total)}</span>
+      </div>`).join('') : '<div style="font-size:11px;color:#9CA3AF">—</div>'}`;
+  box.innerHTML = sec('⬇️ Kas Masuk', kas.masuk, '#10B981', kas.total_masuk)
+    + '<div style="height:8px"></div>'
+    + sec('⬆️ Kas Keluar', kas.keluar, '#EF4444', kas.total_keluar);
+}
+
 async function loadData(){
   const start = document.getElementById('dStart').value;
   const end   = document.getElementById('dEnd').value;
@@ -820,6 +907,11 @@ async function loadData(){
   document.getElementById('mGaji').textContent = 'Total Gaji: ' + fmtRp(d.karyawan.gaji_total);
 
   document.getElementById('mCoin').textContent = Number(d.coin_used).toLocaleString('id-ID');
+
+  // Omset per segmen
+  renderSegmen(d.segmen || []);
+  // Kas konsolidasi
+  renderKas(d.kas_breakdown || null);
 
   // Best/Worst minggu ini
   const wkWrap = document.getElementById('weekRankingWrap');

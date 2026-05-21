@@ -24,3 +24,7 @@ CREATE TABLE IF NOT EXISTS hl_layanan_master (
 ALTER TABLE hl_layanan ADD COLUMN IF NOT EXISTS master_id INT NULL;
 ALTER TABLE hl_layanan ADD COLUMN IF NOT EXISTS harga_overridden TINYINT(1) DEFAULT 0;
 ALTER TABLE hl_layanan ADD INDEX IF NOT EXISTS idx_master (master_id);
+
+-- ── Segmen omset (kiloan / self_service / b2b / satuan / lainnya) ──
+ALTER TABLE hl_layanan_master ADD COLUMN IF NOT EXISTS segmen VARCHAR(30) DEFAULT 'kiloan';
+ALTER TABLE hl_layanan        ADD COLUMN IF NOT EXISTS segmen VARCHAR(30) DEFAULT 'kiloan';
