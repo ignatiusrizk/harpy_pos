@@ -89,6 +89,23 @@ try {
     $orderAktif = (int)$stmt->fetchColumn();
 } catch (Throwable) {}
 
+// ── PIPELINE KONSOLIDASI (proses / siap diambil / selesai hari ini) ──
+$pipeline = ['proses' => $orderAktif, 'siap' => 0, 'selesai_today' => 0];
+try {
+    $stmt = $db->prepare("SELECT COUNT(*) FROM hl_transaksi
+                            WHERE tenant_id=? AND status_proses='siap'");
+    $stmt->execute([$tid]);
+    $pipeline['siap'] = (int)$stmt->fetchColumn();
+} catch (Throwable) {}
+try {
+    // Selesai hari ini = diambil/selesai dengan tanggal hari ini
+    $stmt = $db->prepare("SELECT COUNT(*) FROM hl_transaksi
+                            WHERE tenant_id=? AND status_proses IN ('diambil','selesai')
+                              AND DATE(tanggal)=?");
+    $stmt->execute([$tid, $today]);
+    $pipeline['selesai_today'] = (int)$stmt->fetchColumn();
+} catch (Throwable) {}
+
 // ── Outlet aktif + karyawan + pelanggan ───────────────
 $outletCnt = (int)$db->query("SELECT COUNT(*) FROM outlets WHERE tenant_id=$tid AND status IN ('trial','grace','active')")->fetchColumn();
 
@@ -237,6 +254,39 @@ foreach ($outlets as $o) {
     }
 }
 
+// ── Alert OPERASIONAL lintas outlet ───────────────────
+foreach ($outlets as $o) {
+    $oid = (int)$o['id'];
+
+    // 1. Order estimasi terlewat (estimasi_selesai < hari ini, belum siap/diambil/selesai)
+    try {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM hl_transaksi
+                                WHERE tenant_id=? AND outlet_id=?
+                                  AND estimasi_selesai IS NOT NULL
+                                  AND estimasi_selesai < ?
+                                  AND status_proses NOT IN ('siap','diambil','selesai','batal','dibatalkan')");
+        $stmt->execute([$tid, $oid, $today]);
+        $terlewat = (int)$stmt->fetchColumn();
+        if ($terlewat > 0) {
+            $alerts[] = ['level'=>'danger',
+                'msg'=>"⏱️ Outlet <strong>{$o['nama_outlet']}</strong>: <strong>$terlewat order</strong> estimasi selesai terlewat"];
+        }
+    } catch (Throwable) {}
+
+    // 2. Kas belum diinput hari ini
+    try {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM hl_kas
+                                WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?");
+        $stmt->execute([$tid, $oid, $today]);
+        $kasToday = (int)$stmt->fetchColumn();
+        // Hanya warning kalau outlet ada transaksi hari ini tapi kas kosong
+        if ($kasToday === 0 && (int)($o['order_today'] ?? 0) > 0) {
+            $alerts[] = ['level'=>'warning',
+                'msg'=>"📒 Outlet <strong>{$o['nama_outlet']}</strong>: kas belum diinput hari ini (ada {$o['order_today']} order)"];
+        }
+    } catch (Throwable) {}
+}
+
 $tenantCoin = (int)($hqTenant['coin_balance'] ?? 0);
 $ownerNama  = $hqUser['nama'] ?? 'Owner';
 $tenantNm   = $hqTenant['nama_outlet'] ?? 'HQ';
@@ -271,6 +321,17 @@ require __DIR__ . '/_layout_open.php';
   .metric-label{font-size:12px;color:#6B7280;font-weight:600}
   .metric-sub{font-size:11px;color:#9CA3AF;margin-top:3px}
 
+  .pipeline{background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:18px}
+  .pipeline-title{font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:14px}
+  .pipeline-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pl-stage{flex:1;min-width:140px;text-align:center;padding:16px 12px;border-radius:10px;background:#F9FAFB;border:1px solid #F0F1F4}
+  .pl-stage.proses{background:linear-gradient(135deg,#EFF6FF,#fff);border-color:#BFDBFE}
+  .pl-stage.siap{background:linear-gradient(135deg,#F0FDF4,#fff);border-color:#BBF7D0}
+  .pl-stage.selesai{background:linear-gradient(135deg,#F9FAFB,#fff);border-color:#E5E7EB}
+  .pl-num{font-size:1.9rem;font-weight:800;color:#0F1C3A;font-family:monospace;line-height:1}
+  .pl-label{font-size:12px;color:#6B7280;font-weight:600;margin-top:6px}
+  .pl-arrow{font-size:20px;color:#CBD5E1;font-weight:800}
+  @media(max-width:640px){.pl-arrow{display:none}.pl-stage{min-width:100%}}
   .alerts{margin-bottom:18px;display:flex;flex-direction:column;gap:8px}
   .alert{padding:10px 16px;border-radius:10px;font-size:13px}
   .alert.warning{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
@@ -375,6 +436,27 @@ require __DIR__ . '/_layout_open.php';
       <div class="metric-num"><?= number_format($pelangganCnt) ?></div>
       <div class="metric-label">Pelanggan Terdaftar</div>
       <div class="metric-sub">Database tenant</div>
+    </div>
+  </div>
+
+  <!-- PIPELINE KONSOLIDASI -->
+  <div class="pipeline">
+    <div class="pipeline-title">📦 Pipeline Order Lintas Outlet</div>
+    <div class="pipeline-flow">
+      <div class="pl-stage proses">
+        <div class="pl-num"><?= number_format($pipeline['proses']) ?></div>
+        <div class="pl-label">🔄 Dalam Proses</div>
+      </div>
+      <div class="pl-arrow">→</div>
+      <div class="pl-stage siap">
+        <div class="pl-num"><?= number_format($pipeline['siap']) ?></div>
+        <div class="pl-label">✅ Siap Diambil</div>
+      </div>
+      <div class="pl-arrow">→</div>
+      <div class="pl-stage selesai">
+        <div class="pl-num"><?= number_format($pipeline['selesai_today']) ?></div>
+        <div class="pl-label">📦 Selesai Hari Ini</div>
+      </div>
     </div>
   </div>
 
