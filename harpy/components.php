@@ -47,6 +47,8 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                              'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
                 'kas'    => ['label'=>'Kas',   'url'=>'kas.php',
                              'roles'=>['owner','superadmin','admin','manager']],
+                'checklist' => ['label'=>'Checklist', 'url'=>'checklist.php',
+                             'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
             ],
         ],
         'keuangan' => [
@@ -110,6 +112,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
       'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
       'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
+      'checklist'=>'✅',
     ];
     ?>
     <div class="ol-shell" id="olShell">
