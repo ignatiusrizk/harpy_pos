@@ -108,6 +108,10 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
          class="hq-side-link <?= $_aPage === 'hq-laporan' ? 'active' : '' ?>">
         <span class="ico">📈</span> Laporan
       </a>
+      <a href="/ERP/harpy/hq/billing.php"
+         class="hq-side-link <?= $_aPage === 'hq-billing' ? 'active' : '' ?>">
+        <span class="ico">💳</span> Coin & Billing
+      </a>
       <a href="/ERP/harpy/hq/checklist.php"
          class="hq-side-link <?= $_aPage === 'hq-checklist' ? 'active' : '' ?>">
         <span class="ico">✅</span> Checklist

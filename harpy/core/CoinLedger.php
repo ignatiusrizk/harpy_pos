@@ -299,4 +299,127 @@ class CoinLedger
     {
         return self::deduct('ai_briefing');
     }
+
+    // ════════════════════════════════════════════════════
+    // HQ BILLING — monitor, transfer, budget
+    // ════════════════════════════════════════════════════
+
+    /** Penggunaan coin per outlet (deduct) dalam rentang tanggal + budget bulanan */
+    public static function usageByOutlet(int $tenantId, string $start, string $end): array
+    {
+        $db = Database::get();
+        // coin_budget_monthly mungkin belum ada (migration) → coba, fallback tanpa
+        try {
+            $stmt = $db->prepare("
+                SELECT o.id outlet_id, o.nama_outlet, o.coin_balance, o.coin_budget_monthly,
+                       COALESCE(SUM(ABS(cl.amount)),0) used, COUNT(cl.id) cnt
+                  FROM outlets o
+                  LEFT JOIN coin_ledger cl ON cl.outlet_id=o.id AND cl.tenant_id=o.tenant_id
+                       AND cl.type='deduct' AND DATE(cl.created_at) BETWEEN ? AND ?
+                 WHERE o.tenant_id=? AND o.status IN ('trial','grace','active')
+                 GROUP BY o.id, o.nama_outlet, o.coin_balance, o.coin_budget_monthly
+                 ORDER BY used DESC
+            ");
+            $stmt->execute([$start, $end, $tenantId]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            $stmt = $db->prepare("
+                SELECT o.id outlet_id, o.nama_outlet, o.coin_balance, 0 AS coin_budget_monthly,
+                       COALESCE(SUM(ABS(cl.amount)),0) used, COUNT(cl.id) cnt
+                  FROM outlets o
+                  LEFT JOIN coin_ledger cl ON cl.outlet_id=o.id AND cl.tenant_id=o.tenant_id
+                       AND cl.type='deduct' AND DATE(cl.created_at) BETWEEN ? AND ?
+                 WHERE o.tenant_id=? AND o.status IN ('trial','grace','active')
+                 GROUP BY o.id, o.nama_outlet, o.coin_balance
+                 ORDER BY used DESC
+            ");
+            $stmt->execute([$start, $end, $tenantId]);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+
+    /** Penggunaan coin per fitur dalam rentang (opsional 1 outlet) */
+    public static function usageByFeature(int $tenantId, string $start, string $end, int $outletId = 0): array
+    {
+        $db = Database::get();
+        $filter = $outletId > 0 ? " AND outlet_id=?" : "";
+        $sql = "SELECT COALESCE(feature_used,'(lainnya)') feature,
+                       COALESCE(SUM(ABS(amount)),0) used, COUNT(*) cnt
+                  FROM coin_ledger
+                 WHERE tenant_id=? AND type='deduct' AND DATE(created_at) BETWEEN ? AND ? $filter
+                 GROUP BY feature_used ORDER BY used DESC";
+        $stmt = $db->prepare($sql);
+        $params = [$tenantId, $start, $end];
+        if ($outletId > 0) $params[] = $outletId;
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Coin terpakai bulan berjalan untuk 1 outlet (untuk cek budget) */
+    public static function monthlyUsage(int $tenantId, int $outletId): int
+    {
+        $db = Database::get();
+        $stmt = $db->prepare("SELECT COALESCE(SUM(ABS(amount)),0) FROM coin_ledger
+                               WHERE tenant_id=? AND outlet_id=? AND type='deduct'
+                                 AND DATE_FORMAT(created_at,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')");
+        $stmt->execute([$tenantId, $outletId]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    /** Set budget coin bulanan per outlet (0 = unlimited) */
+    public static function setBudget(int $tenantId, int $outletId, int $budget): bool
+    {
+        $db = Database::get();
+        $stmt = $db->prepare("UPDATE outlets SET coin_budget_monthly=? WHERE id=? AND tenant_id=?");
+        $stmt->execute([max(0, $budget), $outletId, $tenantId]);
+        return $stmt->rowCount() >= 0;
+    }
+
+    /**
+     * Transfer coin antar outlet (hanya mode per_outlet).
+     * @throws RuntimeException kalau mode shared / saldo kurang.
+     */
+    public static function transferBetweenOutlets(
+        int $tenantId, int $fromOutlet, int $toOutlet, int $amount, string $desc = ''
+    ): void {
+        if ($amount <= 0) throw new RuntimeException('Jumlah transfer harus > 0.');
+        if ($fromOutlet === $toOutlet) throw new RuntimeException('Outlet asal & tujuan sama.');
+
+        $db = Database::get();
+        $mode = $db->prepare("SELECT coin_mode FROM tenants WHERE id=?");
+        $mode->execute([$tenantId]);
+        if (($mode->fetchColumn() ?: 'shared') !== 'per_outlet') {
+            throw new RuntimeException('Transfer hanya tersedia di mode coin per-outlet.');
+        }
+
+        $db->beginTransaction();
+        try {
+            $src = $db->prepare("SELECT coin_balance FROM outlets WHERE id=? AND tenant_id=? FOR UPDATE");
+            $src->execute([$fromOutlet, $tenantId]);
+            $srcBal = (int)$src->fetchColumn();
+            if ($srcBal < $amount) throw new RuntimeException('Saldo outlet asal tidak cukup (' . $srcBal . ').');
+
+            $dst = $db->prepare("SELECT coin_balance FROM outlets WHERE id=? AND tenant_id=? FOR UPDATE");
+            $dst->execute([$toOutlet, $tenantId]);
+            $dstBal = (int)$dst->fetchColumn();
+
+            $newSrc = $srcBal - $amount;
+            $newDst = $dstBal + $amount;
+            $db->prepare("UPDATE outlets SET coin_balance=? WHERE id=? AND tenant_id=?")->execute([$newSrc, $fromOutlet, $tenantId]);
+            $db->prepare("UPDATE outlets SET coin_balance=? WHERE id=? AND tenant_id=?")->execute([$newDst, $toOutlet, $tenantId]);
+
+            $ins = $db->prepare("INSERT INTO coin_ledger
+                  (tenant_id, outlet_id, type, amount, feature_used, description, balance_after, ref_id)
+                  VALUES (?,?,?,?,?,?,?,?)");
+            $ins->execute([$tenantId, $fromOutlet, 'deduct', $amount, 'transfer_out',
+                ($desc ?: 'Transfer ke outlet #'.$toOutlet), $newSrc, 'TRF']);
+            $ins->execute([$tenantId, $toOutlet, 'topup', $amount, 'transfer_in',
+                ($desc ?: 'Transfer dari outlet #'.$fromOutlet), $newDst, 'TRF']);
+
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
 }
