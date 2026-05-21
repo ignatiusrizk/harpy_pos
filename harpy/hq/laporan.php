@@ -205,6 +205,44 @@ if ($action === 'data') {
                                 WHERE tenant_id=? AND outlet_id=? AND type='debit' AND DATE(created_at) BETWEEN ? AND ?");
               $s->execute([$tid,$oid,$start,$end]); $o['coin_used']=(int)$s->fetchColumn(); } catch (Throwable) {}
         $o['profit'] = $o['omset'] - $o['gaji'] - $o['kas_keluar'];
+
+        // ── AOV (avg order value) ──
+        $o['aov'] = $o['order_count'] > 0 ? (int)round($o['omset'] / $o['order_count']) : 0;
+
+        // ── % order selesai tepat waktu ──
+        // on-time = order yang sudah siap/diambil/selesai DAN
+        //           (tidak punya estimasi ATAU diselesaikan <= estimasi_selesai)
+        $o['ontime_pct'] = null;
+        try {
+            $s=$db->prepare("SELECT
+                    COUNT(*) total_done,
+                    SUM(CASE WHEN estimasi_selesai IS NULL OR DATE(updated_at) <= estimasi_selesai THEN 1 ELSE 0 END) on_time
+                  FROM hl_transaksi
+                 WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?
+                   AND status_proses IN ('siap','diambil','selesai')");
+            $s->execute([$tid,$oid,$start,$end]);
+            $dr=$s->fetch();
+            $totalDone=(int)$dr['total_done'];
+            $o['ontime_pct'] = $totalDone > 0 ? round(((int)$dr['on_time'] / $totalDone) * 100, 1) : null;
+        } catch (Throwable) {}
+
+        // ── Growth vs bulan lalu (omset periode bulan ini vs bulan sebelumnya) ──
+        $o['omset_prev_month'] = 0; $o['growth_pct'] = null;
+        try {
+            $prevMonthStart = date('Y-m-01', strtotime('first day of last month'));
+            $prevMonthEnd   = date('Y-m-t', strtotime('last day of last month'));
+            $thisMonthStart = date('Y-m-01');
+            $s=$db->prepare("SELECT COALESCE(SUM(total),0) FROM hl_transaksi
+                              WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?");
+            $s->execute([$tid,$oid,$prevMonthStart,$prevMonthEnd]);
+            $prevM=(int)$s->fetchColumn();
+            $o['omset_prev_month']=$prevM;
+
+            $s->execute([$tid,$oid,$thisMonthStart,date('Y-m-d')]);
+            $thisM=(int)$s->fetchColumn();
+            $o['omset_this_month']=$thisM;
+            $o['growth_pct'] = $prevM > 0 ? round((($thisM - $prevM) / $prevM) * 100, 1) : ($thisM > 0 ? 100 : null);
+        } catch (Throwable) {}
     }
     unset($o);
 
@@ -599,8 +637,8 @@ require __DIR__ . '/_layout_open.php';
       <table class="outlets-tbl">
         <thead>
           <tr>
-            <th>Outlet</th><th>Omset</th><th>Order</th><th>Gaji</th><th>Kas Keluar</th>
-            <th>Profit</th><th>Karyawan</th><th>Coin</th><th style="text-align:right">Aksi</th>
+            <th>Outlet</th><th>Omset</th><th>Order</th><th>AOV</th><th>% Tepat Waktu</th>
+            <th>Growth</th><th>Profit</th><th>Coin</th><th style="text-align:right">Aksi</th>
           </tr>
         </thead>
         <tbody id="outletBreakdown">
@@ -730,10 +768,18 @@ async function loadData(){
   if (d.per_outlet.length === 0) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9CA3AF;padding:30px">Belum ada outlet</td></tr>';
   } else {
-    let tO=0,tOr=0,tG=0,tK=0,tP=0,tKar=0,tC=0;
+    let tO=0,tOr=0,tP=0,tC=0;
+    const fmtOntime = p => p === null || p === undefined
+      ? '<span style="color:#9CA3AF">—</span>'
+      : `<span style="font-weight:700;color:${p>=90?'#10B981':p>=70?'#F59E0B':'#EF4444'}">${p}%</span>`;
+    const fmtGrowth = g => {
+      if (g === null || g === undefined) return '<span style="color:#9CA3AF">—</span>';
+      if (g > 0) return `<span style="color:#10B981;font-weight:700">▲ ${g}%</span>`;
+      if (g < 0) return `<span style="color:#EF4444;font-weight:700">▼ ${Math.abs(g)}%</span>`;
+      return '<span style="color:#9CA3AF">→ 0%</span>';
+    };
     let html = d.per_outlet.map(o => {
-      tO+=+o.omset; tOr+=+o.order_count; tG+=+o.gaji; tK+=+o.kas_keluar;
-      tP+=+o.profit; tKar+=+o.karyawan; tC+=+o.coin_used;
+      tO+=+o.omset; tOr+=+o.order_count; tP+=+o.profit; tC+=+o.coin_used;
       return `
         <tr>
           <td><strong>📍 ${escapeHtml(o.nama_outlet)}</strong>
@@ -744,24 +790,25 @@ async function loadData(){
           </td>
           <td>${fmtRp(o.omset)}</td>
           <td>${Number(o.order_count).toLocaleString('id-ID')}</td>
-          <td>${fmtRp(o.gaji)}</td>
-          <td>${fmtRp(o.kas_keluar)}</td>
+          <td>${fmtRp(o.aov)}</td>
+          <td>${fmtOntime(o.ontime_pct)}</td>
+          <td>${fmtGrowth(o.growth_pct)}</td>
           <td class="${o.profit<0?'profit-neg':'profit-pos'}">${fmtRp(o.profit)}</td>
-          <td>${o.karyawan}</td>
           <td>${Number(o.coin_used).toLocaleString('id-ID')}</td>
           <td style="text-align:right">${d.outlet_filter == o.id ? '<span style="color:#9CA3AF;font-size:11px">(aktif)</span>' : `<button class="drill-btn" onclick="drillDown(${o.id})">Detail →</button>`}</td>
         </tr>
       `;
     }).join('');
     if (d.per_outlet.length > 1) {
+      const tAov = tOr > 0 ? Math.round(tO / tOr) : 0;
       html += `<tr class="total-row">
         <td><strong>TOTAL</strong></td>
         <td>${fmtRp(tO)}</td>
         <td>${Number(tOr).toLocaleString('id-ID')}</td>
-        <td>${fmtRp(tG)}</td>
-        <td>${fmtRp(tK)}</td>
+        <td>${fmtRp(tAov)}</td>
+        <td></td>
+        <td></td>
         <td class="${tP<0?'profit-neg':'profit-pos'}">${fmtRp(tP)}</td>
-        <td>${tKar}</td>
         <td>${Number(tC).toLocaleString('id-ID')}</td>
         <td></td>
       </tr>`;
