@@ -2,6 +2,7 @@
 $activePage = 'layanan';
 define('ROOT', __DIR__);
 require_once ROOT . '/middleware/tenant_guard.php';
+require_once ROOT . '/core/ServiceCatalog.php';
 require_once __DIR__ . '/components.php';
 $user = currentUser();
 requirePermission('layanan.view');
@@ -13,11 +14,41 @@ if ($action) {
     $oid = TenantResolver::outletId();
 
     if ($action === 'list') {
-        $rows = TenantQuery::raw(
-            "SELECT * FROM hl_layanan WHERE tenant_id=? AND outlet_id=? ORDER BY kategori,urutan,nama",
-            [$tid, $oid]
-        );
+        // JOIN master untuk expose aturan override (kalau kolom master ada)
+        try {
+            $rows = TenantQuery::raw(
+                "SELECT l.*, m.allow_override, m.override_max_pct, m.harga_default
+                   FROM hl_layanan l
+                   LEFT JOIN hl_layanan_master m ON m.id = l.master_id
+                  WHERE l.tenant_id=? AND l.outlet_id=? ORDER BY l.kategori,l.urutan,l.nama",
+                [$tid, $oid]
+            );
+        } catch (Throwable) {
+            // Fallback kalau migration master belum dijalankan
+            $rows = TenantQuery::raw(
+                "SELECT * FROM hl_layanan WHERE tenant_id=? AND outlet_id=? ORDER BY kategori,urutan,nama",
+                [$tid, $oid]
+            );
+        }
         echo json_encode($rows); exit;
+    }
+
+    // ── Override harga layanan dari master (outlet adjust ±max_pct) ──
+    if ($action === 'override_harga' && $_SERVER['REQUEST_METHOD']==='POST') {
+        if (!hasPermission('layanan.edit')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
+        verifyCsrf();
+        $d = json_decode(file_get_contents('php://input'), true);
+        $masterId = (int)($d['master_id'] ?? 0);
+        $harga    = (float)($d['harga'] ?? 0);
+        if (!$masterId) { echo json_encode(['error'=>'Layanan bukan dari master']); exit; }
+        try {
+            ServiceCatalog::setOutletOverride($tid, $oid, $masterId, $harga);
+            logAudit('override','layanan',"Adjust harga layanan master #$masterId jadi Rp ".number_format($harga,0,',','.'));
+            echo json_encode(['success'=>true]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>$e->getMessage()]);
+        }
+        exit;
     }
     if ($action === 'save' && $_SERVER['REQUEST_METHOD']==='POST') {
         if (!hasPermission('layanan.create') && !hasPermission('layanan.edit')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
@@ -26,6 +57,18 @@ if ($action) {
         $nama    = substr(trim(strip_tags($d['nama'] ?? '')), 0, 100);
         $kategori= substr(trim(strip_tags($d['kategori'] ?? '')), 0, 50);
         if (!$nama) { echo json_encode(['error'=>'Nama wajib diisi']); exit; }
+        // Layanan dari master katalog: nama/kategori/satuan dikunci HQ.
+        // Harga harus lewat override (action=override_harga).
+        if (!empty($d['id'])) {
+            try {
+                $chk = TenantQuery::raw("SELECT master_id FROM hl_layanan WHERE id=? AND tenant_id=? AND outlet_id=?",
+                    [intval($d['id']), $tid, $oid]);
+                if (!empty($chk[0]['master_id'])) {
+                    echo json_encode(['error'=>'Layanan ini dari master katalog HQ. Hanya harga yang bisa di-adjust (jika diizinkan).']);
+                    exit;
+                }
+            } catch (Throwable) {}
+        }
         if (!empty($d['id'])) {
             TenantQuery::update('hl_layanan', [
                 'nama'     => $nama,
@@ -90,6 +133,10 @@ if ($action) {
 .layanan-card.inactive{opacity:.5}
 .layanan-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r-lg) var(--r-lg) 0 0;background:var(--teal)}
 .layanan-harga{font-family:var(--mono);font-size:1.3rem;font-weight:800;color:var(--navy);margin:6px 0 4px}
+.lyn-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;margin-left:4px;white-space:nowrap}
+.lyn-badge.adj{background:#E0F2FE;color:#0369A1}
+.lyn-badge.lock{background:#F3F4F6;color:#6B7280}
+.lyn-badge.ov{background:#FEF3C7;color:#92400E}
 .layanan-nama{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px}
 .layanan-kat{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray);margin-bottom:10px}
 .layanan-actions{display:flex;gap:6px;margin-top:12px}
@@ -234,22 +281,47 @@ function renderLayanan() {
   const grid = document.getElementById('layananGrid');
   if (!list.length) { grid.innerHTML = '<div class="hl-empty">📭 Tidak ada layanan ditemukan.</div>'; return; }
 
-  grid.innerHTML = list.map(l => `
+  grid.innerHTML = list.map(l => {
+    const isMaster = !!l.master_id;
+    const canAdjust = isMaster && String(l.allow_override) === '1';
+    const isOverridden = String(l.harga_overridden) === '1';
+
+    // Badge sumber
+    let badge = '';
+    if (isMaster) {
+      badge = canAdjust
+        ? `<span class="lyn-badge adj" title="Dari HQ, boleh adjust ±${l.override_max_pct}%">🏢 HQ · ±${l.override_max_pct}%</span>`
+        : `<span class="lyn-badge lock" title="Harga dikunci HQ">🔒 HQ</span>`;
+    }
+    const ovTag = isOverridden ? `<span class="lyn-badge ov">harga custom</span>` : '';
+
+    // Tombol aksi: master → adjust/locked; non-master → edit/delete penuh
+    let actions;
+    if (isMaster) {
+      actions = canAdjust
+        ? `<button class="hl-btn hl-btn-outline hl-btn-sm" onclick='openAdjust(${JSON.stringify(l)})'>💲 Adjust Harga</button>`
+        : `<span style="font-size:11px;color:var(--gray)">dikelola HQ</span>`;
+    } else {
+      actions = `
+        <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="editLayanan(${l.id})">✏️ Edit</button>
+        <button class="hl-btn hl-btn-danger hl-btn-sm" onclick="deleteLayanan(${l.id})">🗑️</button>`;
+    }
+
+    return `
     <div class="layanan-card ${l.is_active==1?'':'inactive'}">
-      <div class="layanan-kat">${esc(l.kategori||'Umum')}</div>
+      <div class="layanan-kat">${esc(l.kategori||'Umum')} ${badge} ${ovTag}</div>
       <div class="layanan-nama">${esc(l.nama)}</div>
       <div class="layanan-harga">Rp ${parseFloat(l.harga).toLocaleString('id-ID')} <span style="font-size:13px;font-weight:400;color:var(--gray)">/ ${l.satuan}</span></div>
+      ${canAdjust ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">Default HQ: Rp ${parseFloat(l.harga_default).toLocaleString('id-ID')}</div>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
         <label class="toggle-switch" title="${l.is_active==1?'Nonaktifkan':'Aktifkan'}">
           <input type="checkbox" ${l.is_active==1?'checked':''} onchange="toggleLayanan(${l.id},this.checked)"/>
           <span class="toggle-slider"></span>
         </label>
-        <div class="layanan-actions">
-          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="editLayanan(${l.id})">✏️ Edit</button>
-          <button class="hl-btn hl-btn-danger hl-btn-sm" onclick="deleteLayanan(${l.id})">🗑️</button>
-        </div>
+        <div class="layanan-actions">${actions}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function openModal(data=null) {
@@ -265,6 +337,33 @@ function openModal(data=null) {
 }
 function editLayanan(id) { openModal(allLayanan.find(l=>l.id==id)); }
 function closeModal() { document.getElementById('modalLayanan').classList.remove('open'); }
+
+// ── Adjust harga (override) untuk layanan dari master ──
+async function openAdjust(l){
+  const base = parseFloat(l.harga_default) || 0;
+  const pct  = parseFloat(l.override_max_pct) || 0;
+  const min = base > 0 && pct > 0 ? Math.round(base * (1 - pct/100)) : 0;
+  const max = base > 0 && pct > 0 ? Math.round(base * (1 + pct/100)) : 0;
+  const rangeTxt = (min && max)
+    ? `Rentang diizinkan: Rp ${min.toLocaleString('id-ID')} – Rp ${max.toLocaleString('id-ID')} (±${pct}%)`
+    : `Default HQ: Rp ${base.toLocaleString('id-ID')}`;
+
+  const harga = prompt(
+    `Adjust harga "${l.nama}"\n${rangeTxt}\n\nHarga sekarang: Rp ${parseFloat(l.harga).toLocaleString('id-ID')}\nMasukkan harga baru:`,
+    l.harga
+  );
+  if (harga === null) return;
+  const val = parseFloat(harga);
+  if (isNaN(val) || val < 0) { showToast('⚠️ Harga tidak valid','error'); return; }
+
+  const r = await fetch('layanan.php?action=override_harga', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+    body: JSON.stringify({ master_id: l.master_id, harga: val })
+  });
+  const d = await r.json();
+  if (d.success) { showToast('✅ Harga di-adjust!','success'); loadLayanan(); }
+  else showToast('❌ '+(d.error||'Gagal'),'error');
+}
 
 async function saveLayanan() {
   const nama  = document.getElementById('f_nama').value.trim();
