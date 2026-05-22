@@ -2,6 +2,7 @@
 $activePage = 'orders';
 define('ROOT', __DIR__);
 require_once ROOT . '/middleware/tenant_guard.php';
+require_once ROOT . '/core/Loyalty.php';
 require_once __DIR__ . '/components.php';
 $user = currentUser();
 
@@ -219,6 +220,16 @@ if ($action) {
 
             logAudit('update', 'orders', 'Update order ID: ' . $id);
             $db->commit();
+
+            // Loyalty: earn saat lunas (idempotent)
+            if ($sbayar === 'lunas') {
+                try {
+                    $prow = TenantQuery::rawOne("SELECT pelanggan_id,total FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid,$oid,$id]);
+                    if ($prow && $prow['pelanggan_id'])
+                        Loyalty::earnForTransaction($tid, $oid, (int)$id, (int)$prow['pelanggan_id'], (float)$prow['total']);
+                } catch (Throwable) {}
+            }
+
             echo json_encode(['success' => true]);
         } catch (Throwable $e) {
             $db->rollBack();
@@ -305,8 +316,20 @@ if ($action) {
 
             logAudit('payment', 'orders', 'Pembayaran order: ' . ($trx['no_order'] ?? '') . ', Rp ' . number_format($jumlah, 0, ',', '.'));
             $db->commit();
+
+            // Loyalty: earn saat lunas (idempotent)
+            $poinEarned = 0;
+            if ($new_status === 'lunas') {
+                try {
+                    $prow = TenantQuery::rawOne("SELECT pelanggan_id,total FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid,$oid,$id]);
+                    if ($prow && $prow['pelanggan_id'])
+                        $poinEarned = Loyalty::earnForTransaction($tid, $oid, (int)$id, (int)$prow['pelanggan_id'], (float)$prow['total']);
+                } catch (Throwable) {}
+            }
+
             echo json_encode([
                 'success'      => true,
+                'poin_earned'  => $poinEarned,
                 'status_bayar' => $new_status,
                 'dp'           => $new_dp,
                 'sisa'         => max($new_sisa, 0),

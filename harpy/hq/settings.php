@@ -160,6 +160,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notif'])) {
     }
 }
 
+// ── Simpan setting Loyalty ────────────────────────────
+$loyaltySuccess = false; $loyaltyError = null;
+$hasLoyalty = true;
+try { $db->query("SELECT loyalty_enabled FROM tenants LIMIT 1"); }
+catch (Throwable) { $hasLoyalty = false; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_loyalty'])) {
+    if (!hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
+        $loyaltyError = 'CSRF mismatch';
+    } elseif (!$hasLoyalty) {
+        $loyaltyError = 'Kolom loyalty belum ada. Jalankan loyalty_migration.sql dulu.';
+    } else {
+        $enabled = !empty($_POST['loyalty_enabled']) ? 1 : 0;
+        $rpPerPoin = max(1, (int)($_POST['loyalty_rupiah_per_poin'] ?? 1000));
+        $poinValue = max(1, (int)($_POST['loyalty_poin_value'] ?? 100));
+        try {
+            $db->prepare("UPDATE tenants SET loyalty_enabled=?, loyalty_rupiah_per_poin=?, loyalty_poin_value=? WHERE id=?")
+               ->execute([$enabled, $rpPerPoin, $poinValue, $tid]);
+            try { logAcc($db, $tid, $uid, "loyalty settings updated"); } catch (Throwable) {}
+            $loyaltySuccess = true;
+            $r = $db->prepare("SELECT * FROM tenants WHERE id=?"); $r->execute([$tid]); $hqTenant = $r->fetch();
+        } catch (Throwable $e) { $loyaltyError = 'Gagal: '.$e->getMessage(); }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
     if (!hash_equals(getCsrfToken(), $_POST['_csrf'] ?? '')) {
         $pwError = 'CSRF mismatch';
@@ -596,6 +621,44 @@ require __DIR__ . '/_layout_open.php';
   </div>
 
   <?php endif; // hqCanBilling — coin & billing ?>
+
+  <!-- LOYALTY POIN -->
+  <div class="panel">
+    <div class="panel-title">⭐ Program Loyalty Poin</div>
+    <div class="panel-sub">Pelanggan kumpulkan poin tiap transaksi lunas, bisa ditukar di outlet mana saja.</div>
+    <?php if ($loyaltySuccess): ?>
+      <div class="alert success">✓ Setting loyalty tersimpan.</div>
+    <?php elseif ($loyaltyError): ?>
+      <div class="alert error"><?= htmlspecialchars($loyaltyError) ?></div>
+    <?php endif; ?>
+    <?php if (!$hasLoyalty): ?>
+      <div class="alert error">⚠️ Jalankan <code>loyalty_migration.sql</code> dulu.</div>
+    <?php else: ?>
+    <form method="post">
+      <input type="hidden" name="_csrf" value="<?= getCsrfToken() ?>">
+      <input type="hidden" name="save_loyalty" value="1">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px;cursor:pointer">
+        <input type="checkbox" name="loyalty_enabled" value="1" style="width:auto" <?= !empty($hqTenant['loyalty_enabled'])?'checked':'' ?>>
+        Aktifkan program loyalty
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px">Rp belanja per 1 poin (earn)</label>
+          <input type="number" name="loyalty_rupiah_per_poin" min="1" value="<?= (int)($hqTenant['loyalty_rupiah_per_poin'] ?? 1000) ?>"
+                 style="width:100%;padding:9px 12px;border:1px solid #E5E9F2;border-radius:8px">
+          <small style="color:#9CA3AF">Contoh 1000 = tiap Rp1.000 dapat 1 poin</small>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:4px">Nilai 1 poin saat redeem (Rp)</label>
+          <input type="number" name="loyalty_poin_value" min="1" value="<?= (int)($hqTenant['loyalty_poin_value'] ?? 100) ?>"
+                 style="width:100%;padding:9px 12px;border:1px solid #E5E9F2;border-radius:8px">
+          <small style="color:#9CA3AF">Contoh 100 = 1 poin = Rp100 diskon</small>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">💾 Simpan Loyalty</button>
+    </form>
+    <?php endif; ?>
+  </div>
 
   <!-- ④ NOTIFIKASI PREFERENCE -->
   <div class="panel">

@@ -572,6 +572,7 @@ async function showDetail(id){
       <div class="info-row"><span class="lbl">Outlet pertama daftar</span><span class="val">${escapeHtml(p.registered_outlet_name || '-')}</span></div>
       <div class="info-row"><span class="lbl">Bergabung</span><span class="val">${fmtDate(p.created_at)}</span></div>
       <div class="info-row"><span class="lbl">Total Visit</span><span class="val">${p.total_visit_count || p.total_order || 0}x</span></div>
+      <div class="info-row"><span class="lbl">⭐ Poin Loyalty</span><span class="val" style="color:#0891B2">${Number(p.poin_balance||0).toLocaleString('id-ID')} poin</span></div>
       <div class="info-row"><span class="lbl">Status</span><span class="val">${p.is_active==1?'✓ Aktif':'⚠️ Non-aktif'}</span></div>
     </div>
 
