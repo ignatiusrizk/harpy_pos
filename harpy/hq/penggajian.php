@@ -72,18 +72,22 @@ if ($action === 'generate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $targetOutlet = (int)($d['outlet_id'] ?? 0); // 0 = semua
     $u = currentUser();
     try {
-        $oWhere = $targetOutlet > 0 ? " AND o.id=?" : "";
-        $oStmt = $db->prepare("SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active') $oWhere"
-                              . str_replace('o.id','id',''));
-        // (sederhana) ambil daftar outlet
         $oSql = "SELECT id FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active')" . ($targetOutlet>0?" AND id=?":"");
         $oStmt = $db->prepare($oSql);
         $oStmt->execute($targetOutlet>0 ? [$tid,$targetOutlet] : [$tid]);
         $outletIds = array_column($oStmt->fetchAll(PDO::FETCH_ASSOC), 'id');
 
-        $ins = $db->prepare("INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,status,created_by,created_at)
+        // Jumlah outlet aktif per karyawan → untuk split proporsional gaji
+        $cntStmt = $db->prepare("SELECT karyawan_id, COUNT(DISTINCT outlet_id) c
+                                   FROM hl_karyawan_outlet
+                                  WHERE tenant_id=? AND is_active=1 GROUP BY karyawan_id");
+        $cntStmt->execute([$tid]);
+        $outletCount = [];
+        foreach ($cntStmt->fetchAll(PDO::FETCH_ASSOC) as $row) $outletCount[(int)$row['karyawan_id']] = max(1,(int)$row['c']);
+
+        $ins = $db->prepare("INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,status,catatan,created_by,created_at)
                              VALUES (?,?,?,?,?,?,'pending',?,NOW())");
-        $created = 0;
+        $created = 0; $splitCount = 0;
         foreach ($outletIds as $oid) {
             $oid = (int)$oid;
             $users = $db->prepare("SELECT u.id, u.gaji_pokok FROM hl_users u
@@ -92,13 +96,17 @@ if ($action === 'generate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                    WHERE u.tenant_id=? AND u.is_active=1");
             $users->execute([$oid,$tid]);
             foreach ($users->fetchAll(PDO::FETCH_ASSOC) as $usr) {
-                $gp = (float)($usr['gaji_pokok'] ?? 0);
-                $ins->execute([$tid,$oid,(int)$usr['id'],$bulan,$gp,$gp, $u?(int)$u['id']:null]);
-                if ($ins->rowCount() > 0) $created++;
+                $uid2 = (int)$usr['id'];
+                $nOutlet = $outletCount[$uid2] ?? 1;
+                $gpFull = (float)($usr['gaji_pokok'] ?? 0);
+                $gp = $nOutlet > 1 ? round($gpFull / $nOutlet) : $gpFull;
+                $note = $nOutlet > 1 ? "Gaji di-split $nOutlet outlet (porsi 1/$nOutlet dari Rp ".number_format($gpFull,0,',','.').")" : null;
+                $ins->execute([$tid,$oid,$uid2,$bulan,$gp,$gp,$note, $u?(int)$u['id']:null]);
+                if ($ins->rowCount() > 0) { $created++; if ($nOutlet>1) $splitCount++; }
             }
         }
-        try { logAudit('generate_gaji','penggajian',"Generate slip massal $bulan ($created baru)"); } catch (Throwable) {}
-        echo json_encode(['ok'=>true, 'created'=>$created]);
+        try { logAudit('generate_gaji','penggajian',"Generate slip massal $bulan ($created baru, $splitCount split multi-outlet)"); } catch (Throwable) {}
+        echo json_encode(['ok'=>true, 'created'=>$created, 'split'=>$splitCount]);
     } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
     exit;
 }
@@ -232,7 +240,9 @@ async function doGenerate(bulan, oid){
     const r = await fetch('/ERP/harpy/hq/penggajian.php?action=generate', {method:'POST', body:JSON.stringify({bulan, outlet_id:oid})});
     const d = await r.json();
     if (d.error){ alert('⚠️ '+d.error); return; }
-    alert(`✅ ${d.created} slip gaji baru dibuat.`);
+    let msg = `✅ ${d.created} slip gaji baru dibuat.`;
+    if (d.split > 0) msg += `\n${d.split} karyawan multi-outlet → gaji di-split proporsional.`;
+    alert(msg);
     loadData();
   } catch(e){ alert('Gagal: '+e.message); }
 }

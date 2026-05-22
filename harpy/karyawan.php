@@ -142,13 +142,23 @@ if ($action) {
             [$oid, $tid]
         );
         $db    = Database::get();
+        // Jumlah outlet aktif per karyawan → split proporsional kalau multi-outlet
+        $cntRows = TenantQuery::raw("SELECT karyawan_id, COUNT(DISTINCT outlet_id) c
+                                       FROM hl_karyawan_outlet WHERE tenant_id=? AND is_active=1 GROUP BY karyawan_id", [$tid]);
+        $outletCount = [];
+        foreach ($cntRows as $row) $outletCount[(int)$row['karyawan_id']] = max(1,(int)$row['c']);
+
         $stmt  = $db->prepare(
-            "INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,created_by,created_at)
-             VALUES (?,?,?,?,?,?,?,NOW())"
+            "INSERT IGNORE INTO hl_gaji (tenant_id,outlet_id,user_id,bulan,gaji_pokok,total,catatan,created_by,created_at)
+             VALUES (?,?,?,?,?,?,?,?,NOW())"
         );
         foreach ($users as $u) {
-            $gp = floatval($u['gaji_pokok'] ?? 0);
-            $stmt->execute([$tid, $oid, $u['id'], $bulan, $gp, $gp, $user['id']]);
+            $uid2 = (int)$u['id'];
+            $nOutlet = $outletCount[$uid2] ?? 1;
+            $gpFull = floatval($u['gaji_pokok'] ?? 0);
+            $gp = $nOutlet > 1 ? round($gpFull / $nOutlet) : $gpFull;
+            $note = $nOutlet > 1 ? "Gaji di-split $nOutlet outlet (porsi 1/$nOutlet)" : null;
+            $stmt->execute([$tid, $oid, $uid2, $bulan, $gp, $gp, $note, $user['id']]);
         }
         logAudit('generate_gaji','karyawan','Generate gaji bulan: '.$bulan);
         echo json_encode(['success'=>true]); exit;
