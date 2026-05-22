@@ -29,18 +29,22 @@ if ($action === 'absensi') {
     try {
         $oFilter = $outletId > 0 ? " AND a.outlet_id=?" : "";
         // Rekap per karyawan: hadir/izin/sakit/alpha + telat
+        // Telat = jam_masuk melewati jam_buka outlet (default 08:00 kalau kolom belum ada)
         $sql = "SELECT u.id user_id, u.nama, a.outlet_id,
-                       (SELECT nama_outlet FROM outlets WHERE id=a.outlet_id) nama_outlet,
+                       o.nama_outlet,
                        COUNT(*) total_hari,
                        SUM(a.status='hadir') hadir,
                        SUM(a.status='izin')  izin,
                        SUM(a.status='sakit') sakit,
                        SUM(a.status='alpha') alpha,
-                       SUM(CASE WHEN a.status='hadir' AND a.jam_masuk > '08:00:00' THEN 1 ELSE 0 END) telat
+                       SUM(CASE WHEN a.status='hadir' AND a.jam_masuk IS NOT NULL
+                                 AND a.jam_masuk > COALESCE(o.jam_buka,'08:00:00')
+                                THEN 1 ELSE 0 END) telat
                   FROM hl_absensi a
                   JOIN hl_users u ON u.id=a.user_id AND u.tenant_id=a.tenant_id
+                  LEFT JOIN outlets o ON o.id=a.outlet_id
                  WHERE a.tenant_id=? AND a.tanggal BETWEEN ? AND ? $oFilter
-                 GROUP BY u.id, u.nama, a.outlet_id
+                 GROUP BY u.id, u.nama, a.outlet_id, o.nama_outlet
                  ORDER BY (telat + alpha + izin) DESC, u.nama";
         $params = [$tid, $start, $end];
         if ($outletId > 0) $params[] = $outletId;

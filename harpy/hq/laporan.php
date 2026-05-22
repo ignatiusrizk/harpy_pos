@@ -216,7 +216,9 @@ if ($action === 'data') {
         try {
             $s=$db->prepare("SELECT
                     COUNT(*) total_done,
-                    SUM(CASE WHEN estimasi_selesai IS NULL OR DATE(updated_at) <= estimasi_selesai THEN 1 ELSE 0 END) on_time
+                    SUM(CASE WHEN estimasi_selesai IS NULL
+                              OR COALESCE(tgl_selesai, DATE(updated_at)) <= estimasi_selesai
+                             THEN 1 ELSE 0 END) on_time
                   FROM hl_transaksi
                  WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?
                    AND status_proses IN ('siap','diambil','selesai')");

@@ -110,13 +110,17 @@ if ($action) {
             $sisa   = $total - $dp;
             $sbayar = $dp >= $total && $total > 0 ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
 
-            // Update header
+            // Update header.
+            // tgl_selesai distempel saat status pertama kali jadi siap/diambil/selesai.
             $stmt = $db->prepare("UPDATE hl_transaksi SET
                 status_proses=?, status_bayar=?,
                 catatan=?, catatan_internal=?,
                 metode_bayar=?, dp=?, sisa_bayar=?,
                 diskon=?, total=?, subtotal=?,
-                estimasi_selesai=?
+                estimasi_selesai=?,
+                tgl_selesai = CASE
+                    WHEN ? IN ('siap','diambil','selesai') AND tgl_selesai IS NULL THEN CURDATE()
+                    ELSE tgl_selesai END
                 WHERE tenant_id=? AND outlet_id=? AND id=?");
             $stmt->execute([
                 $data['status_proses'],
@@ -126,6 +130,7 @@ if ($action) {
                 $data['metode_bayar'] ?? 'cash',
                 $dp, $sisa, $diskon, $total, $subtotal > 0 ? $subtotal : null,
                 $data['estimasi'] ?: null,
+                $data['status_proses'],
                 $tid, $oid, $id
             ]);
 

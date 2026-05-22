@@ -39,6 +39,11 @@ $hasOpHours = true;
 try { $db->query("SELECT operating_hours FROM outlets LIMIT 1"); }
 catch (Throwable) { $hasOpHours = false; }
 
+// Cek kolom jam_buka (patokan telat absensi)
+$hasJamBuka = true;
+try { $db->query("SELECT jam_buka FROM outlets LIMIT 1"); }
+catch (Throwable) { $hasJamBuka = false; }
+
 // ── AJAX actions ──────────────────────────────────────
 if ($action) {
     header('Content-Type: application/json');
@@ -92,6 +97,7 @@ if ($action) {
         $kota    = substr(trim(strip_tags($d['kota'] ?? '')), 0, 100);
         $telepon = substr(preg_replace('/[^0-9+\-\s]/', '', $d['telepon'] ?? ''), 0, 20);
         $opHours = substr(trim(strip_tags($d['operating_hours'] ?? '')), 0, 100);
+        $jamBuka = preg_match('/^\d{2}:\d{2}$/', $d['jam_buka'] ?? '') ? $d['jam_buka'].':00' : null;
         $setMain = !empty($d['is_main']);
 
         if (!$oid)  { echo json_encode(['error'=>'ID outlet invalid']); exit; }
@@ -112,6 +118,10 @@ if ($action) {
             if ($hasOpHours) {
                 $cols[] = 'operating_hours=?';
                 $args[] = $opHours ?: null;
+            }
+            if ($hasJamBuka && $jamBuka) {
+                $cols[] = 'jam_buka=?';
+                $args[] = $jamBuka;
             }
             $args[] = $oid;
             $args[] = $tid;
@@ -300,6 +310,12 @@ require __DIR__ . '/_layout_open.php';
         <input type="text" id="edOpHours" maxlength="100" placeholder="cth: Senin–Sabtu 08:00–21:00, Minggu 09:00–18:00">
       </div>
       <?php endif; ?>
+      <?php if ($hasJamBuka): ?>
+      <div>
+        <label>Jam Buka <small style="color:#9CA3AF;font-weight:400">(patokan keterlambatan absensi)</small></label>
+        <input type="time" id="edJamBuka" value="08:00">
+      </div>
+      <?php endif; ?>
       <div>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
           <input type="checkbox" id="edMain" style="width:auto;margin:0">
@@ -317,6 +333,7 @@ require __DIR__ . '/_layout_open.php';
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const hasOpHours = <?= $hasOpHours ? 'true' : 'false' ?>;
+const hasJamBuka = <?= $hasJamBuka ? 'true' : 'false' ?>;
 const coinMode = <?= json_encode($coinMode) ?>;
 const supportWa = <?= json_encode($supportWa) ?>;
 
@@ -408,6 +425,7 @@ async function openEdit(id){
   document.getElementById('edTelepon').value = o.telepon || '';
   document.getElementById('edAlamat').value = o.alamat || '';
   if (hasOpHours) document.getElementById('edOpHours').value = o.operating_hours || '';
+  if (hasJamBuka) document.getElementById('edJamBuka').value = (o.jam_buka || '08:00:00').slice(0,5);
   document.getElementById('edMain').checked = parseInt(o.is_main) === 1;
   document.getElementById('editAlert').innerHTML = '';
   openModal('editModal');
@@ -425,6 +443,7 @@ async function submitEdit(){
     is_main: document.getElementById('edMain').checked ? 1 : 0,
   };
   if (hasOpHours) data.operating_hours = document.getElementById('edOpHours').value.trim();
+  if (hasJamBuka) data.jam_buka = document.getElementById('edJamBuka').value;
   if (!data.nama_outlet) { alertEl.innerHTML = '<div class="alert error">Nama outlet wajib diisi</div>'; return; }
 
   const r = await fetch('/ERP/harpy/hq/outlet.php?action=update', {
