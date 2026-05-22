@@ -5,6 +5,7 @@ require_once ROOT . '/middleware/tenant_guard.php';
 require_once ROOT . '/core/Loyalty.php';
 require_once __DIR__ . '/components.php';
 $user = currentUser();
+$loyaltyCfg = Loyalty::config((int)TenantResolver::id());
 
 // ── API HANDLER ───────────────────────────────────────
 $action = $_GET['action'] ?? '';
@@ -79,11 +80,9 @@ if ($action) {
             foreach ($items as $item) {
                 $subtotal += floatval($item['jumlah']) * floatval($item['harga_satuan']);
             }
-            $diskon   = floatval($data['diskon'] ?? 0);
-            $total    = $subtotal - $diskon;
-            $dp       = floatval($data['dp'] ?? 0);
-            $sisa     = $total - $dp;
-            $status_b = $dp >= $total ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
+            $diskon     = floatval($data['diskon'] ?? 0);
+            $redeemPoin = max(0, (int)($data['redeem_poin'] ?? 0));
+            // total/dp/status dihitung SETELAH pel_id + redeem diketahui
 
             // Upsert pelanggan — TENANT-SCOPED (lintas outlet)
             // Lookup by tenant_id + telepon (HP unique per tenant)
@@ -117,6 +116,33 @@ if ($action) {
                 }
             }
 
+            // ── Loyalty redeem (poin → diskon) — hitung nilai dulu, deduct setelah insert ──
+            $redeemValue = 0;
+            if ($redeemPoin > 0 && $pel_id && Loyalty::isEnabled($tid)) {
+                $cfg = Loyalty::config($tid);
+                // Clamp by saldo poin + by rupiah (jangan melebihi subtotal - diskon manual)
+                $balPoin   = Loyalty::balance($tid, (int)$pel_id);
+                $maxRupiah = max(0, $subtotal - $diskon);
+                $maxPoin   = min($balPoin, (int)floor($maxRupiah / $cfg['poin_value']));
+                $redeemPoin = min($redeemPoin, $maxPoin);
+                if ($redeemPoin > 0) {
+                    $redeemValue = $redeemPoin * $cfg['poin_value'];
+                    if ($catatan === '') $catatan = "Redeem $redeemPoin poin (-Rp " . number_format($redeemValue,0,',','.') . ")";
+                    else $catatan .= " · Redeem $redeemPoin poin (-Rp " . number_format($redeemValue,0,',','.') . ")";
+                } else {
+                    $redeemPoin = 0;
+                }
+            } else {
+                $redeemPoin = 0;
+            }
+
+            // Total final (diskon manual + nilai redeem)
+            $diskonTotal = $diskon + $redeemValue;
+            $total    = max(0, $subtotal - $diskonTotal);
+            $dp       = floatval($data['dp'] ?? 0);
+            $sisa     = $total - $dp;
+            $status_b = $dp >= $total ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
+
             // Insert transaksi header
             $stmt = $db->prepare(
                 "INSERT INTO hl_transaksi
@@ -127,11 +153,16 @@ if ($action) {
             );
             $stmt->execute([
                 $tid, $oid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
-                $subtotal, $diskon, $total, $dp, $sisa,
+                $subtotal, $diskonTotal, $total, $dp, $sisa,
                 $data['metode_bayar'] ?? 'cash', $status_b,
                 'masuk', $estimasi, $catatan, $user['id']
             ]);
             $trx_id = $db->lastInsertId();
+
+            // Deduct poin redeem (dalam transaksi yang sama) — transaksi_id terisi
+            if ($redeemPoin > 0 && $pel_id) {
+                Loyalty::redeemInTx($db, $tid, $oid, (int)$pel_id, $redeemPoin, (int)$trx_id, $user['id']);
+            }
 
             // Insert items
             $istmt = $db->prepare(
@@ -189,7 +220,8 @@ if ($action) {
             }
 
             echo json_encode(['success'=>true, 'no_order'=>$no, 'id'=>$trx_id,
-                'total'=>$total, 'sisa'=>$sisa, 'poin_earned'=>$poinEarned]);
+                'total'=>$total, 'sisa'=>$sisa, 'poin_earned'=>$poinEarned,
+                'poin_redeemed'=>$redeemPoin, 'redeem_value'=>$redeemValue]);
         } catch (Throwable $e) {
             $db->rollBack();
             echo json_encode(['error' => $e->getMessage()]);
@@ -496,6 +528,22 @@ textarea{resize:vertical;min-height:64px}
               <button type="button" onclick="removeVoucher()" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;margin-top:4px;padding:0">✕ Hapus kode</button>
             </div>
 
+            <!-- LOYALTY REDEEM -->
+            <div id="loyaltyBox" style="display:none;background:#F0FDFB;border:1px solid #B6F0E6;border-radius:8px;padding:11px 13px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="font-size:13px;font-weight:700;color:#0F1C3A">⭐ Poin Loyalty</span>
+                <span style="font-size:12px;color:#0891B2;font-weight:700"><span id="loyaltyBal">0</span> poin</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:flex-end">
+                <div class="form-group" style="flex:1;margin-bottom:0">
+                  <label style="font-size:11px">Tukar Poin (jadi diskon)</label>
+                  <input type="number" id="f_redeem_poin" value="0" min="0" oninput="recalc()"/>
+                </div>
+                <button type="button" class="btn btn-teal-sm" onclick="redeemMax()" style="margin-bottom:1px;white-space:nowrap">Max</button>
+              </div>
+              <div id="redeemInfo" style="font-size:11px;color:#0891B2;margin-top:5px;display:none"></div>
+            </div>
+
             <div class="form-row cols3">
               <div class="form-group">
                 <label>Diskon (Rp)</label>
@@ -600,6 +648,8 @@ let items = [];
 let layananAll = [];
 let lastSaved  = null;
 let acTimeout  = null;
+const LOYALTY = <?= json_encode(['enabled'=>$loyaltyCfg['enabled'],'poin_value'=>$loyaltyCfg['poin_value'],'rupiah_per_poin'=>$loyaltyCfg['rupiah_per_poin']]) ?>;
+let currentPelangganPoin = 0;
 
 function localDateStr(d) {
   const dt = d || new Date();
@@ -702,12 +752,27 @@ function renderItems() {
 function recalc() {
   const subtotal = items.reduce((s,i) => s + i.jumlah*i.harga_satuan, 0);
   const diskon   = parseFloat(document.getElementById('f_diskon').value)||0;
-  const total    = Math.max(subtotal - diskon, 0);
+
+  // Loyalty redeem → diskon
+  let redeemValue = 0, redeemPoin = 0;
+  if (LOYALTY.enabled && currentPelangganId) {
+    redeemPoin = parseInt(document.getElementById('f_redeem_poin')?.value || 0) || 0;
+    const maxByRp = Math.floor(Math.max(0, subtotal-diskon)/LOYALTY.poin_value);
+    redeemPoin = Math.max(0, Math.min(redeemPoin, currentPelangganPoin, maxByRp));
+    redeemValue = redeemPoin * LOYALTY.poin_value;
+    const ri = document.getElementById('redeemInfo');
+    if (ri) {
+      if (redeemPoin > 0) { ri.style.display='block'; ri.textContent = `−Rp ${redeemValue.toLocaleString('id-ID')} dari ${redeemPoin} poin`; }
+      else ri.style.display='none';
+    }
+  }
+
+  const total    = Math.max(subtotal - diskon - redeemValue, 0);
   const dp       = parseFloat(document.getElementById('f_dp').value)||0;
   const sisa     = total - dp;
 
   document.getElementById('sumSubtotal').textContent = 'Rp ' + subtotal.toLocaleString('id-ID');
-  document.getElementById('sumDiskon').textContent   = diskon.toLocaleString('id-ID');
+  document.getElementById('sumDiskon').textContent   = (diskon + redeemValue).toLocaleString('id-ID');
   document.getElementById('sumTotal').textContent    = 'Rp ' + total.toLocaleString('id-ID');
   document.getElementById('sumDP').textContent       = 'Rp ' + dp.toLocaleString('id-ID');
   document.getElementById('sumSisa').textContent     = 'Rp ' + sisa.toLocaleString('id-ID');
@@ -736,8 +801,8 @@ function searchPelanggan(q) {
     const data = await res.json();
     if (!data.length) { list.classList.remove('open'); return; }
     list.innerHTML = data.map(p => `
-      <div class="ac-item" onclick="selectPelanggan(${p.id},'${esc(p.nama)}','${esc(p.telepon||'')}')">
-        <div>${esc(p.nama)}</div>
+      <div class="ac-item" onclick="selectPelanggan(${p.id},'${esc(p.nama)}','${esc(p.telepon||'')}',${parseInt(p.poin_balance||0)})">
+        <div>${esc(p.nama)}${LOYALTY.enabled && (p.poin_balance>0)?` <span style="font-size:11px;color:#0891B2">⭐${p.poin_balance}</span>`:''}</div>
         <div class="ac-sub">${p.telepon||'No telepon'} · ${p.tipe} · ${p.total_order} order</div>
       </div>`).join('');
     list.classList.add('open');
@@ -747,14 +812,37 @@ function searchPelanggan(q) {
 let currentPelangganId = null;
 let aiChatOpen = false;
 
-function selectPelanggan(id, nama, telp) {
+function selectPelanggan(id, nama, telp, poin) {
   currentPelangganId = id;
+  currentPelangganPoin = parseInt(poin||0);
   document.getElementById('f_nama').value    = nama;
   document.getElementById('f_telepon').value = telp;
   document.getElementById('acList').classList.remove('open');
   document.getElementById('aiFloating').style.display = 'block';
   document.getElementById('aiStatusText').textContent = nama;
   document.getElementById('aiNotifDot').style.display = 'block';
+  updateLoyaltyBox();
+}
+
+function updateLoyaltyBox(){
+  const box = document.getElementById('loyaltyBox');
+  if (!box) return;
+  if (LOYALTY.enabled && currentPelangganId && currentPelangganPoin > 0) {
+    document.getElementById('loyaltyBal').textContent = currentPelangganPoin.toLocaleString('id-ID');
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+    const rp = document.getElementById('f_redeem_poin'); if (rp) rp.value = 0;
+  }
+}
+
+function redeemMax(){
+  const subtotal = items.reduce((s,i)=>s+i.jumlah*i.harga_satuan,0);
+  const diskon   = parseFloat(document.getElementById('f_diskon').value)||0;
+  const maxByRp  = Math.floor(Math.max(0, subtotal-diskon) / LOYALTY.poin_value);
+  const maxPoin  = Math.min(currentPelangganPoin, maxByRp);
+  document.getElementById('f_redeem_poin').value = maxPoin;
+  recalc();
 }
 
 function toggleAIChat() {
@@ -833,6 +921,7 @@ async function saveTransaksi() {
     telepon:        document.getElementById('f_telepon').value,
     catatan:        document.getElementById('f_catatan').value,
     diskon:         document.getElementById('f_diskon').value,
+    redeem_poin:    (LOYALTY.enabled && currentPelangganId) ? (parseInt(document.getElementById('f_redeem_poin')?.value||0)||0) : 0,
     dp:             document.getElementById('f_dp').value,
     metode_bayar:   document.getElementById('f_metode').value,
     items
@@ -981,7 +1070,9 @@ function resetForm() {
   document.getElementById('f_tanggal').value=today;
   const est=new Date(); est.setDate(est.getDate()+2);
   document.getElementById('f_estimasi').value=localDateStr(est);
-  currentPelangganId=null;
+  currentPelangganId=null; currentPelangganPoin=0;
+  const rp=document.getElementById('f_redeem_poin'); if(rp) rp.value='0';
+  updateLoyaltyBox();
 }
 
 function formatDate(d) {
