@@ -16,7 +16,7 @@ $_ownerNama  = $hqUser['nama'] ?? ($ownerNama ?? 'Owner');
 $_tenantNama = $hqTenant['nama_perusahaan'] ?? ($hqTenant['nama_outlet'] ?? 'Kantor Pusat');
 
 // Group active state
-$_inTim = in_array($_aPage, ['hq-karyawan','hq-mutasi','hq-roles'], true);
+$_inTim = in_array($_aPage, ['hq-karyawan','hq-mutasi','hq-sdm','hq-roles'], true);
 $_inCrm = in_array($_aPage, ['hq-pelanggan','hq-promo'], true);
 
 // Switch button visibility (owner & manager only)
@@ -81,6 +81,8 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
              class="hq-side-link <?= $_aPage === 'hq-karyawan' ? 'active' : '' ?>">Karyawan</a>
           <a href="/ERP/harpy/hq/mutasi.php"
              class="hq-side-link <?= $_aPage === 'hq-mutasi' ? 'active' : '' ?>">Riwayat Mutasi</a>
+          <a href="/ERP/harpy/hq/sdm.php"
+             class="hq-side-link <?= $_aPage === 'hq-sdm' ? 'active' : '' ?>">SDM Analytics</a>
           <a href="/ERP/harpy/hq/roles.php"
              class="hq-side-link <?= $_aPage === 'hq-roles' ? 'active' : '' ?>">Role & Akses</a>
         </div>
