@@ -111,6 +111,46 @@ if (($_GET['action'] ?? '') === 'ai_briefing') {
     exit;
 }
 
+// ── AJAX: live metrics (polling real-time) ───────────
+if (($_GET['action'] ?? '') === 'live') {
+    header('Content-Type: application/json');
+    $today = date('Y-m-d');
+    try {
+        $tg = $db->prepare("SELECT COALESCE(SUM(total),0) omset, COUNT(*) cnt
+                              FROM hl_transaksi WHERE tenant_id=? AND DATE(tanggal)=?");
+        $tg->execute([$tid, $today]); $tgr = $tg->fetch();
+
+        $aktif=0;$siap=0;$selesai=0;
+        $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses NOT IN ('siap','selesai','batal','dibatalkan')");
+        $s->execute([$tid]); $aktif=(int)$s->fetchColumn();
+        $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses='siap'");
+        $s->execute([$tid]); $siap=(int)$s->fetchColumn();
+        $s=$db->prepare("SELECT COUNT(*) FROM hl_transaksi WHERE tenant_id=? AND status_proses IN ('diambil','selesai') AND DATE(tanggal)=?");
+        $s->execute([$tid,$today]); $selesai=(int)$s->fetchColumn();
+
+        // Per outlet omset hari ini
+        $outletsLive = [];
+        $os=$db->prepare("SELECT o.id, COALESCE(SUM(t.total),0) omset, COUNT(t.id) cnt
+                            FROM outlets o
+                            LEFT JOIN hl_transaksi t ON t.outlet_id=o.id AND t.tenant_id=o.tenant_id AND DATE(t.tanggal)=?
+                           WHERE o.tenant_id=? AND o.status IN ('trial','grace','active')
+                           GROUP BY o.id");
+        $os->execute([$today, $tid]);
+        foreach ($os->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $outletsLive[(int)$r['id']] = ['omset'=>(int)$r['omset'], 'cnt'=>(int)$r['cnt']];
+        }
+
+        echo json_encode([
+            'ok'=>true,
+            'omset_today'=>(int)$tgr['omset'], 'order_today'=>(int)$tgr['cnt'],
+            'order_aktif'=>$aktif, 'pipeline'=>['proses'=>$aktif,'siap'=>$siap,'selesai'=>$selesai],
+            'outlets'=>$outletsLive,
+            'ts'=>date('H:i:s'),
+        ]);
+    } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
+    exit;
+}
+
 // ── AJAX: chart data per outlet untuk N hari ─────────
 if (($_GET['action'] ?? '') === 'chart_data') {
     header('Content-Type: application/json');
@@ -480,7 +520,11 @@ require __DIR__ . '/_layout_open.php';
   @media(max-width:640px){.rt-row{grid-template-columns:32px 1fr auto}.rt-delta{grid-column:2/-1;text-align:left}}
   .pipeline{background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 1px 6px rgba(0,0,0,.05);margin-bottom:18px}
   .pipeline-title{font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:14px}
+  .pipeline-title{display:flex;align-items:center}
+  @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.25}}
   .pipeline-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .flash{animation:flashUpd .8s ease}
+  @keyframes flashUpd{0%{background:#FEF9C3}100%{background:transparent}}
   .pl-stage{flex:1;min-width:140px;text-align:center;padding:16px 12px;border-radius:10px;background:#F9FAFB;border:1px solid #F0F1F4}
   .pl-stage.proses{background:linear-gradient(135deg,#EFF6FF,#fff);border-color:#BFDBFE}
   .pl-stage.siap{background:linear-gradient(135deg,#F0FDF4,#fff);border-color:#BBF7D0}
@@ -591,12 +635,12 @@ require __DIR__ . '/_layout_open.php';
   <!-- 4 METRIC CARDS -->
   <div class="metrics">
     <div class="metric">
-      <div class="metric-num">Rp <?= number_format((int)$todayRow['omset_today'], 0, ',', '.') ?></div>
+      <div class="metric-num" id="liveOmset">Rp <?= number_format((int)$todayRow['omset_today'], 0, ',', '.') ?></div>
       <div class="metric-label">Omset Hari Ini</div>
-      <div class="metric-sub">Lintas <?= $outletCnt ?> outlet · Terkumpul Rp <?= number_format((int)$todayRow['terkumpul'], 0, ',', '.') ?></div>
+      <div class="metric-sub">Lintas <?= $outletCnt ?> outlet · <span id="liveOrderToday"><?= number_format((int)$todayRow['order_today']) ?></span> order</div>
     </div>
     <div class="metric blue">
-      <div class="metric-num"><?= number_format($orderAktif) ?></div>
+      <div class="metric-num" id="liveAktif"><?= number_format($orderAktif) ?></div>
       <div class="metric-label">Order Aktif</div>
       <div class="metric-sub">Masih dalam proses pengerjaan</div>
     </div>
@@ -614,20 +658,25 @@ require __DIR__ . '/_layout_open.php';
 
   <!-- PIPELINE KONSOLIDASI -->
   <div class="pipeline">
-    <div class="pipeline-title">📦 Pipeline Order Lintas Outlet</div>
+    <div class="pipeline-title">📦 Pipeline Order Lintas Outlet
+      <span id="liveDot" style="font-size:11px;font-weight:400;color:#10B981;margin-left:auto">
+        <span style="display:inline-block;width:7px;height:7px;background:#10B981;border-radius:50%;animation:livePulse 2s infinite;vertical-align:middle"></span>
+        live · <span id="liveTs">—</span>
+      </span>
+    </div>
     <div class="pipeline-flow">
       <div class="pl-stage proses">
-        <div class="pl-num"><?= number_format($pipeline['proses']) ?></div>
+        <div class="pl-num" id="livePilProses"><?= number_format($pipeline['proses']) ?></div>
         <div class="pl-label">🔄 Dalam Proses</div>
       </div>
       <div class="pl-arrow">→</div>
       <div class="pl-stage siap">
-        <div class="pl-num"><?= number_format($pipeline['siap']) ?></div>
+        <div class="pl-num" id="livePilSiap"><?= number_format($pipeline['siap']) ?></div>
         <div class="pl-label">✅ Siap Diambil</div>
       </div>
       <div class="pl-arrow">→</div>
       <div class="pl-stage selesai">
-        <div class="pl-num"><?= number_format($pipeline['selesai_today']) ?></div>
+        <div class="pl-num" id="livePilSelesai"><?= number_format($pipeline['selesai_today']) ?></div>
         <div class="pl-label">📦 Selesai Hari Ini</div>
       </div>
     </div>
@@ -797,8 +846,8 @@ require __DIR__ . '/_layout_open.php';
       </div>
 
       <div class="ocard-main">
-        <div class="ocard-main-num">Rp <?= number_format((int)$o['omset_today'], 0, ',', '.') ?></div>
-        <div class="ocard-main-label">OMSET HARI INI · <?= (int)$o['order_today'] ?> order</div>
+        <div class="ocard-main-num" data-live-omset="<?= (int)$o['id'] ?>">Rp <?= number_format((int)$o['omset_today'], 0, ',', '.') ?></div>
+        <div class="ocard-main-label">OMSET HARI INI · <span data-live-order="<?= (int)$o['id'] ?>"><?= (int)$o['order_today'] ?></span> order</div>
       </div>
 
       <div class="ocard-stats">
@@ -932,6 +981,35 @@ function setChartType(type, ev){
   currentChartType = type;
   loadChart();
 }
+
+// ── Real-time polling (30 detik) ──
+const fmtRpLive = n => 'Rp ' + Number(n||0).toLocaleString('id-ID');
+function setLive(el, val){
+  if (!el) return;
+  if (el.textContent !== val){ el.textContent = val; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+}
+async function pollLive(){
+  try {
+    const r = await fetch('/ERP/harpy/hq/dashboard.php?action=live');
+    const d = await r.json();
+    if (!d.ok) return;
+    setLive(document.getElementById('liveOmset'), fmtRpLive(d.omset_today));
+    setLive(document.getElementById('liveOrderToday'), Number(d.order_today).toLocaleString('id-ID'));
+    setLive(document.getElementById('liveAktif'), Number(d.order_aktif).toLocaleString('id-ID'));
+    setLive(document.getElementById('livePilProses'), Number(d.pipeline.proses).toLocaleString('id-ID'));
+    setLive(document.getElementById('livePilSiap'), Number(d.pipeline.siap).toLocaleString('id-ID'));
+    setLive(document.getElementById('livePilSelesai'), Number(d.pipeline.selesai).toLocaleString('id-ID'));
+    const ts = document.getElementById('liveTs'); if (ts) ts.textContent = d.ts;
+    // Per outlet
+    Object.entries(d.outlets || {}).forEach(([oid, v]) => {
+      setLive(document.querySelector(`[data-live-omset="${oid}"]`), fmtRpLive(v.omset));
+      setLive(document.querySelector(`[data-live-order="${oid}"]`), Number(v.cnt).toLocaleString('id-ID'));
+    });
+  } catch(e){}
+}
+setInterval(pollLive, 30000);
+// Pause polling saat tab tidak aktif, resume + refresh saat balik
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollLive(); });
 
 async function loadChart(){
   const r = await fetch(`/ERP/harpy/hq/dashboard.php?action=chart_data&days=${currentDays}`);
