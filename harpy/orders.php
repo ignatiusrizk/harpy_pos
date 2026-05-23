@@ -24,6 +24,7 @@ if ($action) {
         $bayar   = $_GET['bayar'] ?? '';
         $dari    = $_GET['dari'] ?? '';
         $sampai  = $_GET['sampai'] ?? '';
+        $sumber  = $_GET['sumber'] ?? '';      // '' / 'walkin' / 'drop' / 'drop:<id>'
         $page    = max(1, intval($_GET['page'] ?? 1));
         $limit   = 25;
         $offset  = ($page - 1) * $limit;
@@ -37,6 +38,12 @@ if ($action) {
         if ($bayar)  { $where[] = "t.status_bayar=?";  $params[] = $bayar; }
         if ($dari)   { $where[] = "DATE(t.tanggal) >= ?"; $params[] = $dari; }
         if ($sampai) { $where[] = "DATE(t.tanggal) <= ?"; $params[] = $sampai; }
+        if ($sumber === 'walkin')      { $where[] = "t.drop_point_id IS NULL"; }
+        elseif ($sumber === 'drop')    { $where[] = "t.drop_point_id IS NOT NULL"; }
+        elseif (strpos($sumber, 'drop:') === 0) {
+            $dpId = (int)substr($sumber, 5);
+            if ($dpId > 0) { $where[] = "t.drop_point_id = ?"; $params[] = $dpId; }
+        }
 
         // Filter berdasarkan permission
         if ($filter === 'own') { $where[] = "t.created_by=?"; $params[] = $user['id']; }
@@ -51,7 +58,8 @@ if ($action) {
         $whereStr = implode(' AND ', $where);
 
         $sql = "SELECT t.*,
-            (SELECT GROUP_CONCAT(nama_layanan SEPARATOR ', ') FROM hl_transaksi_item WHERE transaksi_id=t.id AND tenant_id=t.tenant_id AND outlet_id=t.outlet_id) as layanan_list
+            (SELECT GROUP_CONCAT(nama_layanan SEPARATOR ', ') FROM hl_transaksi_item WHERE transaksi_id=t.id AND tenant_id=t.tenant_id AND outlet_id=t.outlet_id) as layanan_list,
+            (SELECT nama_mitra FROM hl_drop_points WHERE id=t.drop_point_id) as nama_mitra
             FROM hl_transaksi t
             WHERE $whereStr
             ORDER BY $sortCol $dir
@@ -690,6 +698,11 @@ textarea{resize:vertical;min-height:64px}
         <option value="dp">DP</option>
         <option value="lunas">Lunas</option>
       </select>
+      <select id="filterSumber" onchange="loadOrders(1)" title="Sumber order">
+        <option value="">Semua Sumber</option>
+        <option value="walkin">🏪 Walk-in</option>
+        <option value="drop">📦 Drop Point</option>
+      </select>
       <input type="date" id="filterDari" onchange="loadOrders(1)" title="Dari tanggal"
         style="width:auto;padding:9px 10px;border:1.5px solid rgba(27,45,90,.14);border-radius:var(--r);font-family:var(--font);font-size:13px;background:var(--white);outline:none"/>
       <input type="date" id="filterSampai" onchange="loadOrders(1)" title="Sampai tanggal"
@@ -924,10 +937,11 @@ async function loadOrders(page=1) {
   const by     = document.getElementById('filterBayar').value;
   const dari   = document.getElementById('filterDari').value;
   const sampai = document.getElementById('filterSampai').value;
+  const sumber = document.getElementById('filterSumber')?.value || '';
 
   document.getElementById('tableBody').innerHTML = '<tr><td colspan="10"><div class="loading">⏳ Memuat...</div></td></tr>';
 
-  const r = await fetch(`orders.php?action=list&q=${encodeURIComponent(q)}&status=${st}&bayar=${by}&dari=${dari}&sampai=${sampai}&page=${page}&sort=${ordersSort}&dir=${ordersSortDir}`);
+  const r = await fetch(`orders.php?action=list&q=${encodeURIComponent(q)}&status=${st}&bayar=${by}&dari=${dari}&sampai=${sampai}&sumber=${sumber}&page=${page}&sort=${ordersSort}&dir=${ordersSortDir}`);
   const d = await r.json();
 
   if (!d.data?.length) {
@@ -949,7 +963,9 @@ async function loadOrders(page=1) {
     return '<tr onclick="openDetail(' + row.id + ')">'
       + '<td><span class="td-no">' + row.no_order + '</span></td>'
       + '<td>' + fmtDate(row.tanggal) + '</td>'
-      + '<td><div class="td-nama">' + esc(row.nama_pelanggan) + '</div>' + telp + '</td>'
+      + '<td><div class="td-nama">' + esc(row.nama_pelanggan)
+      +   (row.nama_mitra ? ' <span style="font-size:9px;font-weight:700;background:#FEF3C7;color:#92400E;padding:2px 7px;border-radius:100px;margin-left:4px">📦 ' + esc(row.nama_mitra) + '</span>' : '')
+      +   '</div>' + telp + '</td>'
       + '<td><div class="td-layanan">' + esc(row.layanan_list||'-') + '</div></td>'
       + '<td><span class="badge b-' + row.status_proses + '">' + statusLabel(row.status_proses) + '</span></td>'
       + '<td><span class="badge b-' + row.status_bayar + '">' + bayarLabel(row.status_bayar) + '</span></td>'
@@ -996,6 +1012,7 @@ function resetFilter() {
   document.getElementById('filterSampai').value = '';
   document.getElementById('filterStatus').value = '';
   document.getElementById('filterBayar').value  = '';
+  const fs = document.getElementById('filterSumber'); if (fs) fs.value = '';
   document.getElementById('searchInput').value  = '';
   loadOrders(1);
 }

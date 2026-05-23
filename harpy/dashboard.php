@@ -212,7 +212,26 @@ if ($action) {
             [$tid, $oid]
         );
 
-        echo json_encode(['siap' => $siap, 'mepet' => $mepet, 'piutang' => $piutang]);
+        // Mitra drop point yang inaktif >7 hari (tidak ada order)
+        $mitraInaktif = [];
+        try {
+            $mitraInaktif = TenantQuery::raw(
+                "SELECT dp.id, dp.nama_mitra, dp.wa,
+                        (SELECT MAX(created_at) FROM hl_transaksi
+                          WHERE tenant_id=dp.tenant_id AND drop_point_id=dp.id) AS last_order
+                   FROM hl_drop_points dp
+                  WHERE dp.tenant_id=? AND dp.outlet_id=? AND dp.status='aktif'
+                    AND NOT EXISTS (
+                       SELECT 1 FROM hl_transaksi t
+                        WHERE t.tenant_id=dp.tenant_id AND t.drop_point_id=dp.id
+                          AND t.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    )
+                  ORDER BY dp.nama_mitra",
+                [$tid, $oid]
+            );
+        } catch (Throwable) {}
+
+        echo json_encode(['siap' => $siap, 'mepet' => $mepet, 'piutang' => $piutang, 'mitra_inaktif' => $mitraInaktif]);
         exit;
     }
 
@@ -1027,7 +1046,17 @@ if ($_dashRole === 'kasir'):
         <div class="hl-card-body" style="padding:12px" id="listPiutang"><div class="hl-loading">⏳</div></div>
       </div>
     </div>
-  </div>
+
+    <!-- MITRA DROP POINT INAKTIF -->
+    <div id="mitraInaktifWrap" style="display:none;margin-top:16px">
+      <div class="hl-card" style="border-left:4px solid #F59E0B">
+        <div class="hl-card-header">
+          <div class="alert-title">📦 Mitra Drop Point Tidak Aktif &gt;7 Hari</div>
+          <a href="droppoint_manager.php" style="font-size:12px;color:var(--teal);text-decoration:none">Kelola mitra</a>
+        </div>
+        <div class="hl-card-body" style="padding:12px" id="mitraInaktifList"></div>
+      </div>
+    </div>
 
 </div><!-- /hl-main -->
 
@@ -1126,6 +1155,25 @@ async function loadAlerts(){
   document.getElementById('listMepet').innerHTML=d.mepet.length?d.mepet.map(o=>alertRow(o,'mepet')).join(''):'<div class="hl-empty" style="padding:16px">Semua order on-track</div>';
   document.getElementById('badgePiutang').textContent=d.piutang.length;
   document.getElementById('listPiutang').innerHTML=d.piutang.length?d.piutang.map(o=>alertRow(o,'piutang')).join(''):'<div class="hl-empty" style="padding:16px">Tidak ada piutang tertunggak</div>';
+
+  // Mitra drop point inaktif >7 hari
+  const wrapMI = document.getElementById('mitraInaktifWrap');
+  if (wrapMI && Array.isArray(d.mitra_inaktif) && d.mitra_inaktif.length) {
+    wrapMI.style.display = 'block';
+    document.getElementById('mitraInaktifList').innerHTML = d.mitra_inaktif.map(m => {
+      const last = m.last_order ? new Date(m.last_order).toLocaleDateString('id-ID',{day:'2-digit',month:'short'}) : 'belum pernah';
+      const wa = m.wa ? (''+m.wa).replace(/[^0-9]/g,'').replace(/^0/,'62') : '';
+      const waLink = wa ? `<a class="alert-wa" target="_blank" href="https://wa.me/${wa.startsWith('62')?wa:'62'+wa}?text=${encodeURIComponent('Halo '+m.nama_mitra+', sudah lama tidak ada order dari titik kamu. Semua baik2 saja? 🙏')}">💬 WA</a>` : '';
+      return `<div class="alert-row">
+        <div style="flex:1;min-width:0">
+          <div class="alert-nama">📦 ${m.nama_mitra}</div>
+          <div class="alert-meta">Order terakhir: ${last}</div>
+        </div>${waLink}
+      </div>`;
+    }).join('');
+  } else if (wrapMI) {
+    wrapMI.style.display = 'none';
+  }
 }
 
 function alertRow(o,tipe){
