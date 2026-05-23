@@ -77,6 +77,8 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                 // Absensi: kasir NOT included per brief 6.3 (kasir clock via dashboard ringkas)
                 'absensi'  => ['label'=>'Absensi',  'url'=>'absensi.php',
                                'roles'=>['owner','superadmin','admin','manager','staff','kurir']],
+                'droppoint'=> ['label'=>'Drop Point', 'url'=>'droppoint_manager.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
             ],
         ],
         'settings' => [
@@ -112,7 +114,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
       'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
       'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
-      'checklist'=>'✅',
+      'checklist'=>'✅','droppoint'=>'📦',
     ];
     ?>
     <div class="ol-shell" id="olShell">
