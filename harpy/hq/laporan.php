@@ -529,6 +529,7 @@ $activePage = 'hq-laporan';
 require __DIR__ . '/_layout_open.php';
 ?>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   h1{font-size:1.4rem;font-weight:800;color:#0F1C3A;margin-bottom:6px}
   h1 small{display:block;font-size:13px;font-weight:400;color:#6B7280;margin-top:2px}
@@ -548,6 +549,29 @@ require __DIR__ . '/_layout_open.php';
     .print-header p{font-size:12px;color:#444;margin-top:2px}
     @page{margin:1.2cm}
   }
+
+  /* Mode PDF (saat html2pdf jalan) — mirror print CSS */
+  body.pdf-mode .hq-side,
+  body.pdf-mode .hq-top,
+  body.pdf-mode .filter-bar,
+  body.pdf-mode #exportBtn,
+  body.pdf-mode .preset-btn,
+  body.pdf-mode .drill-btn,
+  body.pdf-mode .btn-export,
+  body.pdf-mode #aiInsightPanel { display:none !important; }
+  body.pdf-mode .hq-content, body.pdf-mode .hq-content-inner { padding:0 !important; max-width:100% !important; }
+  body.pdf-mode, body.pdf-mode .hq-shell, body.pdf-mode .hq-main { background:#fff !important; }
+  body.pdf-mode .panel, body.pdf-mode .wk-card { box-shadow:none !important; border:1px solid #ddd !important; }
+  body.pdf-mode .print-header { display:block !important; margin-bottom:14px;
+    border-bottom:2px solid #0F1C3A; padding-bottom:8px }
+  body.pdf-mode .print-header h2 { font-size:18px; font-weight:800; color:#0F1C3A }
+  body.pdf-mode .print-header p { font-size:12px; color:#444; margin-top:2px }
+
+  .pdf-overlay{position:fixed;inset:0;background:rgba(15,28,58,.85);color:#fff;
+    display:none;align-items:center;justify-content:center;z-index:9999;font-size:15px;font-weight:700}
+  .pdf-overlay.show{display:flex}
+  .pdf-overlay .spin{display:inline-block;animation:spin 1.2s linear infinite;margin-right:10px;font-size:20px}
+  @keyframes spin{to{transform:rotate(360deg)}}
 
   .filter-bar{background:#fff;border-radius:12px;padding:14px 18px;display:flex;gap:10px;
               flex-wrap:wrap;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05);align-items:center}
@@ -649,7 +673,8 @@ require __DIR__ . '/_layout_open.php';
       ✨ AI Insight
     </button>
     <a id="exportBtn" href="#" class="btn-export">⬇️ Export CSV</a>
-    <button class="btn-export" onclick="window.print()" style="background:#0891B2">🖨️ Cetak / PDF</button>
+    <button class="btn-export" onclick="downloadPdf()" style="background:#DC2626">📄 Unduh PDF</button>
+    <button class="btn-export" onclick="window.print()" style="background:#0891B2">🖨️ Cetak</button>
   </div>
 
   <!-- AI INSIGHT PANEL -->
@@ -1100,6 +1125,45 @@ function drillDown(outletId){
   document.getElementById('dOutlet').value = outletId;
   loadData();
   window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+// ── Download PDF native (html2pdf.js) ──
+async function downloadPdf(){
+  if (typeof html2pdf === 'undefined') { alert('Library PDF belum dimuat. Coba refresh halaman.'); return; }
+  const target = document.querySelector('.hq-content-inner');
+  if (!target) return;
+
+  // Overlay loading
+  let overlay = document.getElementById('pdfOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'pdfOverlay'; overlay.className = 'pdf-overlay';
+    overlay.innerHTML = '<span class="spin">⏳</span> Membuat PDF…';
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.add('show');
+  document.body.classList.add('pdf-mode');
+
+  const start = document.getElementById('dStart').value;
+  const end   = document.getElementById('dEnd').value;
+  const oidSel = document.getElementById('dOutlet');
+  const oidName = oidSel.options[oidSel.selectedIndex].text.replace(/[^\w-]/g,'_');
+  const filename = `Laporan_${start}_${end}_${oidName}.pdf`;
+
+  try {
+    await html2pdf().from(target).set({
+      margin: [10, 8, 10, 8],
+      filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all','css','legacy'] }
+    }).save();
+  } catch(e){ alert('Gagal generate PDF: ' + e.message); }
+  finally {
+    document.body.classList.remove('pdf-mode');
+    overlay.classList.remove('show');
+  }
 }
 
 loadData();
