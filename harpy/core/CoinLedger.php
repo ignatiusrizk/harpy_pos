@@ -27,6 +27,11 @@ class CoinLedger
         'ai_chat_data'       =>  50,
         'ai_churn_message'   =>  30,
         'ai_briefing_hq'     =>  80,
+        // Owner POV (BAGIAN 7)
+        'daily_report'       => 100,   // per kirim laporan harian ke owner
+        'alert_anomali'      =>  50,   // per alert anomali ke owner
+        'invoice_b2b'        => 200,   // per invoice B2B
+        'reminder_piutang'   => 100,   // per reminder piutang
         'generate_invoice'   => 200,
         'wa_blast'           => 100,
         'export_pdf'         => 500,

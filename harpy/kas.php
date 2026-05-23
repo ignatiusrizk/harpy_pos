@@ -62,7 +62,13 @@ if ($action) {
             TenantQuery::insert('hl_kas', $data);
         }
         logAudit(!empty($d['id'])?'update':'create','kas',($data['tipe']).' Rp '.number_format($data['jumlah'],0,',','.').': '.$keterangan);
-        echo json_encode(['success'=>true]); exit;
+        echo json_encode(['success'=>true]);
+        // Anomaly check (silent)
+        try {
+            require_once __DIR__ . '/core/AnomalyDetector.php';
+            AnomalyDetector::check($tid, $oid);
+        } catch (Throwable) {}
+        exit;
     }
 
     // DELETE KAS

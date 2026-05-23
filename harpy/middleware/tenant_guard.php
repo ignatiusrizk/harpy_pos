@@ -67,6 +67,20 @@ if (isset($_SESSION['hl_login_time'])) {
 }
 $_SESSION['hl_last_activity'] = $_now;
 
+// ── Anomaly Detector (1x per 30 menit per session) ──
+// Skip untuk AJAX request supaya tidak nambah latency response
+if (empty($_GET['action']) && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+    if (!isset($_SESSION['last_anomaly_check']) || ($_now - $_SESSION['last_anomaly_check']) > 1800) {
+        $_SESSION['last_anomaly_check'] = $_now;
+        try {
+            if (TenantResolver::hasOutlet()) {
+                require_once ROOT . '/core/AnomalyDetector.php';
+                AnomalyDetector::check((int)TenantResolver::id(), (int)TenantResolver::outletId());
+            }
+        } catch (Throwable $e) { error_log('[anomaly_check] '.$e->getMessage()); }
+    }
+}
+
 // ════════════════════════════════════════
 // HELPER FUNCTIONS
 // ════════════════════════════════════════

@@ -222,6 +222,12 @@ if ($action) {
             echo json_encode(['success'=>true, 'no_order'=>$no, 'id'=>$trx_id,
                 'total'=>$total, 'sisa'=>$sisa, 'poin_earned'=>$poinEarned,
                 'poin_redeemed'=>$redeemPoin, 'redeem_value'=>$redeemValue]);
+
+            // Run anomaly check (silent, async-ish — setelah response dikirim)
+            try {
+                require_once ROOT . '/core/AnomalyDetector.php';
+                AnomalyDetector::check($tid, $oid);
+            } catch (Throwable) {}
         } catch (Throwable $e) {
             $db->rollBack();
             echo json_encode(['error' => $e->getMessage()]);
