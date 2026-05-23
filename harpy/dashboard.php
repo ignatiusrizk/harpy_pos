@@ -160,6 +160,27 @@ if ($action) {
             $hadir = TenantQuery::count('hl_absensi', "tanggal = ? AND status = 'hadir'", [$today]);
         }
 
+        // Target omset (defensif kalau kolom belum ada)
+        $targetHarian = 0; $targetBulanan = 0;
+        try {
+            $tg = TenantQuery::rawOne(
+                "SELECT target_omset_harian, target_omset_bulanan FROM outlets WHERE id=? AND tenant_id=?",
+                [$oid, $tid]
+            );
+            if ($tg) { $targetHarian = (int)$tg['target_omset_harian']; $targetBulanan = (int)$tg['target_omset_bulanan']; }
+        } catch (Throwable) {}
+
+        // Omset bulan ini (untuk progress bulanan)
+        $omsetBulan = 0;
+        try {
+            $om = TenantQuery::rawOne(
+                "SELECT COALESCE(SUM(total),0) s FROM hl_transaksi
+                  WHERE tenant_id=? AND outlet_id=? AND DATE_FORMAT(tanggal,'%Y-%m')=DATE_FORMAT(?, '%Y-%m')",
+                [$tid, $oid, $today]
+            );
+            $omsetBulan = (int)($om['s'] ?? 0);
+        } catch (Throwable) {}
+
         echo json_encode([
             'order'    => $orderData,
             'kas'      => $kasData,
@@ -168,6 +189,12 @@ if ($action) {
             'saldo'    => floatval($kasData['masuk']) - floatval($kasData['keluar']),
             'is_staff' => $isStaff,
             'role'     => $user['role'],
+            'target'   => [
+                'harian'      => $targetHarian,
+                'bulanan'     => $targetBulanan,
+                'omset_bulan' => $omsetBulan,
+                'hari_sisa'   => max(0, (int)date('t') - (int)date('j')),
+            ],
         ]);
         exit;
     }
@@ -965,6 +992,36 @@ if ($_dashRole === 'kasir'):
     </div>
   </div>
 
+  <!-- TARGET OMSET -->
+  <div id="targetWrap" style="display:none;margin-bottom:14px">
+    <div style="background:#fff;border:1px solid rgba(27,45,90,.07);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--shadow)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="targetGrid">
+        <div id="targetHarianBox">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span style="font-size:11px;font-weight:800;color:#6B7280;letter-spacing:.06em">🎯 TARGET HARI INI</span>
+            <span id="targetHarianPct" style="font-size:13px;font-weight:800;color:#0F1C3A">0%</span>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:5px" id="targetHarianText">-</div>
+          <div style="background:#EEF1F8;border-radius:100px;height:8px;overflow:hidden">
+            <div id="targetHarianBar" style="height:100%;background:linear-gradient(90deg,#35E8D5,#10B981);width:0%;transition:width .4s"></div>
+          </div>
+          <div id="targetHarianSub" style="font-size:11px;color:#6B7280;margin-top:4px">-</div>
+        </div>
+        <div id="targetBulananBox">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span style="font-size:11px;font-weight:800;color:#6B7280;letter-spacing:.06em">🎯 TARGET BULAN INI</span>
+            <span id="targetBulananPct" style="font-size:13px;font-weight:800;color:#0F1C3A">0%</span>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:#0F1C3A;margin-bottom:5px" id="targetBulananText">-</div>
+          <div style="background:#EEF1F8;border-radius:100px;height:8px;overflow:hidden">
+            <div id="targetBulananBar" style="height:100%;background:linear-gradient(90deg,#3B82F6,#8B5CF6);width:0%;transition:width .4s"></div>
+          </div>
+          <div id="targetBulananSub" style="font-size:11px;color:#6B7280;margin-top:4px">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- STAT CARDS -->
   <div class="dash-grid">
     <div class="dash-card teal">
@@ -1133,6 +1190,52 @@ async function loadStats(){
   document.getElementById('dHadir').textContent=isStaff?(d.hadir?'Sudah Clock In':'Belum Clock In'):(d.hadir||0)+' orang';
   if(isStaff)document.getElementById('dHadir').style.color=d.hadir?'var(--green)':'var(--red)';
   document.getElementById('dSiap').textContent='Siap diambil: '+(d.order?.siap_diambil||0)+' order';
+
+  // Target omset progress
+  renderTargetProgress(d);
+}
+
+function renderTargetProgress(d){
+  const wrap = document.getElementById('targetWrap');
+  if (!wrap) return;
+  const t = d.target || {};
+  const tH = parseInt(t.harian)||0, tB = parseInt(t.bulanan)||0;
+  if (!tH && !tB) { wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  const fmt = n => 'Rp '+Number(n||0).toLocaleString('id-ID');
+
+  // Harian
+  const omsetH = parseInt(d.order?.omset)||0;
+  const boxH = document.getElementById('targetHarianBox');
+  if (tH > 0) {
+    boxH.style.display='block';
+    const pct = Math.min(100, Math.round(omsetH/tH*100));
+    document.getElementById('targetHarianPct').textContent  = pct + '%';
+    document.getElementById('targetHarianText').textContent = fmt(omsetH) + ' / ' + fmt(tH);
+    document.getElementById('targetHarianBar').style.width  = pct + '%';
+    const kurang = Math.max(0, tH - omsetH);
+    document.getElementById('targetHarianSub').textContent = kurang > 0
+      ? `Kurang ${fmt(kurang)} lagi`
+      : '✓ Target tercapai!';
+  } else { boxH.style.display='none'; }
+
+  // Bulanan
+  const omsetB = parseInt(t.omset_bulan)||0;
+  const sisaHari = parseInt(t.hari_sisa)||0;
+  const boxB = document.getElementById('targetBulananBox');
+  if (tB > 0) {
+    boxB.style.display='block';
+    const pct = Math.min(100, Math.round(omsetB/tB*100));
+    document.getElementById('targetBulananPct').textContent = pct + '%';
+    document.getElementById('targetBulananText').textContent = fmt(omsetB) + ' / ' + fmt(tB);
+    document.getElementById('targetBulananBar').style.width = pct + '%';
+    const kurang = Math.max(0, tB - omsetB);
+    let sub;
+    if (kurang === 0) sub = '✓ Target tercapai!';
+    else if (sisaHari <= 0) sub = `Kurang ${fmt(kurang)} (bulan berakhir hari ini)`;
+    else sub = `Sisa ${sisaHari} hari — butuh ${fmt(Math.round(kurang/sisaHari))}/hari`;
+    document.getElementById('targetBulananSub').textContent = sub;
+  } else { boxB.style.display='none'; }
 }
 
 // ── PIPELINE ──────────────────────────────────────────

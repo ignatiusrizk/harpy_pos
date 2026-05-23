@@ -44,6 +44,11 @@ $hasJamBuka = true;
 try { $db->query("SELECT jam_buka FROM outlets LIMIT 1"); }
 catch (Throwable) { $hasJamBuka = false; }
 
+// Cek kolom target omset
+$hasTarget = true;
+try { $db->query("SELECT target_omset_harian FROM outlets LIMIT 1"); }
+catch (Throwable) { $hasTarget = false; }
+
 // ── AJAX actions ──────────────────────────────────────
 if ($action) {
     header('Content-Type: application/json');
@@ -98,6 +103,8 @@ if ($action) {
         $telepon = substr(preg_replace('/[^0-9+\-\s]/', '', $d['telepon'] ?? ''), 0, 20);
         $opHours = substr(trim(strip_tags($d['operating_hours'] ?? '')), 0, 100);
         $jamBuka = preg_match('/^\d{2}:\d{2}$/', $d['jam_buka'] ?? '') ? $d['jam_buka'].':00' : null;
+        $targetHarian  = max(0, (int)($d['target_omset_harian']  ?? 0));
+        $targetBulanan = max(0, (int)($d['target_omset_bulanan'] ?? 0));
         $setMain = !empty($d['is_main']);
 
         if (!$oid)  { echo json_encode(['error'=>'ID outlet invalid']); exit; }
@@ -122,6 +129,10 @@ if ($action) {
             if ($hasJamBuka && $jamBuka) {
                 $cols[] = 'jam_buka=?';
                 $args[] = $jamBuka;
+            }
+            if ($hasTarget) {
+                $cols[] = 'target_omset_harian=?';  $args[] = $targetHarian;
+                $cols[] = 'target_omset_bulanan=?'; $args[] = $targetBulanan;
             }
             $args[] = $oid;
             $args[] = $tid;
@@ -316,6 +327,18 @@ require __DIR__ . '/_layout_open.php';
         <input type="time" id="edJamBuka" value="08:00">
       </div>
       <?php endif; ?>
+      <?php if ($hasTarget): ?>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label>🎯 Target Omset Harian (Rp)</label>
+          <input type="number" id="edTargetHarian" min="0" step="50000" value="0" placeholder="1500000">
+        </div>
+        <div>
+          <label>🎯 Target Omset Bulanan (Rp)</label>
+          <input type="number" id="edTargetBulanan" min="0" step="500000" value="0" placeholder="40000000">
+        </div>
+      </div>
+      <?php endif; ?>
       <div>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
           <input type="checkbox" id="edMain" style="width:auto;margin:0">
@@ -334,6 +357,7 @@ require __DIR__ . '/_layout_open.php';
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 const hasOpHours = <?= $hasOpHours ? 'true' : 'false' ?>;
 const hasJamBuka = <?= $hasJamBuka ? 'true' : 'false' ?>;
+const hasTarget  = <?= $hasTarget  ? 'true' : 'false' ?>;
 const coinMode = <?= json_encode($coinMode) ?>;
 const supportWa = <?= json_encode($supportWa) ?>;
 
@@ -426,6 +450,10 @@ async function openEdit(id){
   document.getElementById('edAlamat').value = o.alamat || '';
   if (hasOpHours) document.getElementById('edOpHours').value = o.operating_hours || '';
   if (hasJamBuka) document.getElementById('edJamBuka').value = (o.jam_buka || '08:00:00').slice(0,5);
+  if (hasTarget) {
+    document.getElementById('edTargetHarian').value  = parseInt(o.target_omset_harian)  || 0;
+    document.getElementById('edTargetBulanan').value = parseInt(o.target_omset_bulanan) || 0;
+  }
   document.getElementById('edMain').checked = parseInt(o.is_main) === 1;
   document.getElementById('editAlert').innerHTML = '';
   openModal('editModal');
@@ -444,6 +472,10 @@ async function submitEdit(){
   };
   if (hasOpHours) data.operating_hours = document.getElementById('edOpHours').value.trim();
   if (hasJamBuka) data.jam_buka = document.getElementById('edJamBuka').value;
+  if (hasTarget) {
+    data.target_omset_harian  = document.getElementById('edTargetHarian').value;
+    data.target_omset_bulanan = document.getElementById('edTargetBulanan').value;
+  }
   if (!data.nama_outlet) { alertEl.innerHTML = '<div class="alert error">Nama outlet wajib diisi</div>'; return; }
 
   const r = await fetch('/ERP/harpy/hq/outlet.php?action=update', {

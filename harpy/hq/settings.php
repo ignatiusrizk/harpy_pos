@@ -146,6 +146,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notif'])) {
                 $prefs[$a][$c] = !empty($_POST['notif'][$a][$c]) ? 1 : 0;
             }
         }
+        // Daily report config
+        $jam = $_POST['daily_report_jam'] ?? '21:00';
+        if (!preg_match('/^\d{2}:\d{2}$/', $jam)) $jam = '21:00';
+        $prefs['daily_report_jam'] = $jam;
+        $validKonten = ['omset','order','kas','absensi','alert'];
+        $konten = [];
+        foreach ((array)($_POST['daily_konten'] ?? []) as $k) {
+            if (in_array($k, $validKonten, true)) $konten[] = $k;
+        }
+        if (!$konten) $konten = $validKonten;
+        $prefs['daily_report_konten'] = $konten;
         try {
             $db->prepare("UPDATE tenants SET notif_settings=? WHERE id=?")
                ->execute([json_encode($prefs), $tid]);
@@ -721,6 +732,34 @@ require __DIR__ . '/_layout_open.php';
             <?php endforeach; ?>
           </tbody>
         </table>
+      </div>
+
+      <!-- Daily report config -->
+      <?php
+        $dailyJam = $notifPrefs['daily_report_jam'] ?? '21:00';
+        if (!preg_match('/^\d{2}:\d{2}$/', $dailyJam)) $dailyJam = '21:00';
+        $dailyKonten = $notifPrefs['daily_report_konten'] ?? ['omset','order','kas','absensi','alert'];
+        if (!is_array($dailyKonten)) $dailyKonten = ['omset','order','kas','absensi','alert'];
+      ?>
+      <div style="background:#F9FAFB;border:1px solid #EEF1F8;border-radius:10px;padding:14px 16px;margin-top:16px">
+        <div style="font-weight:700;color:#0F1C3A;font-size:13px;margin-bottom:10px">📊 Konfigurasi Laporan Harian</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;font-weight:600;color:#374151">Jam kirim:</label>
+          <input type="time" name="daily_report_jam" value="<?= htmlspecialchars($dailyJam) ?>"
+                 style="padding:6px 10px;border:1px solid #E5E9F2;border-radius:7px;font-family:inherit">
+          <span style="font-size:11px;color:#9CA3AF">(akan dikirim jika request masuk setelah jam ini & belum dikirim hari ini)</span>
+        </div>
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">Konten:</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <?php foreach (['omset'=>'💰 Omset','order'=>'📦 Order','kas'=>'💵 Kas','absensi'=>'👥 Absensi','alert'=>'⚠️ Alert'] as $k=>$lbl): ?>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#374151;cursor:pointer">
+              <input type="checkbox" name="daily_konten[]" value="<?= $k ?>"
+                     <?= in_array($k, $dailyKonten, true) ? 'checked' : '' ?>
+                     style="accent-color:#35E8D5">
+              <?= $lbl ?>
+            </label>
+          <?php endforeach; ?>
+        </div>
       </div>
 
       <div style="margin-top:14px">
