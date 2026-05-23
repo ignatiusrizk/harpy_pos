@@ -193,6 +193,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $db = Database::get();
 
+                // ── MITRA (drop point) — portal terpisah ──
+                if ($userRole === 'mitra') {
+                    $dpId = (int)($user['drop_point_id'] ?? 0);
+                    if (!$dpId) {
+                        // Akun mitra tanpa drop_point_id (data corrupt) → tolak
+                        session_destroy();
+                        $loginError = 'Akun mitra belum terhubung ke drop point. Hubungi admin outlet.';
+                    } else {
+                        $_SESSION['outlet_id']     = (int)($user['outlet_id'] ?? 0);
+                        $_SESSION['drop_point_id'] = $dpId;
+                        $_SESSION['hq_mode']       = false;
+                        try { logAuditLogin($user, 'login', 'auth', 'Login mitra drop point #'.$dpId); } catch (Throwable) {}
+                        header('Location: droppoint/dashboard.php');
+                        exit;
+                    }
+                }
+
                 // Hitung outlet aktif tenant (total — utk owner/admin)
                 $outletCount = $db->prepare(
                     "SELECT COUNT(*) FROM outlets WHERE tenant_id=? AND status IN ('trial','grace','active')"
