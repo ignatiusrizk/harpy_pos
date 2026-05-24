@@ -23,6 +23,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!defined('ROOT')) define('ROOT', dirname(__DIR__));
 require_once ROOT . '/master/config/db.php';
 require_once ROOT . '/core/Database.php';
+require_once ROOT . '/core/TenantResolver.php';
 
 // ── Auth check ────────────────────────────────────────
 if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {

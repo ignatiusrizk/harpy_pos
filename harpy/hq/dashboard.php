@@ -105,15 +105,40 @@ if (($_GET['action'] ?? '') === 'ai_briefing') {
         exit;
     }
 
-    if (!CoinLedger::canAfford('ai_briefing_hq')) {
-        echo json_encode(['error' => 'Coin tidak cukup. Butuh 80 coin untuk briefing.']);
+    // HQ adalah tenant-level, bukan outlet-level → query coin langsung dari tabel tenants
+    $costBriefing = CoinLedger::COSTS['ai_briefing_hq'] ?? 80;
+    $tenantCoin = (int)($hqTenant['coin_balance'] ?? 0);
+    if ($tenantCoin < $costBriefing) {
+        echo json_encode(['error' => "Coin tenant tidak cukup. Butuh $costBriefing coin, saldo: $tenantCoin"]);
         exit;
     }
 
     try {
         $b = AIInsight::briefingHQ($aiData, $tid);
         if (empty($b['from_cache'])) {
-            try { CoinLedger::deduct('ai_briefing_hq'); } catch (Throwable) {}
+            // Deduct tenant-scoped: update tenants.coin_balance + catat ledger
+            try {
+                $db->beginTransaction();
+                $st = $db->prepare("SELECT coin_balance FROM tenants WHERE id=? FOR UPDATE");
+                $st->execute([$tid]);
+                $cur = (int)$st->fetchColumn();
+                if ($cur >= $costBriefing) {
+                    $newBal = $cur - $costBriefing;
+                    $db->prepare("UPDATE tenants SET coin_balance=? WHERE id=?")
+                       ->execute([$newBal, $tid]);
+                    $db->prepare("INSERT INTO coin_ledger
+                        (tenant_id, outlet_id, type, amount, feature_used, description, balance_after, ref_id)
+                        VALUES (?, NULL, 'deduct', ?, ?, ?, ?, ?)")
+                       ->execute([$tid, $costBriefing, 'ai_briefing_hq',
+                                  'AI Briefing HQ ' . date('Y-m-d'), $newBal, 'briefing_hq_'.date('Y-m-d')]);
+                    $db->commit();
+                } else {
+                    $db->rollBack();
+                }
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                error_log('[hq/ai_briefing] deduct gagal: ' . $e->getMessage());
+            }
             try { logAudit('ai_briefing', 'dashboard', 'Generate briefing HQ ' . date('Y-m-d')); } catch (Throwable) {}
         }
         // Buang accidental output (warning/notice yang lolos) sebelum kirim JSON
