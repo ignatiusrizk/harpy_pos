@@ -69,6 +69,45 @@ if ($action) {
         echo json_encode($rows); exit;
     }
 
+    // INFO POIN + REWARD untuk pelanggan terpilih
+    if ($action === 'pelanggan_poin') {
+        $pid = intval($_GET['id'] ?? 0);
+        if (!$pid) { echo json_encode(['error'=>'id wajib']); exit; }
+        try {
+            $db = Database::get();
+            $st = $db->prepare("SELECT id, nama, tier, segmen, poin_balance, catatan_tetap,
+                                       preferensi_parfum, preferensi_suhu
+                                  FROM hl_pelanggan WHERE id=? AND tenant_id=?");
+            $st->execute([$pid, $tid]);
+            $pel = $st->fetch(PDO::FETCH_ASSOC);
+            if (!$pel) { echo json_encode(['error'=>'Pelanggan tidak ditemukan']); exit; }
+
+            $poin = (int)$pel['poin_balance'];
+            $rewards = Loyalty::availableRewards($tid, $oid, $poin);
+            echo json_encode([
+                'ok' => true,
+                'pelanggan' => [
+                    'id'       => (int)$pel['id'],
+                    'nama'     => $pel['nama'],
+                    'tier'     => $pel['tier'] ?? 'regular',
+                    'segmen'   => $pel['segmen'] ?? 'baru',
+                    'poin'     => $poin,
+                    'catatan_tetap'      => $pel['catatan_tetap'] ?? '',
+                    'preferensi_parfum'  => $pel['preferensi_parfum'] ?? '',
+                    'preferensi_suhu'    => $pel['preferensi_suhu'] ?? '',
+                ],
+                'rewards' => $rewards,
+                'config'  => [
+                    'enabled'    => Loyalty::isEnabled($tid),
+                    'poin_value' => $loyaltyCfg['poin_value'],
+                ],
+            ]);
+        } catch (Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     // SAVE transaksi
     // UPLOAD FOTO KONDISI CUCIAN (multipart) — returns relative path
     if ($action === 'upload_foto' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -646,13 +685,22 @@ textarea{resize:vertical;min-height:64px}
 
             <!-- LOYALTY REDEEM -->
             <div id="loyaltyBox" style="display:none;background:#F0FDFB;border:1px solid #B6F0E6;border-radius:8px;padding:11px 13px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <span style="font-size:13px;font-weight:700;color:#0F1C3A">⭐ Poin Loyalty</span>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-size:13px;font-weight:700;color:#0F1C3A">
+                  ⭐ Poin Loyalty
+                  <span id="loyaltyTierBadge" style="margin-left:6px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:100px;background:#fff;color:#0891B2;display:none"></span>
+                  <span id="loyaltySegmenBadge" style="margin-left:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:100px;display:none"></span>
+                </span>
                 <span style="font-size:12px;color:#0891B2;font-weight:700"><span id="loyaltyBal">0</span> poin</span>
               </div>
-              <div style="display:flex;gap:8px;align-items:flex-end">
+
+              <!-- DAFTAR REWARD (dynamic) -->
+              <div id="rewardsList" style="display:none;margin-bottom:8px;max-height:180px;overflow-y:auto"></div>
+
+              <!-- INPUT MANUAL POIN -->
+              <div style="display:flex;gap:8px;align-items:flex-end;padding-top:8px;border-top:1px dashed rgba(8,145,178,.25)">
                 <div class="form-group" style="flex:1;margin-bottom:0">
-                  <label style="font-size:11px">Tukar Poin (jadi diskon)</label>
+                  <label style="font-size:11px">Tukar Poin (manual)</label>
                   <input type="number" id="f_redeem_poin" value="0" min="0" oninput="recalc()"/>
                 </div>
                 <button type="button" class="btn btn-teal-sm" onclick="redeemMax()" style="margin-bottom:1px;white-space:nowrap">Max</button>
@@ -1003,6 +1051,11 @@ function searchPelanggan(q) {
 let currentPelangganId = null;
 let aiChatOpen = false;
 
+const TIER_BADGE  = {regular:'',silver:'🥈 Silver',gold:'🥇 Gold',platinum:'💎 Platinum'};
+const TIER_COLOR  = {regular:'#94A3B8',silver:'#94A3B8',gold:'#D97706',platinum:'#7C3AED'};
+const SEGMEN_BADGE= {baru:'🆕 Baru',regular:'',vip:'⭐ VIP',dormant:'😴 Dormant'};
+const SEGMEN_COLOR= {baru:'#0891B2',regular:'#94A3B8',vip:'#D97706',dormant:'#9CA3AF'};
+
 function selectPelanggan(id, nama, telp, poin) {
   currentPelangganId = id;
   currentPelangganPoin = parseInt(poin||0);
@@ -1012,7 +1065,71 @@ function selectPelanggan(id, nama, telp, poin) {
   document.getElementById('aiFloating').style.display = 'block';
   document.getElementById('aiStatusText').textContent = nama;
   document.getElementById('aiNotifDot').style.display = 'block';
-  updateLoyaltyBox();
+  // Fetch info detail (poin, tier, segmen, rewards, preferensi)
+  loadPelangganInfo(id);
+}
+
+async function loadPelangganInfo(id){
+  try {
+    const r = await fetch('pos.php?action=pelanggan_poin&id=' + id);
+    const d = await r.json();
+    if (d.error) { updateLoyaltyBox(); return; }
+    currentPelangganPoin = parseInt(d.pelanggan.poin || 0);
+    // Auto-load catatan_tetap (preferensi) ke field catatan
+    const cat = document.getElementById('f_catatan');
+    const cur = (cat?.value || '').trim();
+    if (cat && d.pelanggan.catatan_tetap && cur === '') {
+      cat.value = d.pelanggan.catatan_tetap;
+      showToast('💡 Catatan tetap pelanggan otomatis dimuat','success');
+    }
+    renderTierSegmenBadges(d.pelanggan);
+    renderRewards(d.rewards || [], d.pelanggan.poin);
+    updateLoyaltyBox();
+  } catch(e) { updateLoyaltyBox(); }
+}
+
+function renderTierSegmenBadges(p){
+  const t = document.getElementById('loyaltyTierBadge');
+  const s = document.getElementById('loyaltySegmenBadge');
+  if (t) {
+    if (TIER_BADGE[p.tier]) { t.textContent = TIER_BADGE[p.tier]; t.style.color = TIER_COLOR[p.tier]; t.style.display=''; }
+    else { t.style.display='none'; }
+  }
+  if (s) {
+    if (SEGMEN_BADGE[p.segmen]) { s.textContent = SEGMEN_BADGE[p.segmen]; s.style.background = SEGMEN_COLOR[p.segmen]+'20'; s.style.color = SEGMEN_COLOR[p.segmen]; s.style.display=''; }
+    else { s.style.display='none'; }
+  }
+}
+
+function renderRewards(rewards, poin){
+  const list = document.getElementById('rewardsList');
+  if (!list) return;
+  if (!rewards.length) { list.style.display='none'; return; }
+  list.style.display='block';
+  list.innerHTML = rewards.map(r => {
+    const ok = !!r.bisa_redeem;
+    const tipeLabel = {
+      diskon_nominal: 'Diskon Rp ' + parseInt(r.nilai).toLocaleString('id-ID'),
+      diskon_persen:  'Diskon ' + r.nilai + '%',
+      gratis_layanan: 'Gratis Layanan'
+    }[r.tipe] || '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;margin-bottom:5px;border-radius:7px;border:1px solid ${ok?'rgba(8,145,178,.25)':'rgba(148,163,184,.2)'};background:${ok?'#fff':'#F8FAFC'};opacity:${ok?1:.65}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#0F1C3A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.nama_reward)}</div>
+        <div style="font-size:10px;color:#64748B">${tipeLabel} · <strong>${r.poin_dibutuhkan} poin</strong>${!ok?' · butuh '+r.kurang+' lagi':''}</div>
+      </div>
+      ${ok
+        ? `<button type="button" class="btn btn-teal-sm" style="padding:5px 11px;font-size:11px;white-space:nowrap" onclick="useReward(${r.poin_dibutuhkan},${parseInt(r.nilai)},'${r.tipe}','${esc(r.nama_reward)}')">✓ Pakai</button>`
+        : `<span style="font-size:10px;color:#94A3B8">🔒</span>`}
+    </div>`;
+  }).join('');
+}
+
+function useReward(poin, nilai, tipe, nama){
+  // Set redeem ke jumlah poin reward — recalc otomatis applied
+  document.getElementById('f_redeem_poin').value = poin;
+  showToast('🎁 Reward dipakai: ' + nama, 'success');
+  recalc();
 }
 
 function updateLoyaltyBox(){
@@ -1024,6 +1141,9 @@ function updateLoyaltyBox(){
   } else {
     box.style.display = 'none';
     const rp = document.getElementById('f_redeem_poin'); if (rp) rp.value = 0;
+    const rl = document.getElementById('rewardsList'); if (rl) rl.style.display = 'none';
+    const tb = document.getElementById('loyaltyTierBadge'); if (tb) tb.style.display = 'none';
+    const sb = document.getElementById('loyaltySegmenBadge'); if (sb) sb.style.display = 'none';
   }
 }
 
