@@ -59,13 +59,18 @@ if ($action === 'list') {
 // ── API: list pelanggan B2B (tipe_bayar='bulanan') untuk dropdown ──
 if ($action === 'list_b2b_customer') {
     header('Content-Type: application/json');
+    // Defensive: cek kolom tipe_bayar
+    $hasTipeBayar = true;
+    try { $db->query("SELECT tipe_bayar FROM hl_pelanggan LIMIT 1"); } catch (Throwable) { $hasTipeBayar = false; }
     try {
+        $where = $hasTipeBayar
+            ? "tenant_id=? AND is_active=1 AND (tipe_bayar='bulanan' OR tipe IN ('vip'))"
+            : "tenant_id=? AND is_active=1 AND tipe IN ('vip')";
         $s = $db->prepare("SELECT id, nama, telepon FROM hl_pelanggan
-                            WHERE tenant_id=? AND is_active=1
-                              AND (tipe_bayar='bulanan' OR tipe IN ('vip'))
-                            ORDER BY nama LIMIT 200");
+                            WHERE $where ORDER BY nama LIMIT 200");
         $s->execute([$tid]);
-        echo json_encode(['ok'=>true, 'rows'=>$s->fetchAll(PDO::FETCH_ASSOC)]);
+        echo json_encode(['ok'=>true, 'rows'=>$s->fetchAll(PDO::FETCH_ASSOC),
+                          'has_tipe_bayar'=>$hasTipeBayar]);
     } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
     exit;
 }

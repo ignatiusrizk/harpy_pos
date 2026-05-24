@@ -16,6 +16,16 @@ if ($action) {
     $oid = TenantResolver::outletId();
 
     // LIST orders
+    // Defensive: cek dukungan kolom drop_point_id (kalau migration belum jalan)
+    static $hasDropPoint = null;
+    if ($hasDropPoint === null) {
+        try {
+            Database::get()->query("SELECT drop_point_id FROM hl_transaksi LIMIT 1");
+            Database::get()->query("SELECT 1 FROM hl_drop_points LIMIT 1");
+            $hasDropPoint = true;
+        } catch (Throwable) { $hasDropPoint = false; }
+    }
+
     if ($action === 'list') {
         $filter = getDataFilter('orders.view_all');
         if ($filter === false) $filter = getDataFilter('orders.view_own');
@@ -38,11 +48,13 @@ if ($action) {
         if ($bayar)  { $where[] = "t.status_bayar=?";  $params[] = $bayar; }
         if ($dari)   { $where[] = "DATE(t.tanggal) >= ?"; $params[] = $dari; }
         if ($sampai) { $where[] = "DATE(t.tanggal) <= ?"; $params[] = $sampai; }
-        if ($sumber === 'walkin')      { $where[] = "t.drop_point_id IS NULL"; }
-        elseif ($sumber === 'drop')    { $where[] = "t.drop_point_id IS NOT NULL"; }
-        elseif (strpos($sumber, 'drop:') === 0) {
-            $dpId = (int)substr($sumber, 5);
-            if ($dpId > 0) { $where[] = "t.drop_point_id = ?"; $params[] = $dpId; }
+        if ($hasDropPoint) {
+            if ($sumber === 'walkin')      { $where[] = "t.drop_point_id IS NULL"; }
+            elseif ($sumber === 'drop')    { $where[] = "t.drop_point_id IS NOT NULL"; }
+            elseif (strpos($sumber, 'drop:') === 0) {
+                $dpId = (int)substr($sumber, 5);
+                if ($dpId > 0) { $where[] = "t.drop_point_id = ?"; $params[] = $dpId; }
+            }
         }
 
         // Filter berdasarkan permission
@@ -57,15 +69,22 @@ if ($action) {
 
         $whereStr = implode(' AND ', $where);
 
+        $namaMitraCol = $hasDropPoint
+            ? "(SELECT nama_mitra FROM hl_drop_points WHERE id=t.drop_point_id) as nama_mitra"
+            : "NULL as nama_mitra";
         $sql = "SELECT t.*,
             (SELECT GROUP_CONCAT(nama_layanan SEPARATOR ', ') FROM hl_transaksi_item WHERE transaksi_id=t.id AND tenant_id=t.tenant_id AND outlet_id=t.outlet_id) as layanan_list,
-            (SELECT nama_mitra FROM hl_drop_points WHERE id=t.drop_point_id) as nama_mitra
+            $namaMitraCol
             FROM hl_transaksi t
             WHERE $whereStr
             ORDER BY $sortCol $dir
             LIMIT $limit OFFSET $offset";
 
-        $rows = TenantQuery::raw($sql, $params);
+        try {
+            $rows = TenantQuery::raw($sql, $params);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>'Query gagal: '.$e->getMessage()]); exit;
+        }
 
         $cnt   = TenantQuery::raw("SELECT COUNT(*) as c FROM hl_transaksi t WHERE $whereStr", $params);
         $total = intval($cnt[0]['c'] ?? 0);

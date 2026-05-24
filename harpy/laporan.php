@@ -289,6 +289,13 @@ if ($action) {
         $start = $bulan.'-01';
         $end   = date('Y-m-t', strtotime($start));
 
+        // Defensive: cek kolom handled_by (kalau migration owner_visibility belum jalan)
+        static $hasHandledBy = null;
+        if ($hasHandledBy === null) {
+            try { Database::get()->query("SELECT handled_by FROM hl_transaksi LIMIT 1"); $hasHandledBy = true; }
+            catch (Throwable) { $hasHandledBy = false; }
+        }
+
         try {
             // Hari kerja efektif (jumlah hari sudah lewat dalam periode, capped today)
             $todayStr = date('Y-m-d');
@@ -325,17 +332,19 @@ if ($action) {
                 );
                 $ar = $a[0] ?? [];
 
-                // Order handle (handled_by = uid)
+                // Order handle (handled_by = uid) — skip kalau kolom belum ada
                 $oh = 0;
-                try {
-                    $oArr = TenantQuery::raw(
-                        "SELECT COUNT(*) c FROM hl_transaksi
-                          WHERE tenant_id=? AND outlet_id=? AND handled_by=?
-                            AND DATE(tanggal) BETWEEN ? AND ?",
-                        [$tid, $oid, $uid, $start, $end]
-                    );
-                    $oh = (int)($oArr[0]['c'] ?? 0);
-                } catch (Throwable) {}
+                if ($hasHandledBy) {
+                    try {
+                        $oArr = TenantQuery::raw(
+                            "SELECT COUNT(*) c FROM hl_transaksi
+                              WHERE tenant_id=? AND outlet_id=? AND handled_by=?
+                                AND DATE(tanggal) BETWEEN ? AND ?",
+                            [$tid, $oid, $uid, $start, $end]
+                        );
+                        $oh = (int)($oArr[0]['c'] ?? 0);
+                    } catch (Throwable) {}
+                }
 
                 $rows[] = [
                     'user_id' => $uid,
