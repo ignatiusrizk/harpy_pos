@@ -676,6 +676,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
           <label style="font-size:12px;color:var(--gray);font-weight:600">Bulan:</label>
           <input type="month" id="prodBulan" value="<?= date('Y-m') ?>" onchange="loadProd()"
                  style="padding:7px 10px;border:1px solid #E5E9F2;border-radius:7px;font-family:inherit">
+          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="exportCSV('produktivitas')">📥 Export CSV</button>
         </div>
       </div>
       <div class="hl-card-body" id="prodContent" style="padding:14px">
@@ -1096,7 +1097,23 @@ function exportCSV(type) {
     const rows = [['Tanggal','Total Order','Omset','Terkumpul']];
     bulananData.daily.forEach(d => rows.push([d.tgl,d.total_order,d.omset,d.terkumpul]));
     downloadCSV(rows, 'laporan_bulanan_' + document.getElementById('bBulan').value + '.csv');
+  } else if (type === 'produktivitas') {
+    exportProdCSV();
   }
+}
+async function exportProdCSV(){
+  const bulan = document.getElementById('prodBulan').value;
+  try {
+    const r = await fetch('laporan.php?action=produktivitas&bulan='+bulan);
+    const d = await r.json();
+    if (d.error){ alert('⚠️ '+d.error); return; }
+    const rows = [['Karyawan','Jabatan','Hari Efektif','Hadir','Telat','Izin','Sakit','Alpha','Order Handle','Skor %']];
+    d.rows.forEach(r => {
+      const skor = d.hari_eff > 0 ? Math.round((r.hadir - r.telat*0.5 - r.alpha) / d.hari_eff * 100) : 0;
+      rows.push([r.nama, r.jabatan||'', d.hari_eff, r.hadir, r.telat, r.izin, r.sakit, r.alpha, r.order_handle, skor]);
+    });
+    downloadCSV(rows, 'produktivitas_'+bulan+'.csv');
+  } catch(e){ alert('Gagal: '+e.message); }
 }
 
 function downloadCSV(rows, filename) {

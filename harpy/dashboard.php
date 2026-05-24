@@ -199,6 +199,60 @@ if ($action) {
         exit;
     }
 
+    // ── EXTRAS (segmen breakdown, top 5 pelanggan, week vs week) ──
+    if ($action === 'extras') {
+        $thisWeekStart = date('Y-m-d', strtotime('monday this week'));
+        $todayStr      = date('Y-m-d');
+        $lastWeekStart = date('Y-m-d', strtotime('monday this week -7 days'));
+        $lastWeekEnd   = date('Y-m-d', strtotime('sunday this week -7 days'));
+
+        // 1. Breakdown segmen hari ini
+        $segmen = [];
+        try {
+            $s = $db->prepare("
+                SELECT COALESCE(l.segmen, CASE WHEN t.drop_point_id IS NOT NULL THEN 'drop_point' ELSE 'lainnya' END) seg,
+                       COALESCE(SUM(ti.subtotal),0) total
+                  FROM hl_transaksi t
+                  LEFT JOIN hl_transaksi_item ti ON ti.transaksi_id=t.id
+                  LEFT JOIN hl_layanan l ON l.id=ti.layanan_id
+                 WHERE t.tenant_id=? AND t.outlet_id=? AND DATE(t.tanggal)=?
+                 GROUP BY seg ORDER BY total DESC
+            ");
+            $s->execute([$tid, $oid, $todayStr]);
+            $segmen = $s->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {}
+
+        // 2. Top 5 pelanggan bulan ini
+        $topCust = [];
+        try {
+            $monthStart = date('Y-m-01');
+            $s = $db->prepare("
+                SELECT p.nama, p.telepon, COUNT(t.id) ord, COALESCE(SUM(t.total),0) spend
+                  FROM hl_transaksi t
+                  JOIN hl_pelanggan p ON p.id=t.pelanggan_id AND p.tenant_id=t.tenant_id
+                 WHERE t.tenant_id=? AND t.outlet_id=? AND DATE(t.tanggal) BETWEEN ? AND ?
+                 GROUP BY p.id, p.nama, p.telepon
+                 ORDER BY spend DESC LIMIT 5
+            ");
+            $s->execute([$tid, $oid, $monthStart, $todayStr]);
+            $topCust = $s->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {}
+
+        // 3. Week vs week (omset & order)
+        $wow = ['this_omset'=>0,'this_order'=>0,'last_omset'=>0,'last_order'=>0];
+        try {
+            $s = $db->prepare("SELECT COUNT(*) c, COALESCE(SUM(total),0) o FROM hl_transaksi
+                                WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal) BETWEEN ? AND ?");
+            $s->execute([$tid,$oid,$thisWeekStart,$todayStr]); $a = $s->fetch(PDO::FETCH_ASSOC);
+            $wow['this_omset'] = (int)$a['o']; $wow['this_order'] = (int)$a['c'];
+            $s->execute([$tid,$oid,$lastWeekStart,$lastWeekEnd]); $b = $s->fetch(PDO::FETCH_ASSOC);
+            $wow['last_omset'] = (int)$b['o']; $wow['last_order'] = (int)$b['c'];
+        } catch (Throwable) {}
+
+        echo json_encode(['ok'=>true, 'segmen'=>$segmen, 'top_pelanggan'=>$topCust, 'wow'=>$wow]);
+        exit;
+    }
+
     // ── ALERTS ───────────────────────────────────────
     if ($action === 'alerts') {
         $tomorrow = date('Y-m-d', strtotime('+1 day'));
@@ -1046,6 +1100,24 @@ if ($_dashRole === 'kasir'):
     </div>
   </div>
 
+  <!-- EXTRAS: SEGMEN + TOP PELANGGAN + WOW -->
+  <div id="extrasWrap" style="display:none;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px" id="extrasGrid">
+      <div class="hl-card" style="padding:14px 16px">
+        <div style="font-size:12px;font-weight:700;color:#6B7280;letter-spacing:.05em;margin-bottom:8px">🧷 OMSET PER SEGMEN HARI INI</div>
+        <div id="segmenBox" style="font-size:13px"></div>
+      </div>
+      <div class="hl-card" style="padding:14px 16px">
+        <div style="font-size:12px;font-weight:700;color:#6B7280;letter-spacing:.05em;margin-bottom:8px">🏆 TOP 5 PELANGGAN BULAN INI</div>
+        <div id="topCustBox" style="font-size:13px"></div>
+      </div>
+      <div class="hl-card" style="padding:14px 16px">
+        <div style="font-size:12px;font-weight:700;color:#6B7280;letter-spacing:.05em;margin-bottom:8px">📊 MINGGU INI vs MINGGU LALU</div>
+        <div id="wowBox" style="font-size:13px"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- PIPELINE -->
   <div class="hl-card" style="margin-bottom:20px">
     <div class="hl-card-header">
@@ -1133,7 +1205,64 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadAll();
 });
 
-async function loadAll(){loadStats();loadAlerts();loadPipeline();loadChart();}
+async function loadAll(){loadStats();loadAlerts();loadPipeline();loadChart();loadExtras();}
+
+const SEG_LBL = {kiloan:'🧺 Kiloan',self_service:'🪙 Self-Service',b2b:'🏢 B2B',satuan:'👕 Satuan',drop_point:'📦 Drop Point',lainnya:'📦 Lainnya'};
+async function loadExtras(){
+  try {
+    const r = await fetch('dashboard.php?action=extras');
+    const d = await r.json();
+    if (d.error) return;
+    document.getElementById('extrasWrap').style.display = 'block';
+    const fmt = n => 'Rp '+Number(n||0).toLocaleString('id-ID');
+
+    // Segmen
+    const totSeg = (d.segmen||[]).reduce((s,r)=>s+Number(r.total),0) || 1;
+    document.getElementById('segmenBox').innerHTML = (d.segmen||[]).length
+      ? d.segmen.map(s => {
+          const pct = Math.round(Number(s.total)/totSeg*100);
+          return `<div style="margin-bottom:7px">
+            <div style="display:flex;justify-content:space-between;font-size:12px">
+              <span>${SEG_LBL[s.seg]||s.seg}</span>
+              <span style="font-family:monospace;font-weight:700">${fmt(s.total)} <small style="color:#9CA3AF">${pct}%</small></span>
+            </div>
+            <div style="background:#EEF1F8;border-radius:100px;height:5px;margin-top:2px"><div style="background:#35E8D5;height:100%;width:${pct}%;border-radius:100px"></div></div>
+          </div>`;
+        }).join('')
+      : '<div style="color:#9CA3AF">Belum ada transaksi hari ini</div>';
+
+    // Top Pelanggan
+    document.getElementById('topCustBox').innerHTML = (d.top_pelanggan||[]).length
+      ? d.top_pelanggan.map((p,i) => {
+          const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F3F4F6">
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:700;color:#0F1C3A;font-size:12px">${medal} ${p.nama||'-'}</div>
+              <div style="font-size:10px;color:#9CA3AF">${p.ord||0} order</div>
+            </div>
+            <div style="font-family:monospace;font-weight:700;font-size:12px">${fmt(p.spend)}</div>
+          </div>`;
+        }).join('')
+      : '<div style="color:#9CA3AF">Belum ada pelanggan terdaftar</div>';
+
+    // WoW
+    const w = d.wow || {};
+    const oPct = w.last_omset > 0 ? Math.round((w.this_omset - w.last_omset)/w.last_omset*100) : (w.this_omset>0?100:0);
+    const orPct= w.last_order > 0 ? Math.round((w.this_order - w.last_order)/w.last_order*100) : (w.this_order>0?100:0);
+    const arrow = v => v>0?`<span style="color:#10B981">↑ +${v}%</span>` : (v<0?`<span style="color:#EF4444">↓ ${v}%</span>`:`<span style="color:#9CA3AF">→ 0%</span>`);
+    document.getElementById('wowBox').innerHTML = `
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:#6B7280">Omset minggu ini</div>
+        <div style="font-family:monospace;font-weight:800;color:#0F1C3A">${fmt(w.this_omset)}</div>
+        <div style="font-size:11px">${arrow(oPct)} vs ${fmt(w.last_omset)} mgg lalu</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#6B7280">Order minggu ini</div>
+        <div style="font-family:monospace;font-weight:800;color:#0F1C3A">${w.this_order} order</div>
+        <div style="font-size:11px">${arrow(orPct)} vs ${w.last_order} mgg lalu</div>
+      </div>`;
+  } catch(e){}
+}
 
 // ── AI BRIEFING ───────────────────────────────────────
 let briefingLoaded=false, briefingVisible=false;
