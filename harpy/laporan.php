@@ -283,6 +283,78 @@ if ($action) {
         exit;
     }
 
+    // ── PRODUKTIVITAS KARYAWAN ────────────────────────
+    if ($action === 'produktivitas') {
+        $bulan = preg_match('/^\d{4}-\d{2}$/', $_GET['bulan'] ?? '') ? $_GET['bulan'] : date('Y-m');
+        $start = $bulan.'-01';
+        $end   = date('Y-m-t', strtotime($start));
+
+        try {
+            // Hari kerja efektif (jumlah hari sudah lewat dalam periode, capped today)
+            $todayStr = date('Y-m-d');
+            $endEff = ($end > $todayStr) ? $todayStr : $end;
+            $hariEff = (int)((strtotime($endEff) - strtotime($start))/86400) + 1;
+
+            // Ambil semua karyawan aktif di outlet
+            $kStmt = TenantQuery::raw(
+                "SELECT u.id, u.nama, u.jabatan FROM hl_users u
+                  JOIN hl_karyawan_outlet ko ON ko.karyawan_id=u.id AND ko.tenant_id=u.tenant_id
+                       AND ko.outlet_id=? AND ko.is_active=1
+                 WHERE u.tenant_id=? AND u.is_active=1
+                 ORDER BY u.nama",
+                [$oid, $tid]
+            );
+
+            $rows = [];
+            foreach ($kStmt as $u) {
+                $uid = (int)$u['id'];
+                // Absensi
+                $a = TenantQuery::raw(
+                    "SELECT
+                        SUM(status='hadir') hadir,
+                        SUM(status='izin')  izin,
+                        SUM(status='sakit') sakit,
+                        SUM(status='alpha') alpha,
+                        SUM(CASE WHEN status='hadir' AND jam_masuk IS NOT NULL
+                                 AND jam_masuk > COALESCE((SELECT jam_buka FROM outlets WHERE id=?),'08:00:00')
+                                 THEN 1 ELSE 0 END) telat
+                       FROM hl_absensi
+                      WHERE tenant_id=? AND outlet_id=? AND user_id=?
+                        AND tanggal BETWEEN ? AND ?",
+                    [$oid, $tid, $oid, $uid, $start, $endEff]
+                );
+                $ar = $a[0] ?? [];
+
+                // Order handle (handled_by = uid)
+                $oh = 0;
+                try {
+                    $oArr = TenantQuery::raw(
+                        "SELECT COUNT(*) c FROM hl_transaksi
+                          WHERE tenant_id=? AND outlet_id=? AND handled_by=?
+                            AND DATE(tanggal) BETWEEN ? AND ?",
+                        [$tid, $oid, $uid, $start, $end]
+                    );
+                    $oh = (int)($oArr[0]['c'] ?? 0);
+                } catch (Throwable) {}
+
+                $rows[] = [
+                    'user_id' => $uid,
+                    'nama'    => $u['nama'],
+                    'jabatan' => $u['jabatan'] ?? '-',
+                    'hadir'   => (int)($ar['hadir'] ?? 0),
+                    'izin'    => (int)($ar['izin'] ?? 0),
+                    'sakit'   => (int)($ar['sakit'] ?? 0),
+                    'alpha'   => (int)($ar['alpha'] ?? 0),
+                    'telat'   => (int)($ar['telat'] ?? 0),
+                    'order_handle' => $oh,
+                    'hari_eff' => $hariEff,
+                ];
+            }
+            echo json_encode(['ok'=>true, 'bulan'=>$bulan, 'hari_eff'=>$hariEff, 'rows'=>$rows]);
+        } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
+        exit;
+    }
+
     echo json_encode(['error'=>'Unknown']); exit;
 }
 ?>
@@ -400,6 +472,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
     <?php if (hasPermission('laporan.view_lr')): ?>
     <button class="ptab" onclick="switchTab('lr',this)">📈 Laba / Rugi</button>
     <?php endif; ?>
+    <button class="ptab" onclick="switchTab('produktivitas',this)">👥 Produktivitas Karyawan</button>
   </div>
 
   <!-- ══ TAB HARIAN ═══════════════════════════════════ -->
@@ -594,6 +667,23 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
   </div>
   <?php endif; ?>
 
+  <!-- TAB PRODUKTIVITAS KARYAWAN -->
+  <div id="tabProd" style="display:none">
+    <div class="hl-card">
+      <div class="hl-card-header">
+        <div class="hl-card-title">👥 Produktivitas Karyawan</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--gray);font-weight:600">Bulan:</label>
+          <input type="month" id="prodBulan" value="<?= date('Y-m') ?>" onchange="loadProd()"
+                 style="padding:7px 10px;border:1px solid #E5E9F2;border-radius:7px;font-family:inherit">
+        </div>
+      </div>
+      <div class="hl-card-body" id="prodContent" style="padding:14px">
+        <div class="empty">⏳ Memuat…</div>
+      </div>
+    </div>
+  </div>
+
   <!-- AI ANALYST WIDGET -->
   <div class="hl-card" style="margin-top:20px;border:2px solid rgba(139,92,246,.15)">
     <div class="hl-card-header" style="background:linear-gradient(135deg,#F5F3FF,#EDE9FE)">
@@ -680,16 +770,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── TABS ──────────────────────────────────────────────
 function switchTab(name, el) {
-  ['tabHarian','tabBulanan','tabLR'].forEach(id => {
+  ['tabHarian','tabBulanan','tabLR','tabProd'].forEach(id => {
     const el2 = document.getElementById(id);
     if (el2) el2.style.display = 'none';
   });
-  const tabMap = {'harian':'tabHarian','bulanan':'tabBulanan','lr':'tabLR'};
+  const tabMap = {'harian':'tabHarian','bulanan':'tabBulanan','lr':'tabLR','produktivitas':'tabProd'};
   const target = document.getElementById(tabMap[name]);
   if (target) target.style.display = 'block';
   document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   if (name==='bulanan' && !bulananData) loadBulanan();
+  if (name==='produktivitas') loadProd();
 }
 
 // ── HARIAN ────────────────────────────────────────────
@@ -1015,6 +1106,41 @@ function downloadCSV(rows, filename) {
   a.href     = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
+}
+
+// ── PRODUKTIVITAS KARYAWAN ────────────────────────────
+async function loadProd(){
+  const bulan = document.getElementById('prodBulan').value;
+  const box = document.getElementById('prodContent');
+  box.innerHTML = '<div class="empty">⏳ Memuat…</div>';
+  try {
+    const r = await fetch('laporan.php?action=produktivitas&bulan='+bulan);
+    const d = await r.json();
+    if (d.error){ box.innerHTML = `<div class="empty">⚠️ ${d.error}</div>`; return; }
+    if (!d.rows.length){ box.innerHTML = '<div class="empty">Tidak ada karyawan aktif di outlet.</div>'; return; }
+
+    const hariEff = d.hari_eff;
+    let html = `<div style="font-size:12px;color:#6B7280;margin-bottom:10px">Bulan ${bulan} · ${hariEff} hari efektif s/d hari ini</div>`;
+    html += '<div style="overflow-x:auto"><table class="hl-table"><thead><tr><th>Karyawan</th><th>Jabatan</th><th style="text-align:center">Hadir</th><th style="text-align:center">Telat</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpha</th><th style="text-align:right">Order Handle</th><th style="text-align:center">Skor</th></tr></thead><tbody>';
+    d.rows.forEach(r => {
+      const skor = hariEff > 0 ? Math.round((r.hadir - r.telat*0.5 - r.alpha) / hariEff * 100) : 0;
+      const pillClass = skor>=90?'background:#D1FAE5;color:#065F46':(skor>=70?'background:#FEF3C7;color:#92400E':'background:#FEE2E2;color:#991B1B');
+      html += `<tr>
+        <td><strong>${r.nama}</strong></td>
+        <td><small style="color:#6B7280">${r.jabatan||'-'}</small></td>
+        <td style="text-align:center">${r.hadir}/${hariEff}</td>
+        <td style="text-align:center">${r.telat>0?`<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.telat}</span>`:'0'}</td>
+        <td style="text-align:center">${r.izin}</td>
+        <td style="text-align:center">${r.sakit}</td>
+        <td style="text-align:center">${r.alpha>0?`<span style="background:#FEE2E2;color:#991B1B;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.alpha}</span>`:'0'}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:700">${r.order_handle}</td>
+        <td style="text-align:center"><span style="${pillClass};font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px">${skor}%</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    html += '<div style="font-size:11px;color:#9CA3AF;margin-top:8px">Skor disiplin = (Hadir − Telat×0.5 − Alpha) ÷ Hari Efektif × 100. Order Handle dihitung dari kolom <code>handled_by</code> (di-set otomatis saat status pertama kali keluar dari "masuk").</div>';
+    box.innerHTML = html;
+  } catch(e){ box.innerHTML = `<div class="empty">⚠️ ${e.message}</div>`; }
 }
 
 // ── AI ANALYST ────────────────────────────────────────

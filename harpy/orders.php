@@ -121,6 +121,7 @@ if ($action) {
 
             // Update header.
             // tgl_selesai distempel saat status pertama kali jadi siap/diambil/selesai.
+            // handled_by distempel saat status pertama kali keluar dari 'masuk' (mulai dikerjakan).
             $stmt = $db->prepare("UPDATE hl_transaksi SET
                 status_proses=?, status_bayar=?,
                 catatan=?, catatan_internal=?,
@@ -129,7 +130,10 @@ if ($action) {
                 estimasi_selesai=?,
                 tgl_selesai = CASE
                     WHEN ? IN ('siap','diambil','selesai') AND tgl_selesai IS NULL THEN CURDATE()
-                    ELSE tgl_selesai END
+                    ELSE tgl_selesai END,
+                handled_by = CASE
+                    WHEN ? NOT IN ('masuk') AND handled_by IS NULL THEN ?
+                    ELSE handled_by END
                 WHERE tenant_id=? AND outlet_id=? AND id=?");
             $stmt->execute([
                 $data['status_proses'],
@@ -140,6 +144,7 @@ if ($action) {
                 $dp, $sisa, $diskon, $total, $subtotal > 0 ? $subtotal : null,
                 $data['estimasi'] ?: null,
                 $data['status_proses'],
+                $data['status_proses'], (int)$user['id'],
                 $tid, $oid, $id
             ]);
 
