@@ -8,13 +8,31 @@ $user = currentUser();
 
 if (!hasPermission('orders.view_all') && !hasPermission('orders.view_own')) requirePermission('orders.view_all');
 
+// Helper: data filter scope berdasarkan permission
+if (!function_exists('getDataFilter')) {
+    function getDataFilter(string $kode) {
+        // 'view_all' → tanpa filter (return null), 'view_own' → 'own',
+        // fallback false kalau tidak punya keduanya
+        if (hasPermission($kode)) return null;
+        $owns = str_replace('view_all','view_own', $kode);
+        if (hasPermission($owns)) return 'own';
+        return false;
+    }
+}
+
 // ── API ───────────────────────────────────────────────
 $action = $_GET['action'] ?? '';
 if ($action) {
-    // Suppress notices/warnings supaya tidak rusak JSON output
+    // Tangkap PHP fatal supaya tetap return JSON (bukan empty 500)
+    register_shutdown_function(function() {
+        $e = error_get_last();
+        if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+            if (!headers_sent()) header('Content-Type: application/json');
+            echo json_encode(['error'=>'PHP fatal: '.$e['message'].' @ '.$e['file'].':'.$e['line']]);
+        }
+    });
     @ini_set('display_errors', '0');
     error_reporting(0);
-    ob_start();
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
     $oid = TenantResolver::outletId();
