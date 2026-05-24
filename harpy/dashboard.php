@@ -1053,6 +1053,9 @@ if ($_dashRole === 'kasir'):
     </div>
   </div>
 
+  <!-- HANDOVER PENDING BANNER -->
+  <div id="hoBanner" style="display:none;margin-bottom:14px"></div>
+
   <!-- QUICK SEARCH BAR -->
   <div style="position:relative;margin-bottom:20px">
     <input type="text" id="qSearch" placeholder="🔍 Cari cepat: nomor HP, nama pelanggan, atau no. order…"
@@ -1241,7 +1244,30 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadAll();
 });
 
-async function loadAll(){loadStats();loadAlerts();loadPipeline();loadChart();loadExtras();}
+async function loadAll(){loadStats();loadAlerts();loadPipeline();loadChart();loadExtras();loadHandoverBanner();}
+
+// ── HANDOVER BANNER (unacknowledged shifts) ──
+async function loadHandoverBanner(){
+  try {
+    const r = await fetch('absensi.php?action=handover_pending');
+    const d = await r.json();
+    const box = document.getElementById('hoBanner');
+    if (!box) return;
+    if (!d.rows || !d.rows.length) { box.style.display='none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = d.rows.map(h => `
+      <div style="background:linear-gradient(90deg,#FEF3C7,#FFE4B5);border-left:4px solid #F59E0B;padding:10px 14px;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px">
+        <span style="font-size:18px">🤝</span>
+        <div style="flex:1">
+          <strong>Handover dari ${(h.nama_keluar||'-')}</strong>
+          (${h.tanggal} · ${h.shift}) — Kas Rp ${parseInt(h.saldo_kas_akhir).toLocaleString('id-ID')},
+          ${h.order_pending} pending, ${h.order_siap_ambil} siap.
+          ${h.catatan_khusus ? `<div style="color:#92400E;font-size:12px;margin-top:2px"><em>“${h.catatan_khusus}”</em></div>` : ''}
+        </div>
+        <a href="absensi.php" style="background:#F59E0B;color:#fff;padding:6px 12px;border-radius:8px;font-weight:600;text-decoration:none;font-size:12px">Buka Absensi →</a>
+      </div>`).join('');
+  } catch (e) {}
+}
 
 // ── QUICK SEARCH ──
 const STATUS_PILL_BG = {

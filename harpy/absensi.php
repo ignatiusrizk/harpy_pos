@@ -246,6 +246,113 @@ if ($action) {
         echo json_encode($rows); exit;
     }
 
+    // HANDOVER: precompute (saldo kas, order_pending, order_siap_ambil)
+    if ($action === 'handover_compute') {
+        $tgl = $_GET['tanggal'] ?? date('Y-m-d');
+        try {
+            $db = Database::get();
+            // Saldo kas akhir hari = pemasukan - pengeluaran hari ini (sederhana)
+            $kas = 0;
+            try {
+                $st = $db->prepare("SELECT COALESCE(SUM(CASE WHEN tipe='masuk' THEN nominal ELSE -nominal END),0)
+                                      FROM hl_kas WHERE tenant_id=? AND outlet_id=? AND DATE(tanggal)=?");
+                $st->execute([$tid, $oid, $tgl]);
+                $kas = (int)$st->fetchColumn();
+            } catch (Throwable $e) { $kas = 0; }
+
+            $pending = TenantQuery::count('hl_transaksi',
+                "status_proses IN ('masuk','cuci','kering','setrika')", []);
+            $siap    = TenantQuery::count('hl_transaksi',
+                "status_proses='siap'", []);
+
+            // Cek existing handover hari ini
+            $existing = null;
+            try {
+                $st = $db->prepare("SELECT * FROM hl_shift_handover WHERE tenant_id=? AND outlet_id=? AND tanggal=? AND user_id_keluar=? ORDER BY id DESC LIMIT 1");
+                $st->execute([$tid, $oid, $tgl, $_SESSION['user_id'] ?? 0]);
+                $existing = $st->fetch(PDO::FETCH_ASSOC);
+            } catch (Throwable $e) {}
+
+            echo json_encode([
+                'ok' => true,
+                'saldo_kas_akhir'   => $kas,
+                'order_pending'     => $pending,
+                'order_siap_ambil'  => $siap,
+                'existing'          => $existing,
+            ]);
+        } catch (Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($action === 'handover_save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        verifyCsrf();
+        $d = json_decode(file_get_contents('php://input'), true);
+        $tgl   = $d['tanggal'] ?? date('Y-m-d');
+        $shift = in_array(($d['shift'] ?? 'pagi'), ['pagi','sore','malam'], true) ? $d['shift'] : 'pagi';
+        try {
+            $db  = Database::get();
+            $stmt = $db->prepare("INSERT INTO hl_shift_handover
+                (tenant_id, outlet_id, user_id_keluar, user_id_masuk, tanggal, shift,
+                 saldo_kas_akhir, order_pending, order_siap_ambil,
+                 kondisi_mesin, catatan_khusus, status)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?, 'submitted')");
+            $stmt->execute([
+                $tid, $oid,
+                $_SESSION['user_id'] ?? 0,
+                !empty($d['user_id_masuk']) ? intval($d['user_id_masuk']) : null,
+                $tgl, $shift,
+                intval($d['saldo_kas_akhir'] ?? 0),
+                intval($d['order_pending'] ?? 0),
+                intval($d['order_siap_ambil'] ?? 0),
+                trim($d['kondisi_mesin'] ?? ''),
+                trim($d['catatan_khusus'] ?? ''),
+            ]);
+            logAudit('handover_submit', 'shift', "$tgl/$shift");
+            echo json_encode(['ok'=>true, 'id'=>(int)$db->lastInsertId()]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>'Gagal simpan handover: '.$e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($action === 'handover_ack' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        verifyCsrf();
+        $d  = json_decode(file_get_contents('php://input'), true);
+        $id = intval($d['id'] ?? 0);
+        if (!$id) { echo json_encode(['error'=>'id wajib']); exit; }
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("UPDATE hl_shift_handover
+                                     SET status='acknowledged', acknowledged_at=NOW(), acknowledged_by=?
+                                   WHERE tenant_id=? AND outlet_id=? AND id=?");
+            $stmt->execute([$_SESSION['user_id'] ?? 0, $tid, $oid, $id]);
+            logAudit('handover_ack', 'shift#'.$id, '');
+            echo json_encode(['ok'=>true]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>$e->getMessage()]);
+        }
+        exit;
+    }
+
+    if ($action === 'handover_pending') {
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("SELECT h.*, u.nama AS nama_keluar
+                                    FROM hl_shift_handover h
+                                    LEFT JOIN hl_users u ON u.id=h.user_id_keluar
+                                   WHERE h.tenant_id=? AND h.outlet_id=?
+                                     AND h.status='submitted'
+                                   ORDER BY h.id DESC LIMIT 5");
+            $stmt->execute([$tid, $oid]);
+            echo json_encode(['ok'=>true, 'rows'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } catch (Throwable $e) {
+            echo json_encode(['ok'=>true, 'rows'=>[]]);
+        }
+        exit;
+    }
+
     echo json_encode(['error'=>'Unknown']); exit;
 }
 ?>
@@ -347,6 +454,70 @@ if ($action) {
           <div class="jam-chip">Masuk: <span id="jamMasuk">-</span></div>
           <div class="jam-chip">Keluar: <span id="jamKeluar">-</span></div>
           <div class="jam-chip">Durasi: <span id="durasi">-</span></div>
+        </div>
+      </div>
+
+      <!-- SERAH TERIMA SHIFT (handover) -->
+      <div class="hl-card" style="margin-bottom:16px">
+        <div class="hl-card-header">
+          <div class="hl-card-title">🤝 Serah Terima Shift</div>
+          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="toggleHandover()">
+            <span id="hoToggleLabel">Buka Form</span>
+          </button>
+        </div>
+        <div class="hl-card-body" id="handoverBody" style="display:none">
+          <div id="handoverPending" style="margin-bottom:10px"></div>
+          <div class="hl-form-row" style="margin-bottom:10px">
+            <div class="hl-form-group">
+              <label class="hl-label">Tanggal</label>
+              <input type="date" id="ho_tanggal" class="hl-input"/>
+            </div>
+            <div class="hl-form-group">
+              <label class="hl-label">Shift</label>
+              <select id="ho_shift" class="hl-input" onchange="">
+                <option value="pagi">Pagi</option>
+                <option value="sore">Sore</option>
+                <option value="malam">Malam</option>
+              </select>
+            </div>
+          </div>
+          <div class="hl-form-row" style="margin-bottom:10px">
+            <div class="hl-form-group">
+              <label class="hl-label">Saldo Kas Akhir (Rp)</label>
+              <input type="number" id="ho_kas" class="hl-input" step="500" min="0"/>
+            </div>
+            <div class="hl-form-group">
+              <label class="hl-label">Diserahkan ke (opsional)</label>
+              <select id="ho_user_masuk" class="hl-input">
+                <option value="">— Pilih kasir penerus —</option>
+              </select>
+            </div>
+          </div>
+          <div class="hl-form-row" style="margin-bottom:10px">
+            <div class="hl-form-group">
+              <label class="hl-label">Order Pending</label>
+              <input type="number" id="ho_pending" class="hl-input" min="0" readonly style="background:#F1F5F9"/>
+            </div>
+            <div class="hl-form-group">
+              <label class="hl-label">Order Siap Diambil</label>
+              <input type="number" id="ho_siap" class="hl-input" min="0" readonly style="background:#F1F5F9"/>
+            </div>
+          </div>
+          <div class="hl-form-group" style="margin-bottom:10px">
+            <label class="hl-label">Kondisi Mesin</label>
+            <textarea id="ho_mesin" class="hl-input hl-textarea" placeholder="Mesin A normal, mesin B sedikit bunyi..." style="min-height:60px"></textarea>
+          </div>
+          <div class="hl-form-group" style="margin-bottom:12px">
+            <label class="hl-label">Catatan Khusus</label>
+            <textarea id="ho_catatan" class="hl-input hl-textarea" placeholder="Pelanggan A janji ambil sore, dll." style="min-height:60px"></textarea>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="hl-btn hl-btn-outline" onclick="refreshHandover()">↻ Refresh Data</button>
+            <button class="hl-btn hl-btn-primary" style="flex:1" onclick="submitHandover()">📤 Submit Handover</button>
+          </div>
+          <small style="display:block;margin-top:8px;color:var(--gray)">
+            ℹ️ Optional — tidak menghalangi Clock Out. Berguna untuk audit & shift swap.
+          </small>
         </div>
       </div>
 
@@ -546,7 +717,106 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStatusHariIni();
   loadKalender();
   loadIzinList();
+
+  // Handover defaults
+  document.getElementById('ho_tanggal').value = today;
+  const h = new Date().getHours();
+  document.getElementById('ho_shift').value = (h < 12 ? 'pagi' : (h < 18 ? 'sore' : 'malam'));
 });
+
+// ── HANDOVER SHIFT ────────────────────────────────────
+let handoverOpen = false;
+async function toggleHandover() {
+  handoverOpen = !handoverOpen;
+  document.getElementById('handoverBody').style.display = handoverOpen ? 'block' : 'none';
+  document.getElementById('hoToggleLabel').textContent  = handoverOpen ? 'Tutup' : 'Buka Form';
+  if (handoverOpen) {
+    await refreshHandover();
+    await loadHandoverUsers();
+    await loadHandoverPending();
+  }
+}
+
+async function refreshHandover() {
+  const tgl = document.getElementById('ho_tanggal').value || localDateStr();
+  try {
+    const r = await fetch('absensi.php?action=handover_compute&tanggal=' + tgl);
+    const d = await r.json();
+    if (d.error) return;
+    document.getElementById('ho_kas').value    = d.saldo_kas_akhir || 0;
+    document.getElementById('ho_pending').value = d.order_pending || 0;
+    document.getElementById('ho_siap').value    = d.order_siap_ambil || 0;
+  } catch (e) {}
+}
+
+async function loadHandoverUsers() {
+  try {
+    const r = await fetch('absensi.php?action=list_users');
+    const d = await r.json();
+    if (Array.isArray(d)) {
+      const sel = document.getElementById('ho_user_masuk');
+      sel.innerHTML = '<option value="">— Pilih kasir penerus —</option>' +
+        d.map(u => `<option value="${u.id}">${u.nama} (${u.role})</option>`).join('');
+    }
+  } catch (e) {}
+}
+
+async function loadHandoverPending() {
+  try {
+    const r = await fetch('absensi.php?action=handover_pending');
+    const d = await r.json();
+    const box = document.getElementById('handoverPending');
+    if (!d.rows || !d.rows.length) { box.innerHTML = ''; return; }
+    box.innerHTML = d.rows.map(h => `
+      <div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:8px 12px;border-radius:8px;margin-bottom:6px;font-size:13px">
+        ⚠️ Handover dari <strong>${h.nama_keluar || '-'}</strong> (${h.tanggal} ${h.shift})
+        — Kas Rp ${parseInt(h.saldo_kas_akhir).toLocaleString('id-ID')},
+        ${h.order_pending} pending, ${h.order_siap_ambil} siap ambil.
+        <button class="hl-btn hl-btn-sm" style="margin-left:6px" onclick="ackHandover(${h.id})">✓ Acknowledge</button>
+        ${h.catatan_khusus ? `<div style="margin-top:4px;color:#92400E"><em>Catatan: ${h.catatan_khusus}</em></div>` : ''}
+      </div>`).join('');
+  } catch (e) {}
+}
+
+async function ackHandover(id) {
+  try {
+    const r = await fetch('absensi.php?action=handover_ack', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+      body: JSON.stringify({id})
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, 'error'); return; }
+    toast('✓ Handover di-acknowledge');
+    loadHandoverPending();
+  } catch (e) { toast('Network error','error'); }
+}
+
+async function submitHandover() {
+  const body = {
+    tanggal: document.getElementById('ho_tanggal').value,
+    shift:   document.getElementById('ho_shift').value,
+    user_id_masuk:    document.getElementById('ho_user_masuk').value || null,
+    saldo_kas_akhir:  parseInt(document.getElementById('ho_kas').value)||0,
+    order_pending:    parseInt(document.getElementById('ho_pending').value)||0,
+    order_siap_ambil: parseInt(document.getElementById('ho_siap').value)||0,
+    kondisi_mesin:    document.getElementById('ho_mesin').value,
+    catatan_khusus:   document.getElementById('ho_catatan').value,
+  };
+  try {
+    const r = await fetch('absensi.php?action=handover_save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, 'error'); return; }
+    toast('✓ Handover tersimpan');
+    document.getElementById('ho_mesin').value = '';
+    document.getElementById('ho_catatan').value = '';
+    loadHandoverPending();
+  } catch (e) { toast('Network error','error'); }
+}
 
 // ── STATUS HARI INI ───────────────────────────────────
 async function loadStatusHariIni() {

@@ -396,6 +396,52 @@ if ($action) {
         exit;
     }
 
+    // LIST CATATAN INTERNAL (multi-row, hl_order_notes)
+    if ($action === 'notes_list') {
+        $oidv = intval($_GET['order_id'] ?? 0);
+        if (!$oidv) { echo json_encode(['ok'=>true,'rows'=>[]]); exit; }
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("SELECT id, user_id, user_nama, catatan, created_at
+                                    FROM hl_order_notes
+                                   WHERE tenant_id=? AND outlet_id=? AND transaksi_id=?
+                                   ORDER BY id DESC");
+            $stmt->execute([$tid, $oid, $oidv]);
+            echo json_encode(['ok'=>true, 'rows'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } catch (Throwable $e) {
+            echo json_encode(['ok'=>true, 'rows'=>[]]);
+        }
+        exit;
+    }
+
+    // ADD CATATAN INTERNAL
+    if ($action === 'note_add' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        verifyCsrf();
+        $data    = json_decode(file_get_contents('php://input'), true);
+        $oidv    = intval($data['order_id'] ?? 0);
+        $catatan = trim($data['catatan'] ?? '');
+        if (!$oidv || $catatan === '') { echo json_encode(['error'=>'order_id & catatan wajib']); exit; }
+
+        // Verify ownership transaksi
+        $ck = TenantQuery::rawOne("SELECT id FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid, $oid, $oidv]);
+        if (!$ck) { echo json_encode(['error'=>'Order tidak ditemukan']); exit; }
+
+        $userId   = $_SESSION['user_id']   ?? null;
+        $userNama = $_SESSION['user_nama'] ?? ($_SESSION['nama'] ?? null);
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("INSERT INTO hl_order_notes
+                (tenant_id, outlet_id, transaksi_id, user_id, user_nama, catatan)
+                VALUES (?,?,?,?,?,?)");
+            $stmt->execute([$tid, $oid, $oidv, $userId, $userNama, $catatan]);
+            logAudit('note_add', 'order#'.$oidv, mb_substr($catatan,0,80));
+            echo json_encode(['ok'=>true, 'id'=>(int)$db->lastInsertId()]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>'Gagal simpan catatan: '.$e->getMessage()]);
+        }
+        exit;
+    }
+
     // SUMMARY stats
     if ($action === 'summary') {
         $statuses = ['masuk','cuci','kering','setrika','siap','diambil'];
@@ -1142,6 +1188,15 @@ async function openDetail(id) {
       <textarea id="edit_catatan_internal" placeholder="Catatan hanya untuk tim...">${esc(d.catatan_internal||'')}</textarea>
     </div>
 
+    <div class="section-title">🗒️ Catatan Internal (Tim) <span style="font-size:11px;font-weight:500;color:var(--gray)">— riwayat per-user</span></div>
+    <div id="notesList" style="margin-bottom:8px;max-height:200px;overflow-y:auto;border:1px solid rgba(27,45,90,.1);border-radius:8px;padding:8px;background:var(--off)">
+      <div style="color:var(--gray);font-size:13px">⏳ Memuat catatan...</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <input type="text" id="noteInput" placeholder="Tulis catatan tim (akan tercatat siapa & kapan)..." style="flex:1;font-size:13px;padding:8px 10px;border:1px solid rgba(27,45,90,.15);border-radius:7px"/>
+      <button class="btn btn-teal-sm btn-sm" onclick="addNote()" style="padding:8px 14px">+ Tambah</button>
+    </div>
+
     <div class="section-title">📜 Riwayat Status</div>
     <div id="logList">
       ${(d.logs||[]).length ? (d.logs||[]).map(l => {
@@ -1157,6 +1212,52 @@ async function openDetail(id) {
   renderEditItems();
   renderEditLayananGrid(layananAll);
   recalcEdit();
+  loadNotes(id);
+}
+
+// ── CATATAN INTERNAL MULTI-ROW ────────────────────────
+async function loadNotes(orderId) {
+  const box = document.getElementById('notesList');
+  if (!box) return;
+  try {
+    const r = await fetch('orders.php?action=notes_list&order_id=' + orderId);
+    const d = await r.json();
+    const rows = d.rows || [];
+    if (!rows.length) {
+      box.innerHTML = '<div style="color:var(--gray);font-size:13px;text-align:center;padding:6px">Belum ada catatan tim</div>';
+      return;
+    }
+    box.innerHTML = rows.map(n => `
+      <div style="padding:7px 0;border-bottom:1px dashed rgba(27,45,90,.08)">
+        <div style="font-size:13px;color:var(--navy);white-space:pre-wrap">${esc(n.catatan)}</div>
+        <div style="font-size:11px;color:var(--gray);margin-top:3px">
+          ✍️ ${esc(n.user_nama || '-')} · ${fmtDateTime(n.created_at)}
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = '<div style="color:#dc2626;font-size:12px">❌ Gagal memuat catatan</div>';
+  }
+}
+
+async function addNote() {
+  if (!currentEditId) return;
+  const inp = document.getElementById('noteInput');
+  const v = (inp.value || '').trim();
+  if (!v) { toast('Tulis catatan dulu', 'error'); return; }
+  try {
+    const r = await fetch('orders.php?action=note_add', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+      body: JSON.stringify({order_id: currentEditId, catatan: v})
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, 'error'); return; }
+    inp.value = '';
+    loadNotes(currentEditId);
+    toast('✓ Catatan ditambahkan');
+  } catch (e) {
+    toast('Network error', 'error');
+  }
 }
 
 function closeModal() {
