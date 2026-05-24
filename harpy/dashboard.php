@@ -199,6 +199,29 @@ if ($action) {
         exit;
     }
 
+    // ── QUICK SEARCH (HP/nama/no order) ──
+    if ($action === 'quick_search') {
+        $q = trim($_GET['q'] ?? '');
+        if (strlen($q) < 3) { echo json_encode(['ok'=>true,'rows'=>[]]); exit; }
+        try {
+            $like = '%' . $q . '%';
+            $db = Database::get();
+            $stmt = $db->prepare("
+                SELECT t.id, t.no_order, t.nama_pelanggan, t.telepon,
+                       t.total, t.status_proses, t.status_bayar,
+                       t.tanggal, t.estimasi_selesai, t.created_at
+                  FROM hl_transaksi t
+                 WHERE t.tenant_id=? AND t.outlet_id=?
+                   AND (t.no_order LIKE ? OR t.nama_pelanggan LIKE ? OR t.telepon LIKE ?)
+                 ORDER BY t.status_proses='diambil' ASC, t.id DESC
+                 LIMIT 10
+            ");
+            $stmt->execute([$tid, $oid, $like, $like, $like]);
+            echo json_encode(['ok'=>true, 'rows'=>$stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
+        exit;
+    }
+
     // ── EXTRAS (segmen breakdown, top 5 pelanggan, week vs week) ──
     if ($action === 'extras') {
         $thisWeekStart = date('Y-m-d', strtotime('monday this week'));
@@ -1030,6 +1053,19 @@ if ($_dashRole === 'kasir'):
     </div>
   </div>
 
+  <!-- QUICK SEARCH BAR -->
+  <div style="position:relative;margin-bottom:20px">
+    <input type="text" id="qSearch" placeholder="🔍 Cari cepat: nomor HP, nama pelanggan, atau no. order…"
+           autocomplete="off"
+           style="width:100%;padding:13px 16px;font-size:14px;border:1.5px solid #E5E9F2;border-radius:12px;
+                  background:#fff;font-family:inherit;outline:none;transition:border .15s"
+           onfocus="this.style.borderColor='#35E8D5'"
+           onblur="this.style.borderColor='#E5E9F2'">
+    <div id="qSearchRes" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #E5E9F2;
+                                border-radius:10px;box-shadow:0 8px 24px rgba(15,28,58,.15);max-height:420px;overflow-y:auto;
+                                z-index:50;display:none"></div>
+  </div>
+
   <!-- AI BRIEFING PANEL -->
   <div id="aiBriefingPanel" style="display:none;margin-bottom:20px">
     <div class="hl-card" style="border:2px solid rgba(139,92,246,.2);background:linear-gradient(135deg,#FAFAFA,#F5F3FF)">
@@ -1206,6 +1242,67 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 async function loadAll(){loadStats();loadAlerts();loadPipeline();loadChart();loadExtras();}
+
+// ── QUICK SEARCH ──
+const STATUS_PILL_BG = {
+  masuk:'#DBEAFE/#1E40AF', cuci:'#FEF3C7/#92400E', kering:'#CFFAFE/#155E75',
+  setrika:'#EDE9FE/#5B21B6', siap:'#D1FAE5/#065F46', diambil:'#F3F4F6/#6B7280'
+};
+function qsEsc(s){return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function qsTimerLabel(estimasiSelesai, statusProses){
+  if (statusProses === 'diambil' || statusProses === 'selesai') return '✓ Sudah diambil';
+  if (!estimasiSelesai) return '-';
+  const t = new Date(estimasiSelesai.replace(' ','T')).getTime();
+  const diffMs = t - Date.now();
+  if (diffMs < 0) {
+    const lateH = Math.abs(diffMs)/3600000;
+    return '⚠️ TERLAMBAT ' + (lateH<1 ? Math.round(lateH*60)+'m' : lateH.toFixed(1).replace('.0','')+'j');
+  }
+  const h = diffMs/3600000;
+  return (h<1 ? Math.round(h*60)+'m' : h.toFixed(1).replace('.0','')+'j') + ' lagi';
+}
+let qsTimer = null;
+const qsInput = document.getElementById('qSearch');
+const qsRes   = document.getElementById('qSearchRes');
+if (qsInput) {
+  qsInput.addEventListener('input', () => {
+    clearTimeout(qsTimer);
+    const q = qsInput.value.trim();
+    if (q.length < 3) { qsRes.style.display='none'; qsRes.innerHTML=''; return; }
+    qsTimer = setTimeout(async () => {
+      try {
+        const r = await fetch('dashboard.php?action=quick_search&q=' + encodeURIComponent(q));
+        const d = await r.json();
+        if (d.error || !d.rows){ qsRes.style.display='none'; return; }
+        if (!d.rows.length){
+          qsRes.innerHTML = '<div style="padding:14px;color:#9CA3AF;font-size:13px;text-align:center">Tidak ada order yang cocok.</div>';
+        } else {
+          qsRes.innerHTML = d.rows.map(r => {
+            const [bg,fg] = (STATUS_PILL_BG[r.status_proses] || '#F3F4F6/#6B7280').split('/');
+            const timer = qsTimerLabel(r.estimasi_selesai, r.status_proses);
+            const timerColor = timer.includes('TERLAMBAT') ? '#EF4444' : (r.status_proses==='diambil' ? '#10B981' : '#374151');
+            return `<a href="orders.php?q=${encodeURIComponent(r.no_order)}" style="display:block;padding:11px 14px;border-bottom:1px solid #F3F4F6;text-decoration:none;color:inherit">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                <div style="min-width:0;flex:1">
+                  <div style="font-weight:700;color:#0F1C3A;font-size:13px">${qsEsc(r.nama_pelanggan)} <small style="color:#9CA3AF;font-weight:400">· ${qsEsc(r.no_order)}</small></div>
+                  <div style="font-size:11px;color:#6B7280;margin-top:2px">${qsEsc(r.telepon||'-')} · Rp ${Number(r.total).toLocaleString('id-ID')}</div>
+                </div>
+                <div style="text-align:right;white-space:nowrap">
+                  <span style="background:${bg};color:${fg};font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;text-transform:uppercase">${qsEsc(r.status_proses)}</span>
+                  <div style="font-size:11px;font-weight:600;color:${timerColor};margin-top:3px">⏱ ${timer}</div>
+                </div>
+              </div>
+            </a>`;
+          }).join('');
+        }
+        qsRes.style.display='block';
+      } catch(e){ qsRes.style.display='none'; }
+    }, 300);
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#qSearch') && !e.target.closest('#qSearchRes')) qsRes.style.display='none';
+  });
+}
 
 const SEG_LBL = {kiloan:'🧺 Kiloan',self_service:'🪙 Self-Service',b2b:'🏢 B2B',satuan:'👕 Satuan',drop_point:'📦 Drop Point',lainnya:'📦 Lainnya'};
 async function loadExtras(){

@@ -26,6 +26,35 @@ if ($action) {
 
     // SEARCH pelanggan — TENANT-SCOPED (lintas outlet)
     // Pelanggan adalah aset account, bisa transaksi di outlet manapun
+    // ── action=estimasi_suggest: hitung estimasi jam berdasarkan antrian saat ini ──
+    if ($action === 'estimasi_suggest') {
+        try {
+            $stmt = Database::get()->prepare(
+                "SELECT COUNT(*) FROM hl_transaksi
+                  WHERE tenant_id=? AND outlet_id=?
+                    AND status_proses NOT IN ('siap','diambil','selesai','batal','dibatalkan')"
+            );
+            $stmt->execute([$tid, $oid]);
+            $antrian = (int)$stmt->fetchColumn();
+            $jam = 24;
+            if ($antrian > 20) $jam = 36;
+            if ($antrian > 40) $jam = 48;
+            $datetime = date('Y-m-d H:i:s', strtotime("+{$jam} hours"));
+            $tanggalOnly = date('Y-m-d', strtotime("+{$jam} hours"));
+            $hari = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][(int)date('w', strtotime($datetime))];
+            $isToday = $tanggalOnly === date('Y-m-d');
+            $isTomorrow = $tanggalOnly === date('Y-m-d', strtotime('+1 day'));
+            $label = ($isToday ? 'Hari ini' : ($isTomorrow ? 'Besok' : "$hari ".date('d M', strtotime($datetime))))
+                   . ' jam ' . date('H:i', strtotime($datetime));
+            echo json_encode([
+                'ok'=>true, 'antrian'=>$antrian, 'jam'=>$jam,
+                'datetime'=>$datetime, 'date_only'=>$tanggalOnly,
+                'label'=>$label,
+            ]);
+        } catch (Throwable $e) { echo json_encode(['error'=>$e->getMessage()]); }
+        exit;
+    }
+
     if ($action === 'search_pelanggan') {
         $q = '%' . trim($_GET['q'] ?? '') . '%';
         $rows = TenantQuery::raw(
@@ -54,7 +83,29 @@ if ($action) {
         $telepon   = substr(preg_replace('/[^0-9+\-\s]/', '', $data['telepon'] ?? ''), 0, 20);
         $catatan   = substr(trim(strip_tags($data['catatan'] ?? '')), 0, 500);
         $tanggal   = substr(trim($data['tanggal'] ?? date('Y-m-d')), 0, 10);
-        $estimasi  = !empty($data['estimasi']) ? substr(trim($data['estimasi']), 0, 10) : null;
+        // Estimasi selesai — terima DATE (yyyy-mm-dd) atau DATETIME, normalisasi ke DATETIME.
+        // Kalau kosong, auto-compute dari antrian saat ini.
+        $estRaw = trim($data['estimasi'] ?? '');
+        if ($estRaw === '') {
+            // Auto: hitung dari antrian
+            try {
+                $q = Database::get()->prepare("SELECT COUNT(*) FROM hl_transaksi
+                      WHERE tenant_id=? AND outlet_id=?
+                        AND status_proses NOT IN ('siap','diambil','selesai','batal','dibatalkan')");
+                $q->execute([$tid, $oid]);
+                $antrian = (int)$q->fetchColumn();
+            } catch (Throwable) { $antrian = 0; }
+            $estimasiJam = $antrian > 40 ? 48 : ($antrian > 20 ? 36 : 24);
+            $estimasi    = date('Y-m-d H:i:s', strtotime("+{$estimasiJam} hours"));
+        } else {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $estRaw)) {
+                // Tanggal saja → default jam 14:00
+                $estimasi    = $estRaw . ' 14:00:00';
+            } else {
+                $estimasi    = substr($estRaw, 0, 19);
+            }
+            $estimasiJam = max(1, (int)round((strtotime($estimasi) - time()) / 3600));
+        }
 
         if (!$nama_pel) { echo json_encode(['error'=>'Nama pelanggan wajib diisi']); exit; }
         if (!$telepon)  { echo json_encode(['error'=>'Nomor telepon wajib diisi']); exit; }
@@ -143,20 +194,38 @@ if ($action) {
             $sisa     = $total - $dp;
             $status_b = $dp >= $total ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
 
-            // Insert transaksi header
-            $stmt = $db->prepare(
-                "INSERT INTO hl_transaksi
-                 (tenant_id,outlet_id,no_order,tanggal,pelanggan_id,nama_pelanggan,telepon,
-                  subtotal,diskon,total,dp,sisa_bayar,metode_bayar,status_bayar,
-                  status_proses,estimasi_selesai,catatan,created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-            );
-            $stmt->execute([
-                $tid, $oid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
-                $subtotal, $diskonTotal, $total, $dp, $sisa,
-                $data['metode_bayar'] ?? 'cash', $status_b,
-                'masuk', $estimasi, $catatan, $user['id']
-            ]);
+            // Insert transaksi header (with estimasi_jam kalau kolom ada)
+            $hasEstJam = true;
+            try { $db->query("SELECT estimasi_jam FROM hl_transaksi LIMIT 1"); } catch (Throwable) { $hasEstJam = false; }
+            if ($hasEstJam) {
+                $stmt = $db->prepare(
+                    "INSERT INTO hl_transaksi
+                     (tenant_id,outlet_id,no_order,tanggal,pelanggan_id,nama_pelanggan,telepon,
+                      subtotal,diskon,total,dp,sisa_bayar,metode_bayar,status_bayar,
+                      status_proses,estimasi_selesai,estimasi_jam,catatan,created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                );
+                $stmt->execute([
+                    $tid, $oid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
+                    $subtotal, $diskonTotal, $total, $dp, $sisa,
+                    $data['metode_bayar'] ?? 'cash', $status_b,
+                    'masuk', $estimasi, $estimasiJam, $catatan, $user['id']
+                ]);
+            } else {
+                $stmt = $db->prepare(
+                    "INSERT INTO hl_transaksi
+                     (tenant_id,outlet_id,no_order,tanggal,pelanggan_id,nama_pelanggan,telepon,
+                      subtotal,diskon,total,dp,sisa_bayar,metode_bayar,status_bayar,
+                      status_proses,estimasi_selesai,catatan,created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                );
+                $stmt->execute([
+                    $tid, $oid, $no, $tanggal, $pel_id, $nama_pel, $telepon,
+                    $subtotal, $diskonTotal, $total, $dp, $sisa,
+                    $data['metode_bayar'] ?? 'cash', $status_b,
+                    'masuk', $estimasi, $catatan, $user['id']
+                ]);
+            }
             $trx_id = $db->lastInsertId();
 
             // Deduct poin redeem (dalam transaksi yang sama) — transaksi_id terisi
@@ -414,6 +483,7 @@ textarea{resize:vertical;min-height:64px}
             <div class="form-group">
               <label>Estimasi Selesai</label>
               <input type="date" id="f_estimasi"/>
+              <small id="estHint" style="display:block;margin-top:4px;font-size:11px;color:#0891B2;font-weight:600">⏱ Memuat saran…</small>
             </div>
           </div>
           <div class="form-row">
@@ -653,6 +723,21 @@ let items = [];
 let layananAll = [];
 let lastSaved  = null;
 let acTimeout  = null;
+
+// ── Estimasi auto-suggest dari antrian ──
+async function loadEstimasiHint(){
+  const el = document.getElementById('estHint');
+  if (!el) return;
+  try {
+    const r = await fetch('pos.php?action=estimasi_suggest');
+    const d = await r.json();
+    if (d.error || !d.ok) { el.textContent = ''; return; }
+    el.innerHTML = `⏱ Saran: <strong>${d.label}</strong> (${d.jam}j, antrian ${d.antrian} order)`;
+    // Auto-isi date kalau kosong
+    const fe = document.getElementById('f_estimasi');
+    if (fe && !fe.value) fe.value = d.date_only;
+  } catch(e){ /* silent */ }
+}
 const LOYALTY = <?= json_encode(['enabled'=>$loyaltyCfg['enabled'],'poin_value'=>$loyaltyCfg['poin_value'],'rupiah_per_poin'=>$loyaltyCfg['rupiah_per_poin']]) ?>;
 let currentPelangganPoin = 0;
 
@@ -666,9 +751,9 @@ function localDateStr(d) {
 document.addEventListener('DOMContentLoaded', () => {
   const today = localDateStr();
   document.getElementById('f_tanggal').value = today;
-  const est = new Date(); est.setDate(est.getDate()+2);
-  document.getElementById('f_estimasi').value = localDateStr(est);
+  // Kosongkan estimasi dulu — loadEstimasiHint akan isi otomatis sesuai antrian
   loadLayanan();
+  loadEstimasiHint();
 });
 
 async function loadLayanan() {
