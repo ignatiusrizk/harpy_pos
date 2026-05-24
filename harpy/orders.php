@@ -11,20 +11,22 @@ if (!hasPermission('orders.view_all') && !hasPermission('orders.view_own')) requ
 // ── API ───────────────────────────────────────────────
 $action = $_GET['action'] ?? '';
 if ($action) {
+    // Suppress notices/warnings supaya tidak rusak JSON output
+    @ini_set('display_errors', '0');
+    error_reporting(0);
+    ob_start();
     header('Content-Type: application/json');
     $tid = TenantResolver::id();
     $oid = TenantResolver::outletId();
 
     // LIST orders
     // Defensive: cek dukungan kolom drop_point_id (kalau migration belum jalan)
-    static $hasDropPoint = null;
-    if ($hasDropPoint === null) {
-        try {
-            Database::get()->query("SELECT drop_point_id FROM hl_transaksi LIMIT 1");
-            Database::get()->query("SELECT 1 FROM hl_drop_points LIMIT 1");
-            $hasDropPoint = true;
-        } catch (Throwable) { $hasDropPoint = false; }
-    }
+    $hasDropPoint = false;
+    try {
+        Database::get()->query("SELECT drop_point_id FROM hl_transaksi LIMIT 1");
+        Database::get()->query("SELECT 1 FROM hl_drop_points LIMIT 1");
+        $hasDropPoint = true;
+    } catch (Throwable) { /* migration belum jalan */ }
 
     if ($action === 'list') {
         $filter = getDataFilter('orders.view_all');
@@ -86,8 +88,10 @@ if ($action) {
             echo json_encode(['error'=>'Query gagal: '.$e->getMessage()]); exit;
         }
 
-        $cnt   = TenantQuery::raw("SELECT COUNT(*) as c FROM hl_transaksi t WHERE $whereStr", $params);
-        $total = intval($cnt[0]['c'] ?? 0);
+        try {
+            $cnt   = TenantQuery::raw("SELECT COUNT(*) as c FROM hl_transaksi t WHERE $whereStr", $params);
+            $total = intval($cnt[0]['c'] ?? 0);
+        } catch (Throwable $e) { $total = count($rows); }
 
         echo json_encode([
             'data'        => $rows,
