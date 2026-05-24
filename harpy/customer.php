@@ -131,6 +131,32 @@ if ($action) {
         echo json_encode(['total'=>$total,'b2b'=>$b2b,'baru'=>$baru]); exit;
     }
 
+    // Save preferensi pelanggan
+    if ($action === 'save_preferensi' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!hasPermission('customer.edit')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
+        verifyCsrf();
+        $d  = json_decode(file_get_contents('php://input'), true) ?: [];
+        $id = (int)($d['id'] ?? 0);
+        if (!$id) { echo json_encode(['error'=>'id wajib']); exit; }
+        try {
+            Database::get()
+                ->prepare("UPDATE hl_pelanggan
+                              SET preferensi_parfum=?, preferensi_suhu=?, catatan_tetap=?
+                            WHERE id=? AND tenant_id=?")
+                ->execute([
+                    substr(trim($d['parfum'] ?? ''), 0, 50),
+                    substr(trim($d['suhu'] ?? ''), 0, 20),
+                    substr(trim($d['catatan_tetap'] ?? ''), 0, 1000),
+                    $id, $tid,
+                ]);
+            logAudit('update_preferensi', 'customer#'.$id, '');
+            echo json_encode(['ok'=>true]);
+        } catch (Throwable $e) {
+            echo json_encode(['error'=>$e->getMessage()]);
+        }
+        exit;
+    }
+
     // Stats agregat per-segmen
     if ($action === 'segmen_stats') {
         require_once ROOT . '/core/SegmentasiManager.php';
@@ -496,12 +522,91 @@ async function openDetail(id) {
   const r = await fetch('customer.php?action=get_orders&id='+id);
   const orders = await r.json();
 
+  // Hitung next reward untuk progress bar
+  const poin = parseInt(c.poin_balance||0);
+  const nextThr = poin < 100 ? 100 : poin < 200 ? 200 : poin < 500 ? 500 : 0;
+  const prevThr = poin >= 500 ? 500 : poin >= 200 ? 200 : poin >= 100 ? 100 : 0;
+  const pct = nextThr ? Math.round(((poin - prevThr) / (nextThr - prevThr)) * 100) : 100;
+  const nextLabel = nextThr === 100 ? 'Silver' : nextThr === 200 ? 'Gold' : nextThr === 500 ? 'Platinum' : 'Max tier';
+
   document.getElementById('detailBody').innerHTML = `
+    <div style="background:linear-gradient(135deg,#0F1C3A,#1E3A8A);color:#fff;border-radius:14px;padding:16px 18px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-size:1.3rem;font-weight:800">${esc(c.nama)}</div>
+          <div style="font-size:12px;opacity:.8;margin-top:3px">📞 ${c.telepon||'-'} · Sejak ${fmtDate(c.created_at)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${c.tier && c.tier!=='regular' ? `<span style="background:rgba(255,255,255,.15);font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px">${{silver:'🥈 Silver',gold:'🥇 Gold',platinum:'💎 Platinum'}[c.tier]||c.tier}</span>` : ''}
+          ${c.segmen && c.segmen!=='regular' ? `<span style="background:rgba(255,255,255,.15);font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px">${{baru:'🆕 Baru',vip:'⭐ VIP',dormant:'😴 Dormant'}[c.segmen]||c.segmen}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.15)">
+        <div><div style="font-size:11px;opacity:.7">Total Order</div><div style="font-size:1.2rem;font-weight:800">${c.total_order||0}</div></div>
+        <div><div style="font-size:11px;opacity:.7">Total Spending</div><div style="font-size:1.2rem;font-weight:800">Rp ${parseFloat(c.total_omset||0).toLocaleString('id-ID')}</div></div>
+      </div>
+    </div>
+
+    <!-- POIN PROGRESS -->
+    <div style="background:linear-gradient(90deg,#F0FDFB,#ECFDF5);border:1px solid #B6F0E6;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;color:#0F766E;font-weight:700;text-transform:uppercase;letter-spacing:.06em">⭐ Saldo Poin</div>
+          <div style="font-size:1.4rem;font-weight:800;color:#0F1C3A">${poin.toLocaleString('id-ID')} <span style="font-size:13px;color:var(--gray);font-weight:500">poin</span></div>
+        </div>
+        ${nextThr ? `<div style="text-align:right;font-size:11px;color:#0F766E">
+          ${nextThr - poin} poin lagi<br><strong>→ ${nextLabel}</strong>
+        </div>` : '<div style="font-size:11px;color:#0F766E">💎 Tier tertinggi!</div>'}
+      </div>
+      ${nextThr ? `<div style="height:8px;background:#fff;border-radius:100px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#10B981,#06B6D4);transition:width .3s"></div>
+      </div>` : ''}
+    </div>
+
+    <!-- PREFERENSI -->
+    <div style="background:#fff;border:1px solid rgba(27,45,90,.08);border-radius:12px;padding:14px 16px;margin-bottom:14px" id="prefBox">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:.06em">🌸 Preferensi</div>
+        <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="togglePrefEdit()" id="prefEditBtn">✏️ Edit</button>
+      </div>
+      <div id="prefDisplay">
+        <div style="font-size:13px;line-height:1.7">
+          Parfum: <strong>${c.preferensi_parfum||'-'}</strong>
+          &nbsp;·&nbsp;Suhu: <strong>${c.preferensi_suhu||'-'}</strong>
+        </div>
+        ${c.catatan_tetap ? `<div style="font-size:13px;color:#475569;margin-top:5px;background:#F8FAFC;padding:7px 10px;border-radius:8px;border-left:3px solid var(--teal)">📝 ${esc(c.catatan_tetap)}</div>` : '<div style="font-size:12px;color:var(--gray);font-style:italic;margin-top:5px">Belum ada catatan tetap</div>'}
+      </div>
+      <div id="prefEdit" style="display:none">
+        <div class="hl-form-row" style="margin-bottom:8px">
+          <div class="hl-form-group" style="margin:0">
+            <label class="hl-label">Parfum</label>
+            <input type="text" id="pf_parfum" class="hl-input" placeholder="Lavender / Vanilla / dll" value="${esc(c.preferensi_parfum||'')}"/>
+          </div>
+          <div class="hl-form-group" style="margin:0">
+            <label class="hl-label">Suhu Cuci</label>
+            <select id="pf_suhu" class="hl-input">
+              <option value="">- Default -</option>
+              <option value="Normal" ${c.preferensi_suhu==='Normal'?'selected':''}>Normal</option>
+              <option value="Hangat" ${c.preferensi_suhu==='Hangat'?'selected':''}>Hangat</option>
+              <option value="Panas"  ${c.preferensi_suhu==='Panas'?'selected':''}>Panas</option>
+              <option value="Dingin" ${c.preferensi_suhu==='Dingin'?'selected':''}>Dingin</option>
+            </select>
+          </div>
+        </div>
+        <div class="hl-form-group" style="margin-bottom:10px">
+          <label class="hl-label">Catatan Tetap (auto-load ke POS saat pelanggan ini dipilih)</label>
+          <textarea id="pf_catatan" class="hl-input hl-textarea" placeholder="Baju putih pisah, jangan setrika kerah, dll">${esc(c.catatan_tetap||'')}</textarea>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="togglePrefEdit()">Batal</button>
+          <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="savePreferensi(${c.id})">💾 Simpan</button>
+        </div>
+      </div>
+    </div>
+
     <div style="background:var(--off);border-radius:var(--r);padding:14px 16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px">
-      <div><span style="color:var(--gray)">Telepon: </span><strong>${c.telepon||'-'}</strong></div>
       <div><span style="color:var(--gray)">Tipe: </span><strong>${c.tipe==='b2b'?'B2B / Korporat':'Retail'}</strong></div>
-      <div><span style="color:var(--gray)">Total Order: </span><strong>${c.total_order||0}</strong></div>
-      <div><span style="color:var(--gray)">Total Omset: </span><strong>Rp ${parseFloat(c.total_omset||0).toLocaleString('id-ID')}</strong></div>
+      <div><span style="color:var(--gray)">Last Transaksi: </span><strong>${c.last_transaksi?fmtDate(c.last_transaksi):'-'}</strong></div>
       ${c.alamat?`<div style="grid-column:1/-1"><span style="color:var(--gray)">Alamat: </span>${esc(c.alamat)}</div>`:''}
       ${c.catatan?`<div style="grid-column:1/-1"><span style="color:var(--gray)">Catatan: </span>${esc(c.catatan)}</div>`:''}
     </div>
@@ -516,6 +621,42 @@ async function openDetail(id) {
         <td style="font-family:var(--mono);font-size:12px;text-align:right;font-weight:600">Rp ${parseFloat(o.total).toLocaleString('id-ID')}</td>
       </tr>`).join('')}</tbody>
     </table></div>` : '<div class="hl-empty">Belum ada order</div>'}`;
+}
+
+function togglePrefEdit(){
+  const disp = document.getElementById('prefDisplay');
+  const edit = document.getElementById('prefEdit');
+  const btn  = document.getElementById('prefEditBtn');
+  const showEdit = edit.style.display === 'none';
+  disp.style.display = showEdit ? 'none' : '';
+  edit.style.display = showEdit ? 'block' : 'none';
+  btn.textContent    = showEdit ? '✕ Batal' : '✏️ Edit';
+}
+
+async function savePreferensi(pid){
+  const body = {
+    id: pid,
+    parfum:         document.getElementById('pf_parfum').value,
+    suhu:           document.getElementById('pf_suhu').value,
+    catatan_tetap:  document.getElementById('pf_catatan').value,
+  };
+  try {
+    const r = await fetch('customer.php?action=save_preferensi', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error,'error'); return; }
+    showToast('✓ Preferensi tersimpan','success');
+    // Update cached row + re-open detail dengan data segar
+    const c = allCustomer.find(x => x.id == pid);
+    if (c) {
+      c.preferensi_parfum = body.parfum;
+      c.preferensi_suhu   = body.suhu;
+      c.catatan_tetap     = body.catatan_tetap;
+    }
+    openDetail(pid);
+  } catch(e){ showToast('Network error','error'); }
 }
 
 function statusBayarBadge(s){
