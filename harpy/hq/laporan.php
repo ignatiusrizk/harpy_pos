@@ -17,6 +17,7 @@ $activePage = 'hq-laporan';
 define('ROOT', dirname(__DIR__));
 require_once ROOT . '/middleware/hq_guard.php';
 require_once ROOT . '/core/AIInsight.php';
+require_once ROOT . '/core/CoinLedger.php';
 
 $db   = Database::get();
 $tid  = (int)$hqTenant['id'];
