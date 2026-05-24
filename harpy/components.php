@@ -84,11 +84,13 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
         'settings' => [
             'label' => 'Settings',
             'items' => [
-                'settings' => ['label'=>'Role & Permission', 'url'=>'settings.php',
-                               'roles'=>['owner','superadmin']],
+                'settings'     => ['label'=>'Role & Permission', 'url'=>'settings.php',
+                                   'roles'=>['owner','superadmin']],
                 // Audit: manager BISA lihat (brief 6.3 manager view_audit ✅, manage tidak)
-                'audit'    => ['label'=>'Audit Log',         'url'=>'audit.php',
-                               'roles'=>['owner','superadmin','admin','manager']],
+                'audit'        => ['label'=>'Audit Log',         'url'=>'audit.php',
+                                   'roles'=>['owner','superadmin','admin','manager']],
+                'owner_report' => ['label'=>'Notifikasi Owner',  'url'=>'owner_report.php',
+                                   'roles'=>['owner','superadmin','admin','manager']],
             ],
         ],
     ];
@@ -114,7 +116,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
       'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
       'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
-      'checklist'=>'✅','droppoint'=>'📦',
+      'checklist'=>'✅','droppoint'=>'📦','owner_report'=>'📨',
     ];
     ?>
     <div class="ol-shell" id="olShell">

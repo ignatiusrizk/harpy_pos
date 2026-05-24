@@ -67,17 +67,21 @@ if (isset($_SESSION['hl_login_time'])) {
 }
 $_SESSION['hl_last_activity'] = $_now;
 
-// ── Anomaly Detector (1x per 30 menit per session) ──
-// Skip untuk AJAX request supaya tidak nambah latency response
+// ── Anomaly Detector + Daily Report (1x per 30 menit per session) ──
+// Pseudo-cron: skip AJAX supaya tidak nambah latency response.
 if (empty($_GET['action']) && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     if (!isset($_SESSION['last_anomaly_check']) || ($_now - $_SESSION['last_anomaly_check']) > 1800) {
         $_SESSION['last_anomaly_check'] = $_now;
         try {
             if (TenantResolver::hasOutlet()) {
+                $_tid = (int)TenantResolver::id();
+                $_oid = (int)TenantResolver::outletId();
                 require_once ROOT . '/core/AnomalyDetector.php';
-                AnomalyDetector::check((int)TenantResolver::id(), (int)TenantResolver::outletId());
+                AnomalyDetector::check($_tid, $_oid);
+                require_once ROOT . '/core/DailyReport.php';
+                DailyReport::maybeSend($_tid, $_oid);
             }
-        } catch (Throwable $e) { error_log('[anomaly_check] '.$e->getMessage()); }
+        } catch (Throwable $e) { error_log('[pseudocron] '.$e->getMessage()); }
     }
 }
 
