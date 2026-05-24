@@ -71,6 +71,10 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                                'roles'=>['owner','superadmin','admin','manager']],
                 'customer' => ['label'=>'Customer', 'url'=>'customer.php',
                                'roles'=>['owner','superadmin','admin','manager','kasir']],
+                'loyalty'  => ['label'=>'Sistem Poin', 'url'=>'loyalty.php',
+                               'roles'=>['owner','superadmin','admin','manager']],
+                'retention'=> ['label'=>'Retensi Dormant', 'url'=>'retention.php',
+                               'roles'=>['owner','superadmin','admin','manager','kasir']],
             ],
         ],
         'hr' => [
@@ -121,6 +125,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
       'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
       'checklist'=>'✅','droppoint'=>'📦','owner_report'=>'📨','piutang'=>'💼','kanban'=>'🗂️',
+      'loyalty'=>'⭐','retention'=>'😴',
     ];
     ?>
     <div class="ol-shell" id="olShell">
