@@ -45,6 +45,8 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                              'roles'=>['owner','superadmin','admin','manager','kasir']],
                 'orders' => ['label'=>'Order', 'url'=>'orders.php',
                              'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
+                'kanban' => ['label'=>'Kanban', 'url'=>'kanban.php',
+                             'roles'=>['owner','superadmin','admin','manager','kasir','staff','kurir']],
                 'kas'    => ['label'=>'Kas',   'url'=>'kas.php',
                              'roles'=>['owner','superadmin','admin','manager']],
                 'checklist' => ['label'=>'Checklist', 'url'=>'checklist.php',
@@ -118,7 +120,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
       'dashboard'=>'🏠','pos'=>'🛒','orders'=>'📋','kas'=>'💰',
       'laporan'=>'📊','layanan'=>'🧺','promo'=>'🎟️','customer'=>'👥',
       'karyawan'=>'👤','absensi'=>'📅','settings'=>'⚙️','audit'=>'🔍',
-      'checklist'=>'✅','droppoint'=>'📦','owner_report'=>'📨','piutang'=>'💼',
+      'checklist'=>'✅','droppoint'=>'📦','owner_report'=>'📨','piutang'=>'💼','kanban'=>'🗂️',
     ];
     ?>
     <div class="ol-shell" id="olShell">
