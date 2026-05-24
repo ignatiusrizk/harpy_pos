@@ -80,6 +80,8 @@ if (empty($_GET['action']) && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
                 AnomalyDetector::check($_tid, $_oid);
                 require_once ROOT . '/core/DailyReport.php';
                 DailyReport::maybeSend($_tid, $_oid);
+                require_once ROOT . '/core/SegmentasiManager.php';
+                SegmentasiManager::updateAll($_tid, $_oid);
             }
         } catch (Throwable $e) { error_log('[pseudocron] '.$e->getMessage()); }
     }

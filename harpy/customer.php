@@ -13,15 +13,23 @@ if ($action) {
     $oid = TenantResolver::outletId();
 
     if ($action === 'list') {
-        $q     = $_GET['q'] ?? '';
-        $tipe  = $_GET['tipe'] ?? '';
-        $page  = max(1, intval($_GET['page'] ?? 1));
-        $limit = 24;
-        $offset= ($page - 1) * $limit;
+        $q       = $_GET['q'] ?? '';
+        $tipe    = $_GET['tipe'] ?? '';
+        $segmen  = $_GET['segmen'] ?? '';
+        $tier    = $_GET['tier'] ?? '';
+        $page    = max(1, intval($_GET['page'] ?? 1));
+        $limit   = 24;
+        $offset  = ($page - 1) * $limit;
 
         $where = ['p.tenant_id = ?', 'p.outlet_id = ?']; $params = [$tid, $oid];
         if ($q) { $where[] = '(p.nama LIKE ? OR p.telepon LIKE ? OR p.alamat LIKE ?)'; $like="%$q%"; $params=array_merge($params,[$like,$like,$like]); }
-        if ($tipe) { $where[] = 'p.tipe=?'; $params[] = $tipe; }
+        if ($tipe)   { $where[] = 'p.tipe=?';   $params[] = $tipe; }
+        if ($segmen && in_array($segmen, ['baru','regular','vip','dormant'], true)) {
+            $where[] = 'p.segmen=?'; $params[] = $segmen;
+        }
+        if ($tier && in_array($tier, ['regular','silver','gold','platinum'], true)) {
+            $where[] = 'p.tier=?'; $params[] = $tier;
+        }
 
         $whereStr = implode(' AND ', $where);
 
@@ -123,6 +131,24 @@ if ($action) {
         echo json_encode(['total'=>$total,'b2b'=>$b2b,'baru'=>$baru]); exit;
     }
 
+    // Stats agregat per-segmen
+    if ($action === 'segmen_stats') {
+        require_once ROOT . '/core/SegmentasiManager.php';
+        echo json_encode(['ok'=>true, 'stats'=>SegmentasiManager::stats($tid)]);
+        exit;
+    }
+
+    // Force re-run segmentasi (untuk tombol manual refresh)
+    if ($action === 'segmen_refresh' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!hasPermission('customer.edit') && !hasPermission('customer.view')) {
+            echo json_encode(['error'=>'Akses ditolak']); exit;
+        }
+        require_once ROOT . '/core/SegmentasiManager.php';
+        $changed = SegmentasiManager::updateAll($tid, $oid, true);
+        echo json_encode(['ok'=>true, 'changed'=>$changed]);
+        exit;
+    }
+
     echo json_encode(['error'=>'Unknown']); exit;
 }
 ?>
@@ -177,6 +203,18 @@ if ($action) {
     </div>
   </div>
 
+  <!-- SEGMEN STATS -->
+  <div id="segmenStatsBar" style="display:none;background:#fff;border:1px solid rgba(27,45,90,.07);border-radius:12px;padding:10px 14px;margin-bottom:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px;color:var(--gray);font-weight:700">SEGMEN:</span>
+      <div class="seg-pill" data-seg="baru" onclick="filterSegmen('baru')" style="cursor:pointer;background:#DBEAFE;color:#1E40AF;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600">🆕 Baru <strong id="segCntBaru">0</strong></div>
+      <div class="seg-pill" data-seg="regular" onclick="filterSegmen('regular')" style="cursor:pointer;background:#F1F5F9;color:#475569;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600">Regular <strong id="segCntRegular">0</strong></div>
+      <div class="seg-pill" data-seg="vip" onclick="filterSegmen('vip')" style="cursor:pointer;background:#FEF3C7;color:#92400E;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600">⭐ VIP <strong id="segCntVip">0</strong></div>
+      <div class="seg-pill" data-seg="dormant" onclick="filterSegmen('dormant')" style="cursor:pointer;background:#FEE2E2;color:#991B1B;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:600">😴 Dormant <strong id="segCntDormant">0</strong></div>
+      <span style="margin-left:auto;font-size:11px;color:var(--gray)">Update otomatis 1x/hari</span>
+    </div>
+  </div>
+
   <div class="hl-filter-collapsible">
     <button class="hl-filter-toggle-btn" id="custFilterBtn" onclick="toggleFilter('custFilter')">
       🔍 Filter &amp; Pencarian <span class="hl-filter-active-dot" id="custFilterDot"></span>
@@ -189,7 +227,21 @@ if ($action) {
         <option value="retail">Retail</option>
         <option value="b2b">B2B / Korporat</option>
       </select>
+      <select id="fSegmen" class="hl-input" style="width:auto" onchange="loadCustomer(1)">
+        <option value="">Semua Segmen</option>
+        <option value="baru">🆕 Baru</option>
+        <option value="regular">Regular</option>
+        <option value="vip">⭐ VIP</option>
+        <option value="dormant">😴 Dormant</option>
+      </select>
+      <select id="fTier" class="hl-input" style="width:auto" onchange="loadCustomer(1)">
+        <option value="">Semua Tier</option>
+        <option value="silver">🥈 Silver</option>
+        <option value="gold">🥇 Gold</option>
+        <option value="platinum">💎 Platinum</option>
+      </select>
       <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadCustomer()">↻</button>
+      <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="refreshSegmen()" title="Re-hitung segmen sekarang">🔄 Segmen</button>
       <span id="custInfo" style="font-size:12px;color:var(--gray);margin-left:auto"></span>
       <div class="view-toggle">
         <button class="view-btn active" id="btnGrid" onclick="setView('grid')" title="Grid">⊞</button>
@@ -283,7 +335,7 @@ let allCustomer = [];
 let searchTimer = null;
 let currentDetailId = null;
 
-document.addEventListener('DOMContentLoaded', () => { initFilter('custFilter'); loadCustomer(); loadStats(); });
+document.addEventListener('DOMContentLoaded', () => { initFilter('custFilter'); loadCustomer(); loadStats(); loadSegmenStats(); });
 
 async function loadStats() {
   const r = await fetch('customer.php?action=stats');
@@ -293,17 +345,65 @@ async function loadStats() {
   document.getElementById('sBaru').textContent  = d.baru;
 }
 
+async function loadSegmenStats() {
+  try {
+    const r = await fetch('customer.php?action=segmen_stats');
+    const d = await r.json();
+    if (!d.ok) return;
+    const s = d.stats || {};
+    document.getElementById('segCntBaru').textContent    = s.baru || 0;
+    document.getElementById('segCntRegular').textContent = s.regular || 0;
+    document.getElementById('segCntVip').textContent     = s.vip || 0;
+    document.getElementById('segCntDormant').textContent = s.dormant || 0;
+    document.getElementById('segmenStatsBar').style.display = 'block';
+  } catch(e){}
+}
+
+function filterSegmen(seg) {
+  document.getElementById('fSegmen').value = seg;
+  loadCustomer(1);
+}
+
+async function refreshSegmen() {
+  if (!confirm('Re-hitung segmen semua pelanggan sekarang?')) return;
+  showToast('⏳ Menghitung segmen...', 'success');
+  try {
+    const r = await fetch('customer.php?action=segmen_refresh', {
+      method:'POST', headers:{'X-CSRF-Token':csrfToken()}
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast('✓ Segmen di-update: ' + (d.changed || 0) + ' pelanggan berubah', 'success');
+    loadCustomer(1); loadSegmenStats();
+  } catch(e) { showToast('Network error', 'error'); }
+}
+
+// Helpers untuk badge
+const TIER_BADGES   = {silver:'🥈',gold:'🥇',platinum:'💎'};
+const SEGMEN_BADGES = {baru:['🆕','#1E40AF','#DBEAFE'], vip:['⭐','#92400E','#FEF3C7'], dormant:['😴','#991B1B','#FEE2E2']};
+function tierBadge(t) {
+  if (!t || !TIER_BADGES[t]) return '';
+  return `<span style="font-size:11px;font-weight:600;color:#475569;margin-left:4px">${TIER_BADGES[t]} ${t}</span>`;
+}
+function segmenBadge(s) {
+  if (!s || !SEGMEN_BADGES[s]) return '';
+  const [emo, fg, bg] = SEGMEN_BADGES[s];
+  return `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;background:${bg};color:${fg};margin-left:4px">${emo} ${s.toUpperCase()}</span>`;
+}
+
 let currentPage = 1;
 let totalPages  = 1;
 let totalCustomer = 0;
 
 async function loadCustomer(page=1) {
   currentPage = page;
-  const q    = document.getElementById('fSearch').value;
-  const tipe = document.getElementById('fTipe').value;
+  const q      = document.getElementById('fSearch').value;
+  const tipe   = document.getElementById('fTipe').value;
+  const segmen = document.getElementById('fSegmen')?.value || '';
+  const tier   = document.getElementById('fTier')?.value || '';
   document.getElementById('custGrid').innerHTML = '<div class="hl-loading" style="grid-column:1/-1">⏳ Memuat...</div>';
 
-  const r = await fetch(`customer.php?action=list&q=${encodeURIComponent(q)}&tipe=${tipe}&page=${page}`);
+  const r = await fetch(`customer.php?action=list&q=${encodeURIComponent(q)}&tipe=${tipe}&segmen=${segmen}&tier=${tier}&page=${page}`);
   const d = await r.json();
   allCustomer   = d.data;
   totalPages    = d.total_pages;
@@ -345,10 +445,11 @@ function renderCustomer() {
       <div class="cust-list-item" onclick="openDetail(${c.id})">
         <div class="cust-list-avatar">${esc(c.nama).charAt(0).toUpperCase()}</div>
         <div class="cust-list-info">
-          <div class="cust-list-nama">${esc(c.nama)}</div>
+          <div class="cust-list-nama">${esc(c.nama)} ${tierBadge(c.tier)} ${segmenBadge(c.segmen)}</div>
           <div class="cust-list-telp">${c.telepon||'No telepon'} ·
             <span class="hl-badge ${c.tipe==='b2b'?'hl-badge-navy':'hl-badge-teal'}" style="font-size:10px">${c.tipe==='b2b'?'B2B':'Retail'}</span>
             ${c.metode_bayar==='bulanan'?'<span class="hl-badge" style="background:#FEF3C7;color:#92400E;font-size:10px;margin-left:4px">Bulanan</span>':''}
+            ${parseInt(c.poin_balance||0) > 0 ? '<span class="hl-badge" style="background:#F0FDFB;color:#0F766E;font-size:10px;margin-left:4px">⭐ '+parseInt(c.poin_balance)+' poin</span>' : ''}
           </div>
         </div>
         <div class="cust-list-stats">
@@ -364,6 +465,10 @@ function renderCustomer() {
           <div>
             <div class="cust-nama">${esc(c.nama)}</div>
             <div class="cust-telp">${c.telepon||'No telepon'}</div>
+            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">
+              ${tierBadge(c.tier)} ${segmenBadge(c.segmen)}
+              ${parseInt(c.poin_balance||0) > 0 ? '<span class="hl-badge" style="background:#F0FDFB;color:#0F766E;font-size:10px">⭐ '+parseInt(c.poin_balance)+'</span>' : ''}
+            </div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <span class="hl-badge ${c.tipe==='b2b'?'hl-badge-navy':'hl-badge-teal'}" style="font-size:10px">${c.tipe==='b2b'?'B2B':'Retail'}</span>
