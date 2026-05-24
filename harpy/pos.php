@@ -1058,7 +1058,21 @@ async function loadAIRekomendasi() {
       headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
       body: JSON.stringify({pelanggan_id:currentPelangganId,current_items:items})
     });
-    const d = await r.json();
+    // Defensive: kalau endpoint return HTML (404/500), jangan crash JSON.parse
+    const txt = await r.text();
+    let d;
+    try { d = JSON.parse(txt); }
+    catch (parseErr) {
+      const isMissing = r.status === 404 || /not found|<!doctype|<html/i.test(txt.substring(0,200));
+      document.getElementById('aiContent').innerHTML =
+        `<div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:12px 14px;border-radius:8px;font-size:13px;color:#92400E">
+          <div style="font-weight:700;margin-bottom:6px">⚠️ Fitur AI Rekomendasi belum tersedia</div>
+          <div>Endpoint <code>ai.php?action=upselling</code> ${isMissing?'belum dibuat di server':'mengembalikan respons tidak valid'}. Hubungi admin untuk aktivasi modul AI Upselling.</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--gray)">Status HTTP: ${r.status}</div>
+        </div>`;
+      document.getElementById('aiStatusText').textContent = 'AI belum aktif';
+      return;
+    }
     if (d.error) {
       document.getElementById('aiContent').innerHTML=`<div style="color:var(--red);font-size:13px;padding:12px">❌ ${d.error}</div>`;
       return;
