@@ -392,7 +392,6 @@ textarea{resize:vertical;min-height:64px}
 </head>
 <body>
 <?php renderTopbar('pos'); ?>
-<?php renderToast(); ?>
 
 <div class="main">
   <div class="grid-2">
@@ -1088,5 +1087,6 @@ function formatDate(d) {
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.className='toast',3500)}
 </script>
+<?php renderToast(); ?>
 </body>
 </html>

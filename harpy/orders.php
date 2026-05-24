@@ -647,7 +647,6 @@ textarea{resize:vertical;min-height:64px}
 </head>
 <body>
 <?php renderTopbar('orders'); ?>
-<?php renderToast(); ?>
 
 <div class="main">
 
@@ -883,8 +882,6 @@ textarea{resize:vertical;min-height:64px}
     </div>
   </div>
 </div>
-
-<?php renderToast(); ?>
 
 <script>
 let searchTimer = null;
@@ -1561,5 +1558,6 @@ async function submitBayar() {
   }
 }
 </script>
+<?php renderToast(); ?>
 </body>
 </html>

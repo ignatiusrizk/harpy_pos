@@ -457,7 +457,6 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
 </head>
 <body>
 <?php renderTopbar('laporan'); ?>
-<?php renderToast(); ?>
 
 <div class="hl-main">
 
@@ -1259,5 +1258,6 @@ function fmtDate(d){if(!d)return'-';return new Date(d+'T00:00:00').toLocaleDateS
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='hl-toast '+type+' show';setTimeout(()=>t.className='hl-toast',3500)}
 </script>
+<?php renderToast(); ?>
 </body>
 </html>
