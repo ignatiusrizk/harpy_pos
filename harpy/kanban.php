@@ -82,7 +82,7 @@ if ($action) {
         try {
             $db = Database::get();
             // Verify ownership & ambil row
-            $rs = $db->prepare("SELECT status_proses, no_order, nama_pelanggan, telepon, total
+            $rs = $db->prepare("SELECT status_proses, no_order, nama_pelanggan, telepon, total, pelanggan_id
                                   FROM hl_transaksi WHERE id=? AND tenant_id=? AND outlet_id=?");
             $rs->execute([$id, $tid, $oid]);
             $cur = $rs->fetch(PDO::FETCH_ASSOC);
@@ -105,6 +105,24 @@ if ($action) {
 
             try { logAudit('update_status','orders',"Kanban: {$cur['status_proses']} → {$next}", $cur['no_order']); } catch (Throwable) {}
 
+            // Loyalty: earn poin saat status berubah ke 'siap' (idempotent per transaksi)
+            $poinEarned = 0;
+            $saldoPoin  = 0;
+            $nextReward = null;
+            if ($next === 'siap'
+                && $cur['status_proses'] !== 'siap'
+                && !empty($cur['pelanggan_id'])
+            ) {
+                try {
+                    require_once ROOT . '/core/Loyalty.php';
+                    $poinEarned = Loyalty::earnForTransaction(
+                        $tid, $oid, $id, (int)$cur['pelanggan_id'], (float)$cur['total']
+                    );
+                    $saldoPoin  = Loyalty::balance($tid, (int)$cur['pelanggan_id']);
+                    $nextReward = Loyalty::nextReward($tid, $oid, $saldoPoin);
+                } catch (Throwable) {}
+            }
+
             // Generate WA link kalau jadi 'siap'
             $waUrl = '';
             if ($next === 'siap' && $cur['telepon']) {
@@ -114,10 +132,21 @@ if ($action) {
                 $txt = "Halo *{$cur['nama_pelanggan']}*, cucian kamu sudah selesai dan siap diambil! 🎉\n"
                      . "Order: {$cur['no_order']}\n"
                      . "Total: Rp " . number_format((int)$cur['total'],0,',','.');
+                if ($poinEarned > 0) {
+                    $txt .= "\n\n🌟 Kamu dapat *{$poinEarned} poin* dari transaksi ini!"
+                          . "\nSaldo poin: *{$saldoPoin} poin*";
+                    if ($nextReward) {
+                        $kurang = (int)$nextReward['poin_dibutuhkan'] - $saldoPoin;
+                        $txt .= "\nButuh *{$kurang} poin* lagi untuk *{$nextReward['nama_reward']}* 🎁";
+                    }
+                }
                 $waUrl = "https://wa.me/$p?text=" . urlencode($txt);
             }
 
-            echo json_encode(['ok'=>true, 'status_baru'=>$next, 'wa'=>$waUrl]);
+            echo json_encode([
+                'ok'=>true, 'status_baru'=>$next, 'wa'=>$waUrl,
+                'poin_earned'=>$poinEarned, 'saldo_poin'=>$saldoPoin,
+            ]);
         } catch (Throwable $e) {
             echo json_encode(['error'=>$e->getMessage()]);
         }

@@ -275,16 +275,17 @@ if ($action) {
             logAudit('update', 'orders', 'Update order ID: ' . $id);
             $db->commit();
 
-            // Loyalty: earn saat lunas (idempotent)
-            if ($sbayar === 'lunas') {
+            // Loyalty: earn poin saat status_proses berubah ke 'siap' (idempotent)
+            $poinEarned = 0;
+            if ($data['status_proses'] === 'siap' && $oldRow['status_proses'] !== 'siap') {
                 try {
                     $prow = TenantQuery::rawOne("SELECT pelanggan_id,total FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid,$oid,$id]);
                     if ($prow && $prow['pelanggan_id'])
-                        Loyalty::earnForTransaction($tid, $oid, (int)$id, (int)$prow['pelanggan_id'], (float)$prow['total']);
+                        $poinEarned = Loyalty::earnForTransaction($tid, $oid, (int)$id, (int)$prow['pelanggan_id'], (float)$prow['total']);
                 } catch (Throwable) {}
             }
 
-            echo json_encode(['success' => true]);
+            echo json_encode(['success' => true, 'poin_earned' => $poinEarned]);
         } catch (Throwable $e) {
             $db->rollBack();
             echo json_encode(['error' => $e->getMessage()]);
@@ -371,15 +372,15 @@ if ($action) {
             logAudit('payment', 'orders', 'Pembayaran order: ' . ($trx['no_order'] ?? '') . ', Rp ' . number_format($jumlah, 0, ',', '.'));
             $db->commit();
 
-            // Loyalty: earn saat lunas (idempotent)
+            // Loyalty: earn TIDAK di-trigger oleh pembayaran lagi (sekarang
+            // by status_proses='siap'). Cuma touch last_transaksi.
             $poinEarned = 0;
-            if ($new_status === 'lunas') {
-                try {
-                    $prow = TenantQuery::rawOne("SELECT pelanggan_id,total FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid,$oid,$id]);
-                    if ($prow && $prow['pelanggan_id'])
-                        $poinEarned = Loyalty::earnForTransaction($tid, $oid, (int)$id, (int)$prow['pelanggan_id'], (float)$prow['total']);
-                } catch (Throwable) {}
-            }
+            try {
+                $prow = TenantQuery::rawOne("SELECT pelanggan_id FROM hl_transaksi WHERE tenant_id=? AND outlet_id=? AND id=?", [$tid,$oid,$id]);
+                if ($prow && $prow['pelanggan_id']) {
+                    Loyalty::touchLastTransaksi($tid, (int)$prow['pelanggan_id']);
+                }
+            } catch (Throwable) {}
 
             echo json_encode([
                 'success'      => true,

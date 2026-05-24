@@ -37,6 +37,73 @@ class Loyalty
         return self::config($tenantId)['enabled'];
     }
 
+    /** Update tier pelanggan berdasarkan poin_balance saat ini */
+    public static function updateTier(int $tenantId, int $pelangganId): string
+    {
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("SELECT poin_balance FROM hl_pelanggan WHERE id=? AND tenant_id=?");
+            $stmt->execute([$pelangganId, $tenantId]);
+            $poin = (int)$stmt->fetchColumn();
+            $tier = 'regular';
+            if      ($poin >= 500) $tier = 'platinum';
+            elseif  ($poin >= 200) $tier = 'gold';
+            elseif  ($poin >= 100) $tier = 'silver';
+            $db->prepare("UPDATE hl_pelanggan SET tier=? WHERE id=? AND tenant_id=?")
+               ->execute([$tier, $pelangganId, $tenantId]);
+            return $tier;
+        } catch (Throwable $e) {
+            error_log('[Loyalty::updateTier] '.$e->getMessage());
+            return 'regular';
+        }
+    }
+
+    /** Touch last_transaksi pelanggan ke CURDATE() */
+    public static function touchLastTransaksi(int $tenantId, int $pelangganId): void
+    {
+        try {
+            Database::get()
+                ->prepare("UPDATE hl_pelanggan SET last_transaksi=CURDATE() WHERE id=? AND tenant_id=?")
+                ->execute([$pelangganId, $tenantId]);
+        } catch (Throwable $e) {
+            error_log('[Loyalty::touchLastTransaksi] '.$e->getMessage());
+        }
+    }
+
+    /** Reward berikutnya yang bisa dicapai pelanggan (untuk pesan motivasi) */
+    public static function nextReward(int $tenantId, int $outletId, int $poinSaatIni): ?array
+    {
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("SELECT id, nama_reward, poin_dibutuhkan
+                                    FROM hl_poin_reward
+                                   WHERE tenant_id=? AND outlet_id=? AND is_active=1
+                                     AND poin_dibutuhkan > ?
+                                   ORDER BY poin_dibutuhkan ASC LIMIT 1");
+            $stmt->execute([$tenantId, $outletId, $poinSaatIni]);
+            $r = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $r ?: null;
+        } catch (Throwable) { return null; }
+    }
+
+    /** List reward aktif yang BISA diredeem pelanggan (poin cukup) */
+    public static function availableRewards(int $tenantId, int $outletId, int $poinSaatIni): array
+    {
+        try {
+            $db = Database::get();
+            $stmt = $db->prepare("SELECT * FROM hl_poin_reward
+                                   WHERE tenant_id=? AND outlet_id=? AND is_active=1
+                                   ORDER BY poin_dibutuhkan ASC");
+            $stmt->execute([$tenantId, $outletId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as &$r) {
+                $r['bisa_redeem'] = $poinSaatIni >= (int)$r['poin_dibutuhkan'];
+                $r['kurang']     = max(0, (int)$r['poin_dibutuhkan'] - $poinSaatIni);
+            }
+            return $rows;
+        } catch (Throwable) { return []; }
+    }
+
     public static function balance(int $tenantId, int $pelangganId): int
     {
         try {
@@ -74,14 +141,27 @@ class Loyalty
             $bal = (int)$cur->fetchColumn();
             $newBal = $bal + $poin;
 
-            $db->prepare("UPDATE hl_pelanggan SET poin_balance=? WHERE id=? AND tenant_id=?")
+            $db->prepare("UPDATE hl_pelanggan SET poin_balance=?, last_transaksi=CURDATE() WHERE id=? AND tenant_id=?")
                ->execute([$newBal, $pelangganId, $tenantId]);
+
+            // Expiry — ambil dari setting tenant (default 12 bulan)
+            $months = 12;
+            try {
+                $sst = $db->prepare("SELECT loyalty_expiry_months FROM tenants WHERE id=?");
+                $sst->execute([$tenantId]);
+                $months = max(1, (int)($sst->fetchColumn() ?: 12));
+            } catch (Throwable) {}
+            $expDate = date('Y-m-d', strtotime("+{$months} months"));
+
             $db->prepare("INSERT INTO hl_loyalty_log
-                            (tenant_id, outlet_id, pelanggan_id, transaksi_id, type, poin, balance_after, keterangan)
-                          VALUES (?,?,?,?,'earn',?,?,?)")
+                            (tenant_id, outlet_id, pelanggan_id, transaksi_id, type, poin, balance_after, keterangan, expired_at)
+                          VALUES (?,?,?,?,'earn',?,?,?,?)")
                ->execute([$tenantId, $outletId, $pelangganId, $transaksiId, $poin, $newBal,
-                          'Earn dari transaksi #'.$transaksiId]);
+                          'Earn dari transaksi #'.$transaksiId, $expDate]);
             $db->commit();
+
+            // Update tier (di luar transaction — non-critical)
+            self::updateTier($tenantId, $pelangganId);
             return $poin;
         } catch (Throwable $e) {
             if ($db->inTransaction()) $db->rollBack();

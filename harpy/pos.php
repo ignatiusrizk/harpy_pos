@@ -306,12 +306,12 @@ if ($action) {
             $db->commit();
             logAudit('create', 'orders', 'Buat order baru: ' . $no . ' - ' . $nama_pel, $no);
 
-            // Loyalty: earn poin saat order LUNAS (idempotent)
+            // Loyalty: earn poin TIDAK lagi di sini — sekarang triggered saat
+            // status_proses berubah ke 'siap' (di orders.php / kanban.php).
+            // Touch last_transaksi supaya segmentasi akurat saat order dibuat.
             $poinEarned = 0;
-            if ($status_b === 'lunas' && $pel_id) {
-                try {
-                    $poinEarned = Loyalty::earnForTransaction($tid, $oid, (int)$trx_id, (int)$pel_id, (float)$total);
-                } catch (Throwable) {}
+            if ($pel_id) {
+                try { Loyalty::touchLastTransaksi($tid, (int)$pel_id); } catch (Throwable) {}
             }
 
             echo json_encode(['success'=>true, 'no_order'=>$no, 'id'=>$trx_id,
