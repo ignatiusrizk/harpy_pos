@@ -70,6 +70,19 @@ if ($action) {
     }
 
     // SAVE transaksi
+    // UPLOAD FOTO KONDISI CUCIAN (multipart) — returns relative path
+    if ($action === 'upload_foto' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!hasPermission('pos.create')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
+        verifyCsrf();
+        require_once ROOT . '/core/FileUpload.php';
+        $f = $_FILES['foto'] ?? null;
+        if (!$f) { echo json_encode(['error'=>'File foto tidak ditemukan']); exit; }
+        $res = FileUpload::uploadImage($f, 'uploads/foto_masuk', 't' . $tid . '_o' . $oid);
+        if ($res['error']) { echo json_encode(['error'=>$res['error']]); exit; }
+        echo json_encode(['ok'=>true, 'path'=>$res['path']]);
+        exit;
+    }
+
     if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!hasPermission('pos.create')) { echo json_encode(['error'=>'Akses ditolak']); exit; }
         verifyCsrf();
@@ -194,6 +207,11 @@ if ($action) {
             $sisa     = $total - $dp;
             $status_b = $dp >= $total ? 'lunas' : ($dp > 0 ? 'dp' : 'belum_bayar');
 
+            // Foto masuk (optional, dari upload_foto endpoint)
+            $fotoMasuk = trim($data['foto_masuk'] ?? '');
+            $hasFotoMasuk = true;
+            try { $db->query("SELECT foto_masuk FROM hl_transaksi LIMIT 1"); } catch (Throwable) { $hasFotoMasuk = false; }
+
             // Insert transaksi header (with estimasi_jam kalau kolom ada)
             $hasEstJam = true;
             try { $db->query("SELECT estimasi_jam FROM hl_transaksi LIMIT 1"); } catch (Throwable) { $hasEstJam = false; }
@@ -227,6 +245,14 @@ if ($action) {
                 ]);
             }
             $trx_id = $db->lastInsertId();
+
+            // Simpan foto_masuk kalau kolom & data ada
+            if ($hasFotoMasuk && $fotoMasuk !== '') {
+                try {
+                    $db->prepare("UPDATE hl_transaksi SET foto_masuk=? WHERE id=? AND tenant_id=? AND outlet_id=?")
+                       ->execute([substr($fotoMasuk,0,255), $trx_id, $tid, $oid]);
+                } catch (Throwable) {}
+            }
 
             // Deduct poin redeem (dalam transaksi yang sama) — transaksi_id terisi
             if ($redeemPoin > 0 && $pel_id) {
@@ -547,6 +573,21 @@ textarea{resize:vertical;min-height:64px}
           <div id="emptyItems" style="text-align:center;padding:20px;color:var(--gray);font-size:14px">
             Pilih layanan di atas atau klik "+ Tambah Baris"
           </div>
+
+          <!-- FOTO KONDISI CUCIAN -->
+          <div style="margin-top:16px;padding-top:14px;border-top:1px dashed rgba(27,45,90,.1)">
+            <label style="font-size:12px;font-weight:600;color:var(--gray);display:block;margin-bottom:6px">
+              📸 Foto Kondisi Cucian (opsional)
+            </label>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="f_foto" accept="image/*" capture="environment"
+                     style="font-size:13px" onchange="uploadFotoMasuk(this)"/>
+              <span id="fotoStatus" style="font-size:12px;color:var(--gray)"></span>
+              <button type="button" class="btn btn-outline btn-sm" id="btnFotoClear" onclick="clearFoto()" style="display:none">✕ Hapus</button>
+            </div>
+            <img id="fotoPreview" style="display:none;max-height:80px;border-radius:8px;margin-top:8px;border:1px solid rgba(27,45,90,.1)"/>
+            <input type="hidden" id="f_foto_path" value=""/>
+          </div>
         </div>
       </div>
 
@@ -754,7 +795,67 @@ document.addEventListener('DOMContentLoaded', () => {
   // Kosongkan estimasi dulu — loadEstimasiHint akan isi otomatis sesuai antrian
   loadLayanan();
   loadEstimasiHint();
+
+  // ── KEYBOARD SHORTCUTS ──
+  document.addEventListener('keydown', (e) => {
+    // Skip kalau lagi ketik di input/textarea (kecuali F2/F3/Esc yang harus tetap aktif)
+    const tag = (e.target.tagName||'').toLowerCase();
+    const isField = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+    if (e.key === 'F2') {
+      e.preventDefault();
+      const el = document.getElementById('f_nama'); if (el) el.focus();
+    } else if (e.key === 'F3') {
+      e.preventDefault();
+      saveTransaksi();
+    } else if (e.key === 'Escape') {
+      const cfm = document.getElementById('confirmSaveModal');
+      if (cfm && cfm.style.display === 'flex') { closeCfm(); return; }
+      if (!isField) resetForm();
+    } else if (e.key === 'Enter') {
+      const cfm = document.getElementById('confirmSaveModal');
+      if (cfm && cfm.style.display === 'flex') { e.preventDefault(); doSaveTransaksi(); }
+    }
+  });
 });
+
+// ── FOTO MASUK UPLOAD ────────────────────────────────
+async function uploadFotoMasuk(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const status = document.getElementById('fotoStatus');
+  status.textContent = '⏳ Mengunggah...';
+  const fd = new FormData();
+  fd.append('foto', f);
+  try {
+    const r = await fetch('pos.php?action=upload_foto', {
+      method:'POST',
+      headers:{'X-CSRF-Token':csrfToken()},
+      body: fd
+    });
+    const d = await r.json();
+    if (d.error) { status.textContent = '❌ ' + d.error; status.style.color = 'var(--red)'; return; }
+    document.getElementById('f_foto_path').value = d.path;
+    const prev = document.getElementById('fotoPreview');
+    prev.src = '/ERP/harpy/' + d.path;
+    prev.style.display = 'block';
+    document.getElementById('btnFotoClear').style.display = '';
+    status.textContent = '✓ Terunggah';
+    status.style.color = 'var(--green)';
+  } catch(e){ status.textContent = '❌ Network error'; status.style.color = 'var(--red)'; }
+}
+
+function clearFoto() {
+  document.getElementById('f_foto').value = '';
+  document.getElementById('f_foto_path').value = '';
+  document.getElementById('fotoPreview').style.display = 'none';
+  document.getElementById('fotoPreview').src = '';
+  document.getElementById('fotoStatus').textContent = '';
+  document.getElementById('btnFotoClear').style.display = 'none';
+}
+
+// ── KONFIRMASI MODAL ────────────────────────────────
+function closeCfm(){ document.getElementById('confirmSaveModal').style.display = 'none'; }
 
 async function loadLayanan() {
   const res = await fetch('pos.php?action=get_layanan');
@@ -994,12 +1095,40 @@ document.addEventListener('click', e => {
     document.getElementById('acList').classList.remove('open');
 });
 
-async function saveTransaksi() {
+function saveTransaksi() {
   const nama = document.getElementById('f_nama').value.trim();
   const telp = document.getElementById('f_telepon').value.trim();
   if (!nama) { showToast('⚠️ Nama pelanggan wajib diisi', 'error'); return; }
   if (!telp) { showToast('⚠️ Nomor HP wajib diisi', 'error'); return; }
   if (!items.length) { showToast('⚠️ Minimal 1 item layanan', 'error'); return; }
+
+  // Tampilkan konfirmasi modal dulu
+  const total = document.getElementById('sumTotal')?.textContent || 'Rp 0';
+  const dp    = document.getElementById('sumDP')?.textContent || 'Rp 0';
+  const sisa  = document.getElementById('sumSisa')?.textContent || 'Rp 0';
+  const metode = document.getElementById('f_metode')?.options[document.getElementById('f_metode').selectedIndex]?.text || '-';
+  const fotoOK = !!document.getElementById('f_foto_path').value;
+
+  document.getElementById('cfmBody').innerHTML =
+    '<div><strong>' + escapeHtml(nama) + '</strong> · ' + escapeHtml(telp) + '</div>' +
+    '<div>Item: <strong>' + items.length + '</strong> baris</div>' +
+    '<div>Total: <strong>' + total + '</strong></div>' +
+    '<div>DP/Bayar: <strong>' + dp + '</strong> (' + metode + ')</div>' +
+    '<div>Sisa: <strong>' + sisa + '</strong></div>' +
+    '<div style="margin-top:4px;color:' + (fotoOK?'var(--green)':'var(--gray)') + '">' +
+      (fotoOK ? '📸 Foto kondisi terlampir' : '📸 Tanpa foto kondisi') + '</div>';
+  const modal = document.getElementById('confirmSaveModal');
+  modal.style.display = 'flex';
+  setTimeout(()=>document.getElementById('cfmYes')?.focus(), 50);
+}
+
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+async function doSaveTransaksi() {
+  closeCfm();
+  const nama = document.getElementById('f_nama').value.trim();
+  const telp = document.getElementById('f_telepon').value.trim();
+  if (!nama || !telp || !items.length) return;
 
   const btn = document.getElementById('btnSave');
   btn.disabled=true; btn.textContent='⏳ Menyimpan...';
@@ -1014,6 +1143,7 @@ async function saveTransaksi() {
     redeem_poin:    (LOYALTY.enabled && currentPelangganId) ? (parseInt(document.getElementById('f_redeem_poin')?.value||0)||0) : 0,
     dp:             document.getElementById('f_dp').value,
     metode_bayar:   document.getElementById('f_metode').value,
+    foto_masuk:     document.getElementById('f_foto_path').value || '',
     items
   };
 
@@ -1163,6 +1293,7 @@ function resetForm() {
   currentPelangganId=null; currentPelangganPoin=0;
   const rp=document.getElementById('f_redeem_poin'); if(rp) rp.value='0';
   updateLoyaltyBox();
+  if (typeof clearFoto === 'function') clearFoto();
 }
 
 function formatDate(d) {
@@ -1172,6 +1303,19 @@ function formatDate(d) {
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
 function showToast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.className='toast',3500)}
 </script>
+<!-- KONFIRMASI MODAL -->
+<div id="confirmSaveModal" style="display:none;position:fixed;inset:0;background:rgba(15,28,58,.55);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:20px 22px;max-width:380px;width:90%;box-shadow:0 12px 40px rgba(15,28,58,.25)">
+    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Konfirmasi Order Baru</div>
+    <div id="cfmBody" style="font-size:13px;color:#334155;line-height:1.7;background:#F8FAFC;border-radius:9px;padding:12px 14px;margin-bottom:14px"></div>
+    <div style="font-size:11px;color:var(--gray);margin-bottom:14px">Pastikan data benar — order yang sudah tersimpan tidak bisa dibatalkan dari POS.</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline" style="flex:1" onclick="closeCfm()">✕ Batal</button>
+      <button class="btn btn-primary" style="flex:1.4" id="cfmYes" onclick="doSaveTransaksi()">✓ Ya, Simpan (Enter)</button>
+    </div>
+  </div>
+</div>
+
 <?php renderToast(); ?>
 </body>
 </html>

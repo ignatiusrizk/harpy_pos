@@ -396,6 +396,54 @@ if ($action) {
         exit;
     }
 
+    // BULK UPDATE STATUS_PROSES
+    if ($action === 'bulk_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (!hasPermission('orders.update') && !hasPermission('orders.update_own')) {
+            echo json_encode(['error'=>'Akses ditolak']); exit;
+        }
+        verifyCsrf();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $ids    = $data['ids'] ?? [];
+        $status = $data['status'] ?? '';
+        $allowed = ['masuk','cuci','kering','setrika','siap','diambil'];
+        if (!in_array($status, $allowed, true)) { echo json_encode(['error'=>'Status tidak valid']); exit; }
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $ids = array_filter($ids, fn($x) => $x > 0);
+        if (!$ids) { echo json_encode(['error'=>'Tidak ada order dipilih']); exit; }
+        if (count($ids) > 100) { echo json_encode(['error'=>'Maksimal 100 order per bulk']); exit; }
+
+        $db = Database::get();
+        $db->beginTransaction();
+        try {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            // Update + handled_by stamp + tgl_selesai stamp
+            $sql = "UPDATE hl_transaksi
+                       SET status_proses=?,
+                           handled_by = CASE WHEN ? IN ('cuci','kering','setrika','siap','diambil','selesai')
+                                              AND handled_by IS NULL THEN ? ELSE handled_by END,
+                           tgl_selesai = CASE WHEN ? IN ('siap','diambil','selesai') AND tgl_selesai IS NULL
+                                              THEN NOW() ELSE tgl_selesai END
+                     WHERE tenant_id=? AND outlet_id=? AND id IN ($ph)";
+            $params = [$status, $status, $user['id'], $status, $tid, $oid, ...$ids];
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            $affected = $stmt->rowCount();
+
+            // Log per id
+            $lg = $db->prepare("INSERT INTO hl_proses_log (tenant_id,transaksi_id,status_baru,oleh,catatan) VALUES (?,?,?,?,?)");
+            foreach ($ids as $oidord) {
+                $lg->execute([$tid, $oidord, $status, $user['nama'], 'Bulk update']);
+            }
+            $db->commit();
+            logAudit('bulk_status', 'orders', count($ids).' order → '.$status);
+            echo json_encode(['ok'=>true, 'affected'=>$affected]);
+        } catch (Throwable $e) {
+            $db->rollBack();
+            echo json_encode(['error'=>$e->getMessage()]);
+        }
+        exit;
+    }
+
     // LIST CATATAN INTERNAL (multi-row, hl_order_notes)
     if ($action === 'notes_list') {
         $oidv = intval($_GET['order_id'] ?? 0);
@@ -810,10 +858,26 @@ textarea{resize:vertical;min-height:64px}
       <div class="card-title">📋 Daftar Order Laundry</div>
       <span id="tableInfo" style="font-size:12px;color:var(--gray)"></span>
     </div>
+    <!-- BULK TOOLBAR -->
+    <div id="bulkToolbar" style="display:none;background:#0F1C3A;color:#fff;padding:10px 16px;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600"><span id="bulkCount">0</span> order dipilih</span>
+      <select id="bulkStatus" style="padding:6px 10px;border-radius:7px;border:none;font-size:13px">
+        <option value="">— Pilih status baru —</option>
+        <option value="masuk">📥 Masuk</option>
+        <option value="cuci">🫧 Cuci</option>
+        <option value="kering">💨 Kering</option>
+        <option value="setrika">👔 Setrika</option>
+        <option value="siap">✅ Siap</option>
+        <option value="diambil">📦 Diambil</option>
+      </select>
+      <button class="btn btn-teal-sm btn-sm" onclick="applyBulkStatus()">✓ Terapkan</button>
+      <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)" onclick="clearBulkSelection()">✕ Batal</button>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th style="width:34px;text-align:center"><input type="checkbox" id="bulkAll" onclick="toggleAllBulk(this)" title="Pilih semua di halaman ini"/></th>
             <th class="th-sort" onclick="setSort('no_order')" id="th_no_order">No. Order <span class="sort-icon">↕</span></th>
             <th class="th-sort" onclick="setSort('tanggal')" id="th_tanggal">Tanggal <span class="sort-icon">↕</span></th>
             <th class="th-sort" onclick="setSort('nama_pelanggan')" id="th_nama_pelanggan">Pelanggan <span class="sort-icon">↕</span></th>
@@ -827,7 +891,7 @@ textarea{resize:vertical;min-height:64px}
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="10"><div class="loading">⏳ Memuat data...</div></td></tr>
+          <tr><td colspan="11"><div class="loading">⏳ Memuat data...</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -1001,6 +1065,48 @@ async function loadLayanan() {
   layananAll = await r.json();
 }
 
+// ── BULK SELECTION ────────────────────────────────────
+function onBulkCbChange() {
+  const sel = document.querySelectorAll('.bulkCb:checked').length;
+  document.getElementById('bulkCount').textContent = sel;
+  document.getElementById('bulkToolbar').style.display = sel > 0 ? 'flex' : 'none';
+  // Sync header checkbox tri-state
+  const total = document.querySelectorAll('.bulkCb').length;
+  const all = document.getElementById('bulkAll');
+  if (all) {
+    all.checked = (sel > 0 && sel === total);
+    all.indeterminate = (sel > 0 && sel < total);
+  }
+}
+function toggleAllBulk(cb) {
+  document.querySelectorAll('.bulkCb').forEach(x => x.checked = cb.checked);
+  onBulkCbChange();
+}
+function clearBulkSelection() {
+  document.querySelectorAll('.bulkCb').forEach(x => x.checked = false);
+  const all = document.getElementById('bulkAll'); if (all) { all.checked=false; all.indeterminate=false; }
+  onBulkCbChange();
+}
+async function applyBulkStatus() {
+  const status = document.getElementById('bulkStatus').value;
+  if (!status) { showToast('Pilih status dulu','error'); return; }
+  const ids = Array.from(document.querySelectorAll('.bulkCb:checked')).map(x => parseInt(x.value));
+  if (!ids.length) { showToast('Tidak ada order dipilih','error'); return; }
+  if (!confirm('Update status ' + ids.length + ' order menjadi "' + status + '"?')) return;
+  try {
+    const r = await fetch('orders.php?action=bulk_status', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken()},
+      body: JSON.stringify({ids, status})
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error,'error'); return; }
+    showToast('✓ ' + (d.affected||ids.length) + ' order diupdate');
+    clearBulkSelection();
+    loadOrders(ordersCurrentPage);
+  } catch (e) { showToast('Network error','error'); }
+}
+
 let ordersCurrentPage = 1;
 let ordersTotalPages  = 1;
 let ordersSort        = 'tanggal';
@@ -1028,13 +1134,13 @@ async function loadOrders(page=1) {
   const sampai = document.getElementById('filterSampai').value;
   const sumber = document.getElementById('filterSumber')?.value || '';
 
-  document.getElementById('tableBody').innerHTML = '<tr><td colspan="10"><div class="loading">⏳ Memuat...</div></td></tr>';
+  document.getElementById('tableBody').innerHTML = '<tr><td colspan="11"><div class="loading">⏳ Memuat...</div></td></tr>';
 
   const r = await fetch(`orders.php?action=list&q=${encodeURIComponent(q)}&status=${st}&bayar=${by}&dari=${dari}&sampai=${sampai}&sumber=${sumber}&page=${page}&sort=${ordersSort}&dir=${ordersSortDir}`);
   const d = await r.json();
 
   if (!d.data?.length) {
-    document.getElementById('tableBody').innerHTML = '<tr><td colspan="10"><div class="empty">📭 Tidak ada order ditemukan.</div></td></tr>';
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="11"><div class="empty">📭 Tidak ada order ditemukan.</div></td></tr>';
     document.getElementById('tableInfo').textContent = '';
     document.getElementById('ordersPaging').innerHTML = '';
     return;
@@ -1050,6 +1156,9 @@ async function loadOrders(page=1) {
       : '<span style="font-size:11px;color:var(--green);padding:4px">&#10003; Lunas</span>';
 
     return '<tr onclick="openDetail(' + row.id + ')">'
+      + '<td onclick="event.stopPropagation()" style="text-align:center">'
+      +   '<input type="checkbox" class="bulkCb" value="' + row.id + '" onclick="onBulkCbChange()"/>'
+      + '</td>'
       + '<td><span class="td-no">' + row.no_order + '</span></td>'
       + '<td>' + fmtDate(row.tanggal) + '</td>'
       + '<td><div class="td-nama">' + esc(row.nama_pelanggan)
@@ -1072,6 +1181,9 @@ async function loadOrders(page=1) {
 
   ordersTotalPages = d.total_pages;
   document.getElementById('tableInfo').textContent = `${d.total} order · halaman ${page} dari ${d.total_pages}`;
+  // Reset bulk selection on reload
+  const btb = document.getElementById('bulkToolbar'); if (btb) btb.style.display = 'none';
+  const ball = document.getElementById('bulkAll'); if (ball) { ball.checked=false; ball.indeterminate=false; }
   renderOrdersPaging(d.page, d.total_pages);
 }
 
@@ -1243,7 +1355,7 @@ async function addNote() {
   if (!currentEditId) return;
   const inp = document.getElementById('noteInput');
   const v = (inp.value || '').trim();
-  if (!v) { toast('Tulis catatan dulu', 'error'); return; }
+  if (!v) { showToast('Tulis catatan dulu', 'error'); return; }
   try {
     const r = await fetch('orders.php?action=note_add', {
       method: 'POST',
@@ -1251,12 +1363,12 @@ async function addNote() {
       body: JSON.stringify({order_id: currentEditId, catatan: v})
     });
     const d = await r.json();
-    if (d.error) { toast(d.error, 'error'); return; }
+    if (d.error) { showToast(d.error, 'error'); return; }
     inp.value = '';
     loadNotes(currentEditId);
-    toast('✓ Catatan ditambahkan');
+    showToast('✓ Catatan ditambahkan');
   } catch (e) {
-    toast('Network error', 'error');
+    showToast('Network error', 'error');
   }
 }
 

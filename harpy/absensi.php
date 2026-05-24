@@ -786,10 +786,10 @@ async function ackHandover(id) {
       body: JSON.stringify({id})
     });
     const d = await r.json();
-    if (d.error) { toast(d.error, 'error'); return; }
-    toast('✓ Handover di-acknowledge');
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast('✓ Handover di-acknowledge');
     loadHandoverPending();
-  } catch (e) { toast('Network error','error'); }
+  } catch (e) { showToast('Network error','error'); }
 }
 
 async function submitHandover() {
@@ -810,12 +810,12 @@ async function submitHandover() {
       body: JSON.stringify(body)
     });
     const d = await r.json();
-    if (d.error) { toast(d.error, 'error'); return; }
-    toast('✓ Handover tersimpan');
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast('✓ Handover tersimpan');
     document.getElementById('ho_mesin').value = '';
     document.getElementById('ho_catatan').value = '';
     loadHandoverPending();
-  } catch (e) { toast('Network error','error'); }
+  } catch (e) { showToast('Network error','error'); }
 }
 
 // ── STATUS HARI INI ───────────────────────────────────
