@@ -15,6 +15,22 @@
 // ══════════════════════════════════════════════════════
 
 define('ROOT', __DIR__);
+
+// ── Hardening: jangan biarkan PHP warning/notice/fatal leak HTML ke client ──
+@ini_set('display_errors', '0');
+if (ob_get_level() === 0) ob_start();
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        while (ob_get_level() > 0) ob_end_clean();
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        echo json_encode(['error' => 'Server error: ' . $err['message']]);
+    }
+});
+
 require_once ROOT . '/middleware/tenant_guard.php';
 require_once ROOT . '/core/AnthropicClient.php';
 require_once ROOT . '/core/CoinLedger.php';
@@ -56,8 +72,19 @@ function ai_cache_put(int $tid, ?int $oid, string $key, array $out, int $tokIn, 
 }
 
 function ai_err(string $msg, int $code = 400): never {
-    http_response_code($code);
+    while (ob_get_level() > 0) ob_end_clean();
+    if (!headers_sent()) {
+        http_response_code($code);
+        header('Content-Type: application/json');
+    }
     echo json_encode(['error' => $msg]);
+    exit;
+}
+
+function ai_ok(array $payload): never {
+    while (ob_get_level() > 0) { $junk = ob_get_clean(); if (!empty($junk)) error_log('[ai.php] stray output: '.substr($junk,0,300)); }
+    if (!headers_sent()) header('Content-Type: application/json');
+    echo json_encode($payload);
     exit;
 }
 
@@ -71,7 +98,7 @@ if ($action === 'briefing') {
     $cached = ai_cache_get($tid, $key);
     if ($cached !== null) {
         $cached['from_cache'] = true;
-        echo json_encode(['ok'=>true, 'data'=>$cached]);
+        ai_ok(['ok'=>true, 'data'=>$cached]);
         exit;
     }
 
@@ -203,7 +230,7 @@ if ($action === 'briefing') {
     ai_cache_put($tid, $oid, $key, $output, $result['tokens_in'], $result['tokens_out'], 24);
     if (function_exists('logAudit')) logAudit('ai_briefing', 'dashboard', 'Outlet briefing '.$today);
 
-    echo json_encode(['ok'=>true, 'data'=>$output]);
+    ai_ok(['ok'=>true, 'data'=>$output]);
     exit;
 }
 
@@ -263,12 +290,11 @@ if ($action === 'laporan_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     CoinLedger::deduct('ai_chat_data', 'laporan_chat');
     if (function_exists('logAudit')) logAudit('ai_chat', 'laporan', mb_substr($pertanyaan, 0, 80));
 
-    echo json_encode([
+    ai_ok([
         'ok'          => true,
         'jawaban'     => trim($result['text']),
         'tokens_used' => $result['tokens_in'] + $result['tokens_out'],
     ]);
-    exit;
 }
 
 // ══════════════════════════════════════════════════════
@@ -286,7 +312,7 @@ if ($action === 'upselling' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $cached = ai_cache_get($tid, $key);
     if ($cached !== null) {
         $cached['from_cache'] = true;
-        echo json_encode(['ok'=>true, 'data'=>$cached]);
+        ai_ok(['ok'=>true, 'data'=>$cached]);
         exit;
     }
 
@@ -396,7 +422,7 @@ if ($action === 'upselling' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     ai_cache_put($tid, $oid, $key, $output, $result['tokens_in'], $result['tokens_out'], 24);
     if (function_exists('logAudit')) logAudit('ai_upselling', 'pelanggan#'.$pid, '');
 
-    echo json_encode(['ok'=>true, 'data'=>$output]);
+    ai_ok(['ok'=>true, 'data'=>$output]);
     exit;
 }
 

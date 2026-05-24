@@ -23,6 +23,22 @@ $startTimeline = date('Y-m-d', strtotime('-6 days'));
 
 // ── AJAX: AI Briefing HQ ─────────────────────────────
 if (($_GET['action'] ?? '') === 'ai_briefing') {
+    // ── Hardening: jangan biarkan PHP warning/notice/fatal leak HTML ke client ──
+    @error_reporting(E_ALL);
+    @ini_set('display_errors', '0');
+    if (ob_get_level() === 0) ob_start();
+    register_shutdown_function(function () {
+        $err = error_get_last();
+        if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+            // Buang output HTML yang sudah keluar, ganti dengan JSON error
+            while (ob_get_level() > 0) ob_end_clean();
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: application/json');
+            }
+            echo json_encode(['error' => 'Server error: ' . $err['message']]);
+        }
+    });
     header('Content-Type: application/json');
 
     // Cek cache dulu (gratis kalau sudah ada hari ini) — peek tanpa generate
@@ -99,6 +115,8 @@ if (($_GET['action'] ?? '') === 'ai_briefing') {
             try { CoinLedger::deduct('ai_briefing_hq'); } catch (Throwable) {}
             try { logAudit('ai_briefing', 'dashboard', 'Generate briefing HQ ' . date('Y-m-d')); } catch (Throwable) {}
         }
+        // Buang accidental output (warning/notice yang lolos) sebelum kirim JSON
+        while (ob_get_level() > 0) { $junk = ob_get_clean(); if (!empty($junk)) error_log('[hq/ai_briefing] stray output: '.substr($junk,0,300)); }
         echo json_encode([
             'ok'           => true,
             'briefing'     => $b['briefing'],
@@ -106,6 +124,12 @@ if (($_GET['action'] ?? '') === 'ai_briefing') {
             'generated_at' => $b['generated_at'] ?? date('Y-m-d H:i:s'),
         ]);
     } catch (Throwable $e) {
+        while (ob_get_level() > 0) ob_end_clean();
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        error_log('[hq/ai_briefing] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         echo json_encode(['error' => 'Briefing gagal: ' . $e->getMessage()]);
     }
     exit;
@@ -1078,7 +1102,22 @@ async function generateBriefing(){
 
   try {
     const r = await fetch('/ERP/harpy/hq/dashboard.php?action=ai_briefing');
-    const d = await r.json();
+    const txt = await r.text();
+    let d;
+    try { d = JSON.parse(txt); }
+    catch (parseErr) {
+      btn.disabled = false;
+      document.getElementById('aiBriefLoading').style.display = 'none';
+      document.getElementById('aiBriefEmpty').style.display = 'block';
+      const peek = txt.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').substring(0,180);
+      document.getElementById('aiBriefEmpty').innerHTML =
+        '<div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:10px 12px;border-radius:8px;font-size:12px;color:#92400E;text-align:left">'
+        + '<div style="font-weight:700;margin-bottom:4px">⚠️ Server return format tidak valid (HTTP ' + r.status + ')</div>'
+        + '<div style="font-size:11px;opacity:.8">Cuplikan response: <code>' + (peek || '(kosong)') + '</code></div>'
+        + '<div style="margin-top:6px;font-size:11px">Cek <code>error_log</code> di hosting untuk detail.</div>'
+        + '</div>';
+      return;
+    }
     btn.disabled = false;
     if (d.error) {
       document.getElementById('aiBriefLoading').style.display = 'none';

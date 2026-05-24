@@ -1400,7 +1400,17 @@ async function loadBriefing(){
   document.getElementById('aiBriefingContent').innerHTML='<div class="hl-loading">⏳ AI sedang menganalisis data hari ini...</div>';
   try{
     const r=await fetch('ai.php?action=briefing');
-    const d=await r.json();
+    const txt=await r.text();
+    let d;
+    try{d=JSON.parse(txt);}
+    catch(parseErr){
+      document.getElementById('aiBriefingContent').innerHTML=
+        `<div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:12px 14px;border-radius:8px;font-size:13px;color:#92400E">
+          <div style="font-weight:700;margin-bottom:6px">⚠️ AI Briefing gagal merespons</div>
+          <div>Server mengembalikan format tidak valid (HTTP ${r.status}). Cek error_log atau coba lagi nanti.</div>
+        </div>`;
+      return;
+    }
     if(d.error){document.getElementById('aiBriefingContent').innerHTML=`<div style="color:var(--red);font-size:13px">❌ ${d.error}</div>`;return;}
     const data=d.data;
     const cmap={baik:'var(--green)',waspada:'var(--yellow)',kritis:'var(--red)'};
