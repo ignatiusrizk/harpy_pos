@@ -369,7 +369,7 @@ function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
     <script>
     function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}
-    // ── Notification bell — pakai event delegation, defensive ──
+    // ── Notification bell ──
     (function(){
       function init(){
         var btn = document.getElementById('hlNotifBtn');
@@ -377,8 +377,7 @@ function renderToast(): void { ?>
         var closeBtn = document.getElementById('hlNotifClose');
         if (!btn || !pop) return;
         btn.addEventListener('click', function(e){
-          e.stopPropagation();
-          e.preventDefault();
+          e.stopPropagation(); e.preventDefault();
           pop.classList.toggle('open');
         });
         if (closeBtn) {
@@ -387,9 +386,7 @@ function renderToast(): void { ?>
             pop.classList.remove('open');
           });
         }
-        // Click di dalam popover jangan close popover
         pop.addEventListener('click', function(e){ e.stopPropagation(); });
-        // Click di luar = close
         document.addEventListener('click', function(e){
           if (!pop.classList.contains('open')) return;
           if (e.target.closest('#hlNotif')) return;
