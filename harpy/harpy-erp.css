@@ -838,3 +838,43 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 
 /* Body: prevent horizontal scroll bleed */
 html, body { overflow-x: hidden; }
+
+/* ── GLOBAL MOBILE FIXES (semua page) ──────────────── */
+@media (max-width: 680px) {
+  /* card-header umum (per-page CSS bisa override) — wrap supaya tombol tidak terpotong */
+  .card-header, .hl-card-header {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  /* Table wrap pattern — paksa scroll horizontal */
+  .table-wrap, .hl-table-wrap, .items-table-wrap, .ol-shell table {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  /* Form row 2/3 kolom → stack di HP */
+  .hl-form-row, .form-row {
+    grid-template-columns: 1fr !important;
+  }
+  /* Filter bar wrap */
+  .hl-filter-bar, .filter-bar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .hl-filter-bar input, .hl-filter-bar select,
+  .filter-bar input, .filter-bar select {
+    width: 100% !important; min-width: 0 !important; flex: 1 1 auto;
+  }
+  /* Stat grids — adapt */
+  .hl-stat-grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+  .hl-stat-grid-6 { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+  .hl-grid-2, .hl-grid-3 { grid-template-columns: 1fr !important; }
+  /* Modal: ambil full screen di HP */
+  .hl-modal, .modal {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
+    max-height: 92vh !important;
+  }
+  .hl-modal-overlay, .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+}

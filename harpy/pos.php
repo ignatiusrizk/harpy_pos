@@ -515,20 +515,34 @@ textarea{resize:vertical;min-height:64px}
   #confirmSaveModal > div{padding:16px 18px}
 }
 @media(max-width:680px){
-  .main{padding:12px 10px 80px}
+  .main{padding:12px 10px 80px;max-width:100%;overflow-x:hidden}
+  .card{margin-bottom:14px}
+  /* card-header wrap + tombol stack */
+  .card-header{padding:12px 14px;flex-wrap:wrap;gap:8px}
+  .card-header .btn,.card-header button{flex-shrink:0}
+  .card-body{padding:14px}
   .layanan-grid{grid-template-columns:repeat(2,1fr);gap:5px;max-height:180px}
   .items-table thead th{font-size:10px;padding:7px 5px}
   .items-table tbody td{font-size:12px;padding:5px 4px}
   .items-table{font-size:12px}
+  /* Items table wrap — paksa scroll horizontal */
+  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .items-table-wrap::-webkit-scrollbar{height:6px}
+  .items-table-wrap::-webkit-scrollbar-thumb{background:rgba(27,45,90,.2);border-radius:3px}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .btn-actions{flex-direction:column;gap:8px}
   .btn-actions .btn{width:100%}
-  .btn{padding:12px 14px;font-size:14px}  /* tap target lebih besar */
-  /* AI floating menutupi tombol di HP — geser ke kiri-bawah */
+  .btn{padding:12px 14px;font-size:14px}
+  /* AI floating menutupi tombol — geser ke kiri-bawah */
   #aiBubbleBtn{bottom:80px!important;right:14px!important}
   #aiChatPanel{right:14px!important;left:14px;width:auto!important;max-width:none}
   /* Loyalty reward list maks 140px di HP */
   #rewardsList{max-height:140px!important}
+  /* Summary box — pastikan tidak overflow */
+  .summary-box{padding:14px}
+  .summary-box input{max-width:90px!important}
+  /* Voucher row stack di HP */
+  .form-row.cols3{grid-template-columns:1fr 1fr}
 }
 @media(max-width:400px){
   .main{padding:8px 8px 80px}
