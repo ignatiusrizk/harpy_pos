@@ -510,7 +510,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
       <div class="card">
         <div class="card-header"><div class="card-title">🧺 Layanan Hari Ini</div></div>
         <div class="table-wrap">
-          <table>
+          <table class="hl-stack-mobile">
             <thead><tr><th>Layanan</th><th style="text-align:right">Jml</th><th style="text-align:right">Order</th><th style="text-align:right">Omset</th></tr></thead>
             <tbody id="hLayananBody"><tr><td colspan="4" class="loading">⏳</td></tr></tbody>
           </table>
@@ -528,7 +528,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
         <span id="hOrderCount" style="font-size:12px;color:var(--gray)"></span>
       </div>
       <div class="table-wrap">
-        <table>
+        <table class="hl-stack-mobile">
           <thead><tr><th>No Order</th><th>Pelanggan</th><th>Layanan</th><th>Status</th><th>Bayar</th><th style="text-align:right">Total</th><th style="text-align:right">Terkumpul</th></tr></thead>
           <tbody id="hOrderBody"><tr><td colspan="7" class="loading">⏳</td></tr></tbody>
           <tfoot id="hOrderFoot" style="display:none">
@@ -578,7 +578,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
       <div class="card">
         <div class="card-header"><div class="card-title">🏆 Layanan Terlaris</div></div>
         <div class="table-wrap">
-          <table>
+          <table class="hl-stack-mobile">
             <thead><tr><th>#</th><th>Layanan</th><th style="text-align:right">Order</th><th style="text-align:right">Omset</th></tr></thead>
             <tbody id="bLayananBody"><tr><td colspan="4" class="loading">⏳</td></tr></tbody>
           </table>
@@ -594,7 +594,7 @@ tfoot td{padding:9px 12px;font-weight:700;font-size:13px}
         <div class="card">
           <div class="card-header"><div class="card-title">❤️ Pengeluaran per Kategori</div></div>
           <div class="table-wrap">
-            <table>
+            <table class="hl-stack-mobile">
               <thead><tr><th>Kategori</th><th style="text-align:right">Jml</th><th style="text-align:right">Total</th></tr></thead>
               <tbody id="bPengeluaranBody"><tr><td colspan="3" class="loading">⏳</td></tr></tbody>
               <tfoot><tr><td colspan="2" style="font-weight:700">Total Pengeluaran</td><td class="td-num" id="bPengeluaranTotal">-</td></tr></tfoot>
@@ -810,10 +810,10 @@ async function loadHarian() {
 
   document.getElementById('hLayananBody').innerHTML = d.layanan.length
     ? d.layanan.map(l => `<tr>
-        <td>${esc(l.nama_layanan)}</td>
-        <td class="td-num">${parseFloat(l.total_jumlah).toLocaleString('id-ID')}</td>
-        <td class="td-num">${l.total_order}</td>
-        <td class="td-num td-green">Rp ${parseFloat(l.total_omset).toLocaleString('id-ID')}</td>
+        <td data-lbl="Layanan">${esc(l.nama_layanan)}</td>
+        <td data-lbl="Jml" class="td-num">${parseFloat(l.total_jumlah).toLocaleString('id-ID')}</td>
+        <td data-lbl="Order" class="td-num">${l.total_order}</td>
+        <td data-lbl="Omset" class="td-num td-green">Rp ${parseFloat(l.total_omset).toLocaleString('id-ID')}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" class="empty">Belum ada layanan hari ini</td></tr>';
 
@@ -849,13 +849,13 @@ async function loadHarian() {
         totalOmset     += parseFloat(o.total||0);
         totalTerkumpul += parseFloat(o.dp||0);
         return `<tr>
-          <td style="font-family:var(--mono);font-size:12px;color:var(--teal-d)">${o.no_order}</td>
-          <td style="font-weight:600">${esc(o.nama_pelanggan)}</td>
-          <td style="font-size:12px;color:var(--gray);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.layanan_list||'-')}</td>
-          <td><span class="badge" style="background:var(--light);color:var(--gray);font-size:10px">${statusLabel(o.status_proses)}</span></td>
-          <td><span class="badge b-${o.status_bayar}">${bayarLabel(o.status_bayar)}</span></td>
-          <td class="td-num">Rp ${parseFloat(o.total).toLocaleString('id-ID')}</td>
-          <td class="td-num td-green">Rp ${parseFloat(o.dp||0).toLocaleString('id-ID')}</td>
+          <td data-lbl="No Order" style="font-family:var(--mono);font-size:12px;color:var(--teal-d)">${o.no_order}</td>
+          <td data-lbl="Pelanggan" style="font-weight:600">${esc(o.nama_pelanggan)}</td>
+          <td data-lbl="Layanan" style="font-size:12px;color:var(--gray);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.layanan_list||'-')}</td>
+          <td data-lbl="Status"><span class="badge" style="background:var(--light);color:var(--gray);font-size:10px">${statusLabel(o.status_proses)}</span></td>
+          <td data-lbl="Bayar"><span class="badge b-${o.status_bayar}">${bayarLabel(o.status_bayar)}</span></td>
+          <td data-lbl="Total" class="td-num">Rp ${parseFloat(o.total).toLocaleString('id-ID')}</td>
+          <td data-lbl="Terkumpul" class="td-num td-green">Rp ${parseFloat(o.dp||0).toLocaleString('id-ID')}</td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="7" class="empty">Tidak ada order hari ini</td></tr>';
@@ -902,10 +902,10 @@ async function loadBulanan() {
 
   document.getElementById('bLayananBody').innerHTML = d.top_layanan.length
     ? d.top_layanan.map((l,i) => `<tr>
-        <td style="color:var(--gray);font-size:12px">${i+1}</td>
-        <td>${esc(l.nama_layanan)}</td>
-        <td class="td-num">${l.total_order}</td>
-        <td class="td-num td-green">Rp ${parseFloat(l.total_omset).toLocaleString('id-ID')}</td>
+        <td data-lbl="#" style="color:var(--gray);font-size:12px">${i+1}</td>
+        <td data-lbl="Layanan">${esc(l.nama_layanan)}</td>
+        <td data-lbl="Order" class="td-num">${l.total_order}</td>
+        <td data-lbl="Omset" class="td-num td-green">Rp ${parseFloat(l.total_omset).toLocaleString('id-ID')}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" class="empty">Belum ada data</td></tr>';
 
@@ -926,9 +926,9 @@ async function loadBulanan() {
     ? d.pengeluaran.map(p => {
         totalPeng += parseFloat(p.total);
         return `<tr>
-          <td>${esc(p.kategori)}</td>
-          <td class="td-num">${p.count}×</td>
-          <td class="td-num td-red">Rp ${parseFloat(p.total).toLocaleString('id-ID')}</td>
+          <td data-lbl="Kategori">${esc(p.kategori)}</td>
+          <td data-lbl="Jml" class="td-num">${p.count}×</td>
+          <td data-lbl="Total" class="td-num td-red">Rp ${parseFloat(p.total).toLocaleString('id-ID')}</td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="3" class="empty">Tidak ada pengeluaran</td></tr>';
@@ -1153,20 +1153,20 @@ async function loadProd(){
 
     const hariEff = d.hari_eff;
     let html = `<div style="font-size:12px;color:#6B7280;margin-bottom:10px">Bulan ${bulan} · ${hariEff} hari efektif s/d hari ini</div>`;
-    html += '<div style="overflow-x:auto"><table class="hl-table"><thead><tr><th>Karyawan</th><th>Jabatan</th><th style="text-align:center">Hadir</th><th style="text-align:center">Telat</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpha</th><th style="text-align:right">Order Handle</th><th style="text-align:center">Skor</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto"><table class="hl-table hl-stack-mobile"><thead><tr><th>Karyawan</th><th>Jabatan</th><th style="text-align:center">Hadir</th><th style="text-align:center">Telat</th><th style="text-align:center">Izin</th><th style="text-align:center">Sakit</th><th style="text-align:center">Alpha</th><th style="text-align:right">Order Handle</th><th style="text-align:center">Skor</th></tr></thead><tbody>';
     d.rows.forEach(r => {
       const skor = hariEff > 0 ? Math.round((r.hadir - r.telat*0.5 - r.alpha) / hariEff * 100) : 0;
       const pillClass = skor>=90?'background:#D1FAE5;color:#065F46':(skor>=70?'background:#FEF3C7;color:#92400E':'background:#FEE2E2;color:#991B1B');
       html += `<tr>
-        <td><strong>${r.nama}</strong></td>
-        <td><small style="color:#6B7280">${r.jabatan||'-'}</small></td>
-        <td style="text-align:center">${r.hadir}/${hariEff}</td>
-        <td style="text-align:center">${r.telat>0?`<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.telat}</span>`:'0'}</td>
-        <td style="text-align:center">${r.izin}</td>
-        <td style="text-align:center">${r.sakit}</td>
-        <td style="text-align:center">${r.alpha>0?`<span style="background:#FEE2E2;color:#991B1B;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.alpha}</span>`:'0'}</td>
-        <td style="text-align:right;font-family:monospace;font-weight:700">${r.order_handle}</td>
-        <td style="text-align:center"><span style="${pillClass};font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px">${skor}%</span></td>
+        <td data-lbl="Karyawan"><strong>${r.nama}</strong></td>
+        <td data-lbl="Jabatan"><small style="color:#6B7280">${r.jabatan||'-'}</small></td>
+        <td data-lbl="Hadir" style="text-align:center">${r.hadir}/${hariEff}</td>
+        <td data-lbl="Telat" style="text-align:center">${r.telat>0?`<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.telat}</span>`:'0'}</td>
+        <td data-lbl="Izin" style="text-align:center">${r.izin}</td>
+        <td data-lbl="Sakit" style="text-align:center">${r.sakit}</td>
+        <td data-lbl="Alpha" style="text-align:center">${r.alpha>0?`<span style="background:#FEE2E2;color:#991B1B;font-size:11px;font-weight:700;padding:2px 7px;border-radius:100px">${r.alpha}</span>`:'0'}</td>
+        <td data-lbl="Order Handle" style="text-align:right;font-family:monospace;font-weight:700">${r.order_handle}</td>
+        <td data-lbl="Skor" style="text-align:center"><span style="${pillClass};font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px">${skor}%</span></td>
       </tr>`;
     });
     html += '</tbody></table></div>';

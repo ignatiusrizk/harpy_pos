@@ -624,7 +624,7 @@ if ($action) {
         <span id="rekapInfo" style="font-size:12px;color:var(--gray)"></span>
       </div>
       <div class="hl-table-wrap">
-        <table class="hl-table">
+        <table class="hl-table hl-stack-mobile">
           <thead>
             <tr>
               <th>Nama</th>
@@ -654,7 +654,7 @@ if ($action) {
         <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="loadIzinList()">↻ Refresh</button>
       </div>
       <div class="hl-table-wrap">
-        <table class="hl-table">
+        <table class="hl-table hl-stack-mobile">
           <thead>
             <tr>
               <th>Nama</th>
@@ -1006,18 +1006,18 @@ async function loadRekapAll() {
     const rataStr = hadir > 0 ? Math.floor(rataMin/60) + 'j ' + (rataMin%60) + 'm' : '-';
     const pct     = Math.round((menit/maxMenit)*100);
     return `<tr>
-      <td style="font-weight:600;color:var(--navy)">${esc(row.nama)}</td>
-      <td><span class="hl-badge hl-badge-gray" style="font-size:10px">${row.role}</span></td>
-      <td style="text-align:center"><span style="font-weight:700;color:var(--green)">${row.hadir}</span></td>
-      <td style="text-align:center"><span style="font-weight:700;color:var(--yellow)">${row.izin}</span></td>
-      <td style="text-align:center"><span style="font-weight:700;color:var(--blue)">${row.sakit}</span></td>
-      <td style="text-align:center"><span style="font-weight:700;color:var(--red)">${row.alpha}</span></td>
-      <td>
+      <td data-lbl="Nama" style="font-weight:600;color:var(--navy)">${esc(row.nama)}</td>
+      <td data-lbl="Role"><span class="hl-badge hl-badge-gray" style="font-size:10px">${row.role}</span></td>
+      <td data-lbl="Hadir" style="text-align:center"><span style="font-weight:700;color:var(--green)">${row.hadir}</span></td>
+      <td data-lbl="Izin" style="text-align:center"><span style="font-weight:700;color:var(--yellow)">${row.izin}</span></td>
+      <td data-lbl="Sakit" style="text-align:center"><span style="font-weight:700;color:var(--blue)">${row.sakit}</span></td>
+      <td data-lbl="Alpha" style="text-align:center"><span style="font-weight:700;color:var(--red)">${row.alpha}</span></td>
+      <td data-lbl="Total Jam">
         <div style="font-family:var(--mono);font-size:13px;font-weight:600">${jam}j ${menit%60}m</div>
         <div class="durasi-bar"><div class="durasi-fill" style="width:${pct}%"></div></div>
       </td>
-      <td style="font-size:13px;color:var(--gray)">${rataStr}</td>
-      <td style="font-size:12px;color:var(--gray)">${row.last_absen ? fmtDate(row.last_absen) : '-'}</td>
+      <td data-lbl="Rata/hari" style="font-size:13px;color:var(--gray)">${rataStr}</td>
+      <td data-lbl="Terakhir" style="font-size:12px;color:var(--gray)">${row.last_absen ? fmtDate(row.last_absen) : '-'}</td>
     </tr>`;
   }).join('');
   document.getElementById('rekapInfo').textContent = d.data.length + ' karyawan · ' + d.periode.bulan;
@@ -1043,17 +1043,17 @@ async function loadIzinList() {
   };
 
   el.innerHTML = d.map(row => `<tr>
-    <td style="font-weight:600">${esc(row.nama)}</td>
-    <td><span class="hl-badge hl-badge-gray">${tipeBadge[row.tipe]||row.tipe}</span></td>
-    <td style="font-size:13px">${fmtDate(row.dari_tanggal)}</td>
-    <td style="font-size:13px">${fmtDate(row.sampai_tanggal)}</td>
-    <td style="font-size:13px;max-width:180px;color:var(--gray)">${esc(row.alasan||'-')}</td>
-    <td>${statusBadge[row.status]||row.status}</td>
+    <td data-lbl="Nama" style="font-weight:600">${esc(row.nama)}</td>
+    <td data-lbl="Tipe"><span class="hl-badge hl-badge-gray">${tipeBadge[row.tipe]||row.tipe}</span></td>
+    <td data-lbl="Dari" style="font-size:13px">${fmtDate(row.dari_tanggal)}</td>
+    <td data-lbl="Sampai" style="font-size:13px">${fmtDate(row.sampai_tanggal)}</td>
+    <td data-lbl="Alasan" style="font-size:13px;max-width:180px;color:var(--gray)">${esc(row.alasan||'-')}</td>
+    <td data-lbl="Status">${statusBadge[row.status]||row.status}</td>
     <td>
       ${IS_ADMIN && row.status==='pending' ? `
         <div style="display:flex;gap:4px">
-          <button class="hl-btn hl-btn-green hl-btn-sm" onclick="approveIzin(${row.id},'approved')">✅</button>
-          <button class="hl-btn hl-btn-danger hl-btn-sm" onclick="approveIzin(${row.id},'rejected')">❌</button>
+          <button class="hl-btn hl-btn-green hl-btn-sm" onclick="approveIzin(${row.id},'approved')">✅ Approve</button>
+          <button class="hl-btn hl-btn-danger hl-btn-sm" onclick="approveIzin(${row.id},'rejected')">❌ Tolak</button>
         </div>` : '-'}
     </td>
   </tr>`).join('');

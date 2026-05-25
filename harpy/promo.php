@@ -387,7 +387,7 @@ if ($action) {
         </select>
       </div>
       <div class="hl-table-wrap">
-        <table class="hl-table">
+        <table class="hl-table hl-stack-mobile">
           <thead><tr><th>Kode</th><th>Promo</th><th>Penerima</th><th>Status</th><th>Digunakan di</th><th>Expired</th><th>Dibuat</th></tr></thead>
           <tbody id="voucherTable">
             <tr><td colspan="7" class="hl-empty">Pilih promo untuk lihat voucher</td></tr>
@@ -660,13 +660,13 @@ async function loadVoucherList() {
   const promo = promos.find(p=>p.id==promo_id);
   document.getElementById('voucherTable').innerHTML = d.map(v => `
     <tr>
-      <td><span class="td-kode" onclick="copyKode('${v.kode}',this)" style="cursor:pointer;${v.is_used?'text-decoration:line-through;color:var(--gray)':''}">${v.kode}</span></td>
-      <td style="font-size:13px">${esc(promo?.nama||'-')}</td>
-      <td style="font-size:13px">${esc(v.nama_penerima||'-')}</td>
-      <td><span class="hl-badge" style="${v.is_used?'background:#F3F4F6;color:#374151':'background:#D1FAE5;color:#065F46'}">${v.is_used?'✓ Terpakai':'○ Belum'}</span></td>
-      <td style="font-family:var(--mono);font-size:12px">${v.used_by_order||'-'}</td>
-      <td style="font-size:12px;color:var(--gray)">${v.expired_at?fmtDate(v.expired_at):'-'}</td>
-      <td style="font-size:12px;color:var(--gray)">${fmtDate(v.created_at)}</td>
+      <td data-lbl="Kode"><span class="td-kode" onclick="copyKode('${v.kode}',this)" style="cursor:pointer;${v.is_used?'text-decoration:line-through;color:var(--gray)':''}">${v.kode}</span></td>
+      <td data-lbl="Promo" style="font-size:13px">${esc(promo?.nama||'-')}</td>
+      <td data-lbl="Penerima" style="font-size:13px">${esc(v.nama_penerima||'-')}</td>
+      <td data-lbl="Status"><span class="hl-badge" style="${v.is_used?'background:#F3F4F6;color:#374151':'background:#D1FAE5;color:#065F46'}">${v.is_used?'✓ Terpakai':'○ Belum'}</span></td>
+      <td data-lbl="Order" style="font-family:var(--mono);font-size:12px">${v.used_by_order||'-'}</td>
+      <td data-lbl="Expired" style="font-size:12px;color:var(--gray)">${v.expired_at?fmtDate(v.expired_at):'-'}</td>
+      <td data-lbl="Dibuat" style="font-size:12px;color:var(--gray)">${fmtDate(v.created_at)}</td>
     </tr>`).join('');
 }
 
