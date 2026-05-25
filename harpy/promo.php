@@ -512,7 +512,12 @@ async function loadPromos() {
 function renderPromos() {
   const grid = document.getElementById('promoGrid');
   if (!promos.length) {
-    grid.innerHTML = '<div class="hl-empty" style="grid-column:1/-1">🎯 Belum ada promo. Klik "+ Buat Promo" untuk mulai.</div>';
+    grid.innerHTML = `<div style="grid-column:1/-1"><div class="hl-empty-v2">
+      <div class="e-icon">🎯</div>
+      <div class="e-title">Belum ada promo</div>
+      <div class="e-sub">Buat promo & voucher untuk menarik pelanggan</div>
+      <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="openPromoModal()">+ Buat Promo</button>
+    </div></div>`;
     return;
   }
   grid.innerHTML = promos.map(p => {

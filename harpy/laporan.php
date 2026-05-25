@@ -992,7 +992,14 @@ async function loadLR() {
   const sampai = document.getElementById('lrSampai').value;
   if (!dari || !sampai) return;
 
-  document.getElementById('lrContent').innerHTML = '<div class="loading">⏳ Menghitung L/R...</div>';
+  document.getElementById('lrContent').innerHTML = `
+    <div class="hl-skel-card"><span class="hl-skel xl" style="width:55%"></span>
+      <div style="margin-top:14px">
+        <span class="hl-skel" style="width:80%;display:block"></span>
+        <span class="hl-skel" style="width:60%;display:block;margin-top:8px"></span>
+        <span class="hl-skel" style="width:75%;display:block;margin-top:8px"></span>
+      </div>
+    </div>`;
 
   const r = await fetch(`laporan.php?action=lr&dari=${dari}&sampai=${sampai}`);
   const d = await r.json();

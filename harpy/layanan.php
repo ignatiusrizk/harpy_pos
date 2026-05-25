@@ -279,7 +279,11 @@ function renderLayanan() {
   if (status !== '') list = list.filter(l => String(l.is_active) === status);
 
   const grid = document.getElementById('layananGrid');
-  if (!list.length) { grid.innerHTML = '<div class="hl-empty">📭 Tidak ada layanan ditemukan.</div>'; return; }
+  if (!list.length) { grid.innerHTML = `<div style="grid-column:1/-1"><div class="hl-empty-v2">
+    <div class="e-icon">🧺</div>
+    <div class="e-title">Belum ada layanan</div>
+    <div class="e-sub">Tambah layanan supaya bisa dipakai di POS</div>
+  </div></div>`; return; }
 
   grid.innerHTML = list.map(l => {
     const isMaster = !!l.master_id;

@@ -139,7 +139,13 @@ if ($action === 'preview') {
   </div>
 
   <div id="feedBox">
-    <div style="text-align:center;padding:40px;color:#9CA3AF">⏳ Memuat…</div>
+    <?php for($i=0;$i<4;$i++): ?>
+    <div class="hl-skel-card" style="padding:14px">
+      <span class="hl-skel" style="width:120px;display:block"></span>
+      <span class="hl-skel lg" style="width:75%;display:block;margin-top:8px"></span>
+      <span class="hl-skel" style="width:50%;display:block;margin-top:6px"></span>
+    </div>
+    <?php endfor; ?>
   </div>
 </div>
 
@@ -163,7 +169,11 @@ async function loadFeed(){
     document.getElementById('unreadBadge').innerHTML = d.unread > 0
       ? `<span style="background:#EF4444;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:100px;margin-left:6px">${d.unread} belum dibaca</span>` : '';
     if (!d.rows.length){
-      box.innerHTML = '<div style="text-align:center;padding:40px;color:#9CA3AF;background:#fff;border-radius:10px">📭 Belum ada notifikasi.</div>';
+      box.innerHTML = `<div class="hl-empty-v2">
+        <div class="e-icon">📭</div>
+        <div class="e-title">Belum ada notifikasi</div>
+        <div class="e-sub">Notifikasi alert anomali & daily report akan muncul di sini</div>
+      </div>`;
       return;
     }
     box.innerHTML = d.rows.map(r => {

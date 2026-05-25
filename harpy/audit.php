@@ -200,13 +200,25 @@ async function loadLog(page=1) {
   const dari   = document.getElementById('fDari').value;
   const sampai = document.getElementById('fSampai').value;
 
-  document.getElementById('logBody').innerHTML = '<tr><td colspan="8" class="hl-loading">⏳ Memuat...</td></tr>';
+  document.getElementById('logBody').innerHTML = Array.from({length:6}).map(()=>`
+    <tr><td colspan="8" style="padding:0;border-bottom:1px solid var(--light)">
+      <div class="hl-skel-row" style="padding:11px 14px">
+        <span class="hl-skel" style="width:90px"></span>
+        <span class="hl-skel" style="width:110px"></span>
+        <span class="hl-skel" style="width:80px"></span>
+        <span class="hl-skel" style="width:200px;margin-left:auto"></span>
+      </div></td></tr>`).join('');
 
   const r = await fetch(`audit.php?action=list&q=${encodeURIComponent(q)}&modul=${modul}&user_id=${userId}&dari=${dari}&sampai=${sampai}&page=${page}`);
   const d = await r.json();
 
   if (!d.data?.length) {
-    document.getElementById('logBody').innerHTML = '<tr><td colspan="8" class="hl-empty">📭 Tidak ada log.</td></tr>';
+    document.getElementById('logBody').innerHTML = `<tr><td colspan="8" style="padding:0">
+      <div class="hl-empty-v2" style="margin:14px;background:transparent;border:0">
+        <div class="e-icon">🔍</div>
+        <div class="e-title">Tidak ada log</div>
+        <div class="e-sub">Coba ubah filter atau periode pencarian</div>
+      </div></td></tr>`;
     document.getElementById('logPaging').innerHTML = '';
     document.getElementById('logInfo').textContent = '';
     return;

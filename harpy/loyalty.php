@@ -166,6 +166,12 @@ if ($action) {
 .reward-row{padding:12px 14px;border:1px solid rgba(27,45,90,.08);border-radius:10px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center}
 .reward-row.inactive{opacity:.55;background:#F8FAFC}
 .pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px}
+@media(max-width:680px){
+  .reward-row{grid-template-columns:1fr auto;gap:8px}
+  .reward-row > div:nth-child(2){grid-column:1/-1;text-align:left;font-size:13px;color:#0891B2}
+  .reward-row > div:nth-child(3){grid-column:1}
+  .reward-row > div:nth-child(4){grid-column:2;justify-self:end}
+}
 </style>
 </head>
 <body>
@@ -328,7 +334,12 @@ async function loadRewards(){
     const d = await r.json();
     if (d.error) { box.innerHTML = '<div class="hl-empty">'+d.error+'</div>'; return; }
     const rows = d.rows || [];
-    if (!rows.length) { box.innerHTML = '<div class="hl-empty">📭 Belum ada reward. Tambahkan untuk mulai.</div>'; return; }
+    if (!rows.length) { box.innerHTML = `<div class="hl-empty-v2">
+      <div class="e-icon">🎁</div>
+      <div class="e-title">Belum ada reward</div>
+      <div class="e-sub">Tambahkan reward pertama supaya pelanggan bisa tukar poin</div>
+      <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="openRewardModal()">+ Tambah Reward</button>
+    </div>`; return; }
     box.innerHTML = rows.map(r => {
       const [bg,fg] = TIPE_COLOR[r.tipe] || ['#F1F5F9','#475569'];
       const nilaiTxt = r.tipe === 'diskon_nominal' ? 'Rp ' + parseInt(r.nilai).toLocaleString('id-ID')

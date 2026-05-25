@@ -75,7 +75,16 @@ if ($action) {
 <script>
 async function loadList(){
   const box = document.getElementById('dormantList');
-  box.innerHTML = '<div class="hl-loading">⏳ Memuat...</div>';
+  box.innerHTML = Array.from({length:4}).map(()=>`
+    <div class="hl-skel-card" style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <span class="hl-skel lg" style="width:140px;display:block"></span>
+          <span class="hl-skel" style="width:60%;display:block;margin-top:8px"></span>
+        </div>
+        <span class="hl-skel" style="width:90px;height:32px"></span>
+      </div>
+    </div>`).join('');
   try {
     const r = await fetch('retention.php?action=list');
     const d = await r.json();
@@ -85,10 +94,14 @@ async function loadList(){
 
     const rows = d.data || [];
     if (!rows.length) {
-      const msg = (d.sent_today >= 20)
-        ? '✅ Quota 20 reminder hari ini sudah terpakai. Lanjut besok ya.'
-        : '🎉 Tidak ada pelanggan dormant yang perlu di-reminder sekarang. Bagus!';
-      box.innerHTML = '<div class="hl-empty">'+msg+'</div>';
+      const overQuota = d.sent_today >= 20;
+      box.innerHTML = `<div class="hl-empty-v2">
+        <div class="e-icon">${overQuota ? '⏰' : '🎉'}</div>
+        <div class="e-title">${overQuota ? 'Quota harian habis' : 'Tidak ada dormant'}</div>
+        <div class="e-sub">${overQuota
+          ? 'Quota 20 reminder hari ini sudah terpakai. Lanjut besok ya.'
+          : 'Tidak ada pelanggan dormant yang perlu di-reminder sekarang. Bagus!'}</div>
+      </div>`;
       return;
     }
 

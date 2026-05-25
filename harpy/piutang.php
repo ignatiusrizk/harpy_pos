@@ -383,7 +383,11 @@ async function loadList(){
     document.getElementById('sumOut').textContent  = fmtRp(d.summary.outstanding);
     document.getElementById('sumDue').textContent  = fmtRp(d.summary.due_week);
     document.getElementById('sumOver').textContent = fmtRp(d.summary.overdue);
-    if (!d.rows.length){ box.innerHTML = '<div class="empty">Belum ada piutang.</div>'; return; }
+    if (!d.rows.length){ box.innerHTML = `<div class="hl-empty-v2">
+      <div class="e-icon">💼</div>
+      <div class="e-title">Belum ada piutang</div>
+      <div class="e-sub">Tagihan B2B yang belum lunas akan muncul di sini</div>
+    </div>`; return; }
     let html = '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Pelanggan</th><th>Periode</th><th>Jatuh Tempo</th><th style="text-align:right">Tagihan</th><th style="text-align:right">Sisa</th><th>Status</th><th></th></tr></thead><tbody>';
     d.rows.forEach(r => {
       const ht = parseInt(r.hari_tempo);
