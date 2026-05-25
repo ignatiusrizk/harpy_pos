@@ -827,8 +827,17 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 .hl-notif-cta:hover { background: var(--teal); color: #fff; }
 
 @media (max-width: 600px) {
-  /* Popover full width di HP */
-  .hl-notif-pop { right: -8px; width: calc(100vw - 16px); }
+  /* Popover anchor ke viewport, bukan ke bell — biar muat di HP */
+  .hl-notif-pop {
+    position: fixed;
+    top: 56px;            /* tepat di bawah topbar */
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+  }
 }
 .ol-top-user {
   font-size: 12px; color: var(--gray); font-weight: 600;
