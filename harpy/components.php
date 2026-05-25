@@ -294,6 +294,59 @@ function renderToast(): void { ?>
       var open=saved!==null?saved==='1':(defaultOpen!==false);
       if(open){btn.classList.add('open');}else{bar.classList.add('collapsed');}
     }
+    // Skeleton helper — renderSkel('container', {rows:5, type:'row'|'card'|'table'})
+    function renderSkel(containerOrId, opts){
+      const el = typeof containerOrId === 'string'
+                 ? document.getElementById(containerOrId)
+                 : containerOrId;
+      if (!el) return;
+      const o = Object.assign({rows:4, type:'row'}, opts||{});
+      let html = '';
+      if (o.type === 'card') {
+        for (let i=0; i<o.rows; i++) {
+          html += `<div class="hl-skel-card">
+            <span class="hl-skel lg" style="width:60%"></span><br>
+            <span class="hl-skel" style="width:80%;margin-top:8px"></span><br>
+            <span class="hl-skel" style="width:40%;margin-top:6px"></span>
+          </div>`;
+        }
+      } else if (o.type === 'table') {
+        for (let i=0; i<o.rows; i++) {
+          html += `<div class="hl-skel-row">
+            <span class="hl-skel" style="width:90px"></span>
+            <span class="hl-skel" style="width:140px"></span>
+            <span class="hl-skel" style="width:60px;margin-left:auto"></span>
+          </div>`;
+        }
+      } else {
+        for (let i=0; i<o.rows; i++) {
+          html += `<div class="hl-skel-row">
+            <span class="hl-skel round" style="width:36px;height:36px"></span>
+            <div style="flex:1">
+              <span class="hl-skel" style="width:55%;display:block"></span>
+              <span class="hl-skel" style="width:30%;display:block;margin-top:6px;height:9px"></span>
+            </div>
+          </div>`;
+        }
+      }
+      el.innerHTML = html;
+    }
+
+    // Empty state v2 — renderEmpty('container', {icon:'📭', title:'...', sub:'...', cta:{label,onclick}})
+    function renderEmpty(containerOrId, opts){
+      const el = typeof containerOrId === 'string'
+                 ? document.getElementById(containerOrId)
+                 : containerOrId;
+      if (!el) return;
+      const o = Object.assign({icon:'📭', title:'Tidak ada data', sub:'', cta:null}, opts||{});
+      el.innerHTML = `<div class="hl-empty-v2">
+        <div class="e-icon">${o.icon}</div>
+        <div class="e-title">${o.title}</div>
+        ${o.sub ? `<div class="e-sub">${o.sub}</div>` : ''}
+        ${o.cta ? `<button class="hl-btn hl-btn-primary hl-btn-sm" onclick="${o.cta.onclick||''}">${o.cta.label||'Tambah'}</button>` : ''}
+      </div>`;
+    }
+
     function showToast(msg,type='success'){
       const t=document.getElementById('toast');
       t.textContent=msg;t.className='hl-toast '+type+' show';

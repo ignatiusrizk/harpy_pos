@@ -427,7 +427,21 @@ async function loadCustomer(page=1) {
   const tipe   = document.getElementById('fTipe').value;
   const segmen = document.getElementById('fSegmen')?.value || '';
   const tier   = document.getElementById('fTier')?.value || '';
-  document.getElementById('custGrid').innerHTML = '<div class="hl-loading" style="grid-column:1/-1">⏳ Memuat...</div>';
+  // Skeleton 6 cards
+  document.getElementById('custGrid').innerHTML = Array.from({length:6}).map(()=>`
+    <div class="hl-skel-card" style="padding:18px">
+      <span class="hl-skel lg" style="width:65%;display:block"></span>
+      <span class="hl-skel" style="width:45%;display:block;margin-top:8px"></span>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <span class="hl-skel" style="width:70px"></span>
+        <span class="hl-skel" style="width:50px"></span>
+      </div>
+      <div style="display:flex;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--light)">
+        <span class="hl-skel" style="width:30%"></span>
+        <span class="hl-skel" style="width:30%"></span>
+        <span class="hl-skel" style="width:30%"></span>
+      </div>
+    </div>`).join('');
 
   const r = await fetch(`customer.php?action=list&q=${encodeURIComponent(q)}&tipe=${tipe}&segmen=${segmen}&tier=${tier}&page=${page}`);
   const d = await r.json();
@@ -462,7 +476,12 @@ function setView(view) {
 function renderCustomer() {
   const grid = document.getElementById('custGrid');
   if (!allCustomer.length) {
-    grid.innerHTML = '<div class="hl-empty">📭 Belum ada customer.</div>';
+    grid.innerHTML = `<div style="grid-column:1/-1"><div class="hl-empty-v2">
+      <div class="e-icon">👥</div>
+      <div class="e-title">Belum ada customer</div>
+      <div class="e-sub">Tambahkan customer pertamamu atau cek filter pencarian</div>
+      <button class="hl-btn hl-btn-primary hl-btn-sm" onclick="openModal()">+ Tambah Customer</button>
+    </div></div>`;
     return;
   }
 

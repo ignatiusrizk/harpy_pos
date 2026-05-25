@@ -762,6 +762,12 @@ textarea{resize:vertical;min-height:64px}
   .card-header{padding:12px 14px;flex-wrap:wrap;gap:6px}
   .modal{width:100%;max-width:100%;border-radius:var(--r-lg) var(--r-lg) 0 0;height:92vh}
   .modal-overlay{align-items:flex-end;padding:0}
+  /* Table utama orders scroll horizontal di HP */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .table-wrap table{min-width:760px}
+  /* Bulk toolbar wrap di HP */
+  #bulkToolbar{flex-direction:column;align-items:stretch!important;gap:8px}
+  #bulkToolbar select,#bulkToolbar button{width:100%}
   .items-table{table-layout:fixed !important;width:100% !important}
   .items-table th{min-width:0 !important}
   .items-table th:nth-child(1){width:auto !important}
@@ -773,6 +779,8 @@ textarea{resize:vertical;min-height:64px}
   .items-table td input,.items-table td select{width:100% !important;min-width:0 !important}
   .action-btns{flex-wrap:wrap}
   .pay-opt{grid-template-columns:1fr 1fr}
+  /* Tombol di action col harus stack vertikal supaya readable */
+  .action-btns .btn{padding:8px 10px;font-size:11px;flex:1;min-width:0}
 }
 @media(max-width:400px){
   .main{padding:8px 8px 80px}
@@ -1135,13 +1143,29 @@ async function loadOrders(page=1) {
   const sampai = document.getElementById('filterSampai').value;
   const sumber = document.getElementById('filterSumber')?.value || '';
 
-  document.getElementById('tableBody').innerHTML = '<tr><td colspan="11"><div class="loading">⏳ Memuat...</div></td></tr>';
+  // Skeleton: 6 row table skeleton
+  document.getElementById('tableBody').innerHTML = Array.from({length:6}).map(()=>`
+    <tr><td colspan="11" style="padding:0;border-bottom:1px solid var(--light)">
+      <div class="hl-skel-row" style="padding:14px 12px">
+        <span class="hl-skel" style="width:90px"></span>
+        <span class="hl-skel" style="width:70px"></span>
+        <span class="hl-skel" style="width:140px"></span>
+        <span class="hl-skel" style="width:120px;display:none" class="hide-sm"></span>
+        <span class="hl-skel" style="width:70px;margin-left:auto"></span>
+      </div>
+    </td></tr>`).join('');
 
   const r = await fetch(`orders.php?action=list&q=${encodeURIComponent(q)}&status=${st}&bayar=${by}&dari=${dari}&sampai=${sampai}&sumber=${sumber}&page=${page}&sort=${ordersSort}&dir=${ordersSortDir}`);
   const d = await r.json();
 
   if (!d.data?.length) {
-    document.getElementById('tableBody').innerHTML = '<tr><td colspan="11"><div class="empty">📭 Tidak ada order ditemukan.</div></td></tr>';
+    document.getElementById('tableBody').innerHTML = `<tr><td colspan="11" style="padding:0">
+      <div class="hl-empty-v2" style="margin:14px;background:transparent;border:0">
+        <div class="e-icon">📭</div>
+        <div class="e-title">Tidak ada order</div>
+        <div class="e-sub">Coba ubah filter atau tanggal pencarian</div>
+        <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="resetFilter()">↻ Reset Filter</button>
+      </div></td></tr>`;
     document.getElementById('tableInfo').textContent = '';
     document.getElementById('ordersPaging').innerHTML = '';
     return;

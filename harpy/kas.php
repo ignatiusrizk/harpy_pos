@@ -369,7 +369,13 @@ async function loadKas() {
   const dari   = document.getElementById('fDari').value;
   const sampai = document.getElementById('fSampai').value;
   const tipe   = document.getElementById('fTipe').value;
-  document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" class="hl-loading">⏳ Memuat...</td></tr>';
+  document.getElementById('tableBody').innerHTML = Array.from({length:5}).map(()=>
+    `<tr><td colspan="7" style="padding:0;border-bottom:1px solid var(--light)">
+      <div class="hl-skel-row" style="padding:12px 14px">
+        <span class="hl-skel" style="width:80px"></span>
+        <span class="hl-skel" style="width:140px"></span>
+        <span class="hl-skel" style="width:60px;margin-left:auto"></span>
+      </div></td></tr>`).join('');
 
   const r = await fetch(`kas.php?action=list&dari=${dari}&sampai=${sampai}&tipe=${tipe}`);
   const d = await r.json();

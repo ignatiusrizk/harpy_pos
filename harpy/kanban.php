@@ -163,7 +163,20 @@ if ($action) {
 <style>
 .kb-wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 4px}
 @media(max-width:1100px){.kb-wrap{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:720px){.kb-wrap{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){
+  /* Horizontal scroll-snap di HP — UX seperti Trello mobile */
+  .kb-wrap{
+    display:flex;grid-template-columns:none;
+    overflow-x:auto;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    gap:8px;padding:0 4px 8px;margin:0 -10px;
+  }
+  .kb-col{flex:0 0 80vw;max-width:340px;scroll-snap-align:start;min-height:300px}
+  .kb-col::-webkit-scrollbar{display:none}
+  /* Indicator dots scroll position */
+  .kb-mobile-hint{display:flex!important;justify-content:center;gap:6px;margin:8px 0 12px;padding:0 14px;flex-wrap:wrap;font-size:11px;color:var(--gray)}
+}
+.kb-mobile-hint{display:none}
 
 .kb-col{background:#F4F7FB;border-radius:12px;padding:10px;min-height:240px;display:flex;flex-direction:column}
 .kb-col-head{display:flex;justify-content:space-between;align-items:center;padding:5px 8px 10px;border-bottom:1px solid #E5E9F2;margin-bottom:8px}
@@ -222,6 +235,7 @@ if ($action) {
     </div>
   </div>
 
+  <div class="kb-mobile-hint">👈 Geser samping untuk lihat kolom lain</div>
   <div class="kb-wrap" id="kbWrap">
     <div class="kb-col col-masuk"  ><div class="kb-col-head"><span class="kb-col-title">📥 Masuk</span><span class="kb-col-count" id="cnt-masuk">0</span></div><div id="col-masuk"  ><div class="kb-empty">Memuat…</div></div></div>
     <div class="kb-col col-cuci"   ><div class="kb-col-head"><span class="kb-col-title">🫧 Cuci</span><span class="kb-col-count" id="cnt-cuci">0</span></div><div id="col-cuci"   ><div class="kb-empty">Memuat…</div></div></div>
