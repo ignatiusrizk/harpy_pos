@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════ */
 
 /* ── HQ LAYOUT SHELL ─────────────────────────────────── */
-.hq-shell { display: flex; min-height: 100vh; background: var(--off); }
+.hq-shell { min-height: 100vh; background: var(--off); }
 
 /* ── SIDEBAR (HQ) ────────────────────────────────────── */
 .hq-side {
@@ -13,10 +13,10 @@
   background: var(--navy-d);
   color: var(--white);
   display: flex; flex-direction: column;
-  position: sticky; top: 0;
-  height: 100vh; max-height: 100vh; overflow: hidden;
+  position: fixed; top: 0; left: 0; bottom: 0;
+  z-index: 50;
+  overflow: hidden;
   border-right: 1px solid rgba(53,232,213,.12);
-  flex-shrink: 0;
 }
 .hq-side-brand {
   padding: 14px 16px 12px;
@@ -101,7 +101,7 @@
 }
 
 /* ── HQ MAIN AREA ────────────────────────────────────── */
-.hq-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hq-main { min-width: 0; display: flex; flex-direction: column; margin-left: 176px; }
 
 /* ── HQ TOPBAR ───────────────────────────────────────── */
 .hq-top {
@@ -158,13 +158,13 @@
 
 @media (max-width: 900px) {
   .hq-side {
-    position: fixed; left: 0; top: 0; bottom: 0;
     transform: translateX(-100%);
     transition: transform .25s;
     z-index: 200;
     box-shadow: 0 0 40px rgba(0,0,0,.4);
   }
   .hq-shell.open .hq-side { transform: translateX(0); }
+  .hq-main { margin-left: 0; }
   .hq-shell-backdrop {
     display: none; position: fixed; inset: 0; background: rgba(15,28,58,.6);
     z-index: 199; backdrop-filter: blur(2px);
