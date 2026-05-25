@@ -234,9 +234,9 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
 
             <?php if (!$minimalMode && TenantResolver::hasOutlet()): ?>
               <!-- Bell button + popover -->
-              <div class="hl-notif" style="position:relative">
+              <div class="hl-notif" id="hlNotif">
                 <button type="button" class="ol-top-bell <?= $hasDanger ? 'has-danger' : '' ?>"
-                        onclick="this.nextElementSibling.classList.toggle('open')"
+                        onclick="toggleNotif(event)"
                         title="Pemberitahuan"
                         aria-label="Pemberitahuan">
                   🔔
@@ -244,10 +244,10 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
                     <span class="ol-top-bell-dot <?= $hasDanger ? 'danger' : '' ?>"><?= $notifCount > 9 ? '9+' : $notifCount ?></span>
                   <?php endif; ?>
                 </button>
-                <div class="hl-notif-pop" style="display:none">
+                <div class="hl-notif-pop" id="hlNotifPop">
                   <div class="hl-notif-head">
                     <span>🔔 Pemberitahuan</span>
-                    <button onclick="this.closest('.hl-notif-pop').classList.remove('open')" aria-label="Tutup">✕</button>
+                    <button type="button" onclick="closeNotif(event)" aria-label="Tutup">✕</button>
                   </div>
                   <div class="hl-notif-body">
                     <?php if (empty($notifItems)): ?>
@@ -369,10 +369,22 @@ function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
     <script>
     function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}
-    // Tutup notif popover saat klik di luar
+    // ── Notification bell ──
+    function toggleNotif(e){
+      if(e){ e.stopPropagation(); e.preventDefault(); }
+      var pop = document.getElementById('hlNotifPop');
+      if(pop) pop.classList.toggle('open');
+    }
+    function closeNotif(e){
+      if(e){ e.stopPropagation(); }
+      var pop = document.getElementById('hlNotifPop');
+      if(pop) pop.classList.remove('open');
+    }
+    // Tutup saat klik di luar
     document.addEventListener('click', function(e){
-      if (!e.target.closest('.hl-notif')) {
-        document.querySelectorAll('.hl-notif-pop.open').forEach(function(p){p.classList.remove('open');});
+      if (!e.target.closest('#hlNotif')) {
+        var pop = document.getElementById('hlNotifPop');
+        if(pop) pop.classList.remove('open');
       }
     });
     function toggleFilter(id){

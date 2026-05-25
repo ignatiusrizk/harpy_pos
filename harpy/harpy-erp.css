@@ -770,8 +770,12 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   50%      { box-shadow: 0 0 0 1px rgba(220,38,38,.5), 0 0 0 8px rgba(220,38,38,0); }
 }
 
+/* Bell container */
+.hl-notif { position: relative; display: inline-flex; }
+
 /* Popover */
 .hl-notif-pop {
+  display: none;
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -784,7 +788,7 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   z-index: 999;
   overflow: hidden;
 }
-.hl-notif-pop.open { display: block !important; }
+.hl-notif-pop.open { display: block; }
 .hl-notif-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 16px;
