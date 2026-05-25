@@ -653,7 +653,18 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.ol-side-nav { padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
+.ol-side-nav {
+  padding: 12px 10px 20px;
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;          /* Wajib untuk flex child supaya overflow:auto bekerja */
+  overflow-y: auto;
+  scrollbar-width: thin;  /* Firefox */
+  scrollbar-color: rgba(27,45,90,.2) transparent;
+}
+.ol-side-nav::-webkit-scrollbar { width: 6px; }
+.ol-side-nav::-webkit-scrollbar-thumb { background: rgba(27,45,90,.15); border-radius: 3px; }
+.ol-side-nav::-webkit-scrollbar-thumb:hover { background: rgba(27,45,90,.3); }
 .ol-side-divider { height: 1px; background: #EEF1F8; margin: 10px 6px; }
 .ol-side-label {
   font-size: 10px; font-weight: 700; letter-spacing: .12em;

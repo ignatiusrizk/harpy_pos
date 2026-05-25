@@ -34,7 +34,18 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.hq-side-nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.hq-side-nav {
+  padding: 10px 8px 20px;
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;          /* wajib untuk flex child supaya overflow:auto bekerja */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.2) transparent;
+}
+.hq-side-nav::-webkit-scrollbar { width: 6px; }
+.hq-side-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 3px; }
+.hq-side-nav::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.3); }
 .hq-side-divider {
   height: 1px; background: rgba(255,255,255,.06);
   margin: 8px 6px;
