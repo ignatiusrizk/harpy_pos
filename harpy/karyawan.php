@@ -288,7 +288,7 @@ function localMonthStr() {
         <span id="gajiInfo" style="font-size:12px;color:var(--gray)"></span>
       </div>
       <div class="hl-table-wrap">
-        <table class="hl-table">
+        <table class="hl-table hl-stack-mobile">
           <thead>
             <tr>
               <th>Nama</th><th>Jabatan</th>
@@ -557,16 +557,16 @@ async function loadGaji() {
   document.getElementById('gajiBody').innerHTML = d.map(g => {
     totalGaji += parseFloat(g.total||0);
     return `<tr>
-      <td style="font-weight:600;color:var(--navy)">${esc(g.nama)}</td>
-      <td style="font-size:12px;color:var(--gray)">${esc(g.jabatan||'-')}</td>
-      <td class="hl-td-mono hl-td-right">Rp ${parseFloat(g.gaji_pokok||0).toLocaleString('id-ID')}</td>
-      <td class="hl-td-mono hl-td-right" style="color:var(--green)">+Rp ${parseFloat(g.bonus||0).toLocaleString('id-ID')}</td>
-      <td class="hl-td-mono hl-td-right" style="color:#EF4444">-Rp ${parseFloat(g.potongan||0).toLocaleString('id-ID')}</td>
-      <td class="hl-td-mono hl-td-right" style="font-weight:800;color:var(--navy)">Rp ${parseFloat(g.total||0).toLocaleString('id-ID')}</td>
-      <td><span class="hl-badge ${g.status==='dibayar'?'hl-badge-lunas':'hl-badge-dp'}">${g.status==='dibayar'?'✅ Dibayar':'⏳ Pending'}</span></td>
+      <td data-lbl="Nama" style="font-weight:600;color:var(--navy)">${esc(g.nama)}</td>
+      <td data-lbl="Jabatan" style="font-size:12px;color:var(--gray)">${esc(g.jabatan||'-')}</td>
+      <td data-lbl="Pokok" class="hl-td-mono hl-td-right">Rp ${parseFloat(g.gaji_pokok||0).toLocaleString('id-ID')}</td>
+      <td data-lbl="Bonus" class="hl-td-mono hl-td-right" style="color:var(--green)">+Rp ${parseFloat(g.bonus||0).toLocaleString('id-ID')}</td>
+      <td data-lbl="Potongan" class="hl-td-mono hl-td-right" style="color:#EF4444">-Rp ${parseFloat(g.potongan||0).toLocaleString('id-ID')}</td>
+      <td data-lbl="Total" class="hl-td-mono hl-td-right" style="font-weight:800;color:var(--navy)">Rp ${parseFloat(g.total||0).toLocaleString('id-ID')}</td>
+      <td data-lbl="Status"><span class="hl-badge ${g.status==='dibayar'?'hl-badge-lunas':'hl-badge-dp'}">${g.status==='dibayar'?'✅ Dibayar':'⏳ Pending'}</span></td>
       <td>
         <div style="display:flex;gap:4px">
-          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick='editGaji(${JSON.stringify(g)})'>✏️</button>
+          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick='editGaji(${JSON.stringify(g)})'>✏️ Edit</button>
           ${g.status==='pending'?`<button class="hl-btn hl-btn-sm hl-btn-green" onclick="bayarGaji(${g.id})">💰 Bayar</button>`:''}
         </div>
       </td>

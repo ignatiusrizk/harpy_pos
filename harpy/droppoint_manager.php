@@ -553,7 +553,7 @@ async function loadMitra(){
     const d = await r.json();
     if (d.error){ box.innerHTML = `<div class="empty">⚠️ ${esc(d.error)}</div>`; return; }
     if (!d.mitra.length){ box.innerHTML = '<div class="empty">Belum ada mitra. Klik <strong>+ Tambah Mitra</strong></div>'; return; }
-    let html = '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Mitra</th><th>WA</th><th>Komisi</th><th>Order bln ini</th><th>Akun</th><th>Status</th><th></th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table class="tbl hl-stack-mobile"><thead><tr><th>Mitra</th><th>WA</th><th>Komisi</th><th>Order bln ini</th><th>Akun</th><th>Status</th><th></th></tr></thead><tbody>';
     d.mitra.forEach(m => {
       const komisi = m.komisi_model==='per_kg'   ? `Rp ${Number(m.komisi_per_kg).toLocaleString('id-ID')}/kg`
                    : m.komisi_model==='persen'   ? `${m.komisi_persen}% omset`
@@ -564,14 +564,14 @@ async function loadMitra(){
            <small style="color:${m.user_active==1?'#10B981':'#9CA3AF'}">${m.user_active==1?'aktif':'nonaktif'}</small>`
         : '<small style="color:#9CA3AF">belum dibuat</small>';
       html += `<tr>
-        <td><strong>${esc(m.nama_mitra)}</strong>${m.alamat?`<br><small style="color:#9CA3AF">${esc(m.alamat).substring(0,40)}</small>`:''}</td>
-        <td style="font-family:monospace;font-size:11px">${esc(m.wa||'-')}</td>
-        <td>${komisi}</td>
-        <td style="text-align:center">${m.order_bulan}</td>
-        <td>${akunHtml}</td>
-        <td><span class="pill pill-${m.status}">${m.status}</span></td>
+        <td data-lbl="Mitra"><strong>${esc(m.nama_mitra)}</strong>${m.alamat?`<br><small style="color:#9CA3AF">${esc(m.alamat).substring(0,40)}</small>`:''}</td>
+        <td data-lbl="WA" style="font-family:monospace;font-size:11px">${esc(m.wa||'-')}</td>
+        <td data-lbl="Komisi">${komisi}</td>
+        <td data-lbl="Order bln ini" style="text-align:center">${m.order_bulan}</td>
+        <td data-lbl="Akun">${akunHtml}</td>
+        <td data-lbl="Status"><span class="pill pill-${m.status}">${m.status}</span></td>
         <td style="white-space:nowrap">
-          <button class="btn btn-light btn-sm" onclick='openMitra(${JSON.stringify(m)})'>✏️</button>
+          <button class="btn btn-light btn-sm" onclick='openMitra(${JSON.stringify(m)})'>✏️ Edit</button>
           <button class="btn btn-light btn-sm" onclick="genAccount(${m.id}, ${JSON.stringify(m.nama_mitra)}, ${JSON.stringify(m.wa||'')})">🔑 Akun</button>
           ${m.username?`<button class="btn btn-light btn-sm" onclick="toggleAccount(${m.id}, ${m.user_active==1?0:1})">${m.user_active==1?'🔒 Nonaktif':'✓ Aktifkan'}</button>`:''}
         </td>
@@ -681,19 +681,19 @@ async function loadRekap(){
     if (d.error){ box.innerHTML = `<div class="empty">⚠️ ${esc(d.error)}</div>`; return; }
     if (!d.rows.length){ box.innerHTML = '<div class="empty">Tidak ada mitra aktif.</div>'; return; }
     let totOrder=0,totKg=0,totOmset=0,totKomisi=0;
-    let html = '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Mitra</th><th style="text-align:right">Order</th><th style="text-align:right">Kg</th><th style="text-align:right">Omset</th><th style="text-align:right">Komisi</th><th>Status</th><th></th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table class="tbl hl-stack-mobile"><thead><tr><th>Mitra</th><th style="text-align:right">Order</th><th style="text-align:right">Kg</th><th style="text-align:right">Omset</th><th style="text-align:right">Komisi</th><th>Status</th><th></th></tr></thead><tbody>';
     d.rows.forEach(r => {
       totOrder+=r.order; totKg+=Number(r.kg); totOmset+=r.omset; totKomisi+=r.komisi;
       const stat = r.rekap_status==='dibayar' ? '<span class="pill pill-aktif">dibayar</span>'
                  : r.rekap_status==='pending' ? '<span class="pill" style="background:#FEF3C7;color:#92400E">pending</span>'
                  : '<span class="pill pill-nonaktif">live</span>';
       html += `<tr>
-        <td><strong>${esc(r.nama)}</strong></td>
-        <td class="num">${r.order}</td>
-        <td class="num">${Number(r.kg).toFixed(1)}</td>
-        <td class="num">${fmtRp(r.omset)}</td>
-        <td class="num" style="color:#0F1C3A">${fmtRp(r.komisi)}</td>
-        <td>${stat}</td>
+        <td data-lbl="Mitra"><strong>${esc(r.nama)}</strong></td>
+        <td data-lbl="Order" class="num">${r.order}</td>
+        <td data-lbl="Kg" class="num">${Number(r.kg).toFixed(1)}</td>
+        <td data-lbl="Omset" class="num">${fmtRp(r.omset)}</td>
+        <td data-lbl="Komisi" class="num" style="color:#0F1C3A">${fmtRp(r.komisi)}</td>
+        <td data-lbl="Status">${stat}</td>
         <td>${r.rekap_id && r.rekap_status==='pending' && r.komisi>0
           ? `<button class="btn btn-green btn-sm" onclick="bayarSatu(${r.rekap_id})">💸 Bayar</button>`
           : ''}</td>
@@ -759,15 +759,15 @@ async function loadOrders(){
     const d = await r.json();
     if (d.error){ box.innerHTML = `<div class="empty">⚠️ ${esc(d.error)}</div>`; return; }
     if (!d.orders.length){ box.innerHTML = '<div class="empty">Belum ada order drop point hari ini.</div>'; return; }
-    let html = '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>No. Order</th><th>Mitra</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table class="tbl hl-stack-mobile"><thead><tr><th>No. Order</th><th>Mitra</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>';
     d.orders.forEach(o => {
       html += `<tr>
-        <td><strong>${esc(o.no_order)}</strong></td>
-        <td>${esc(o.nama_mitra)}</td>
-        <td>${esc(o.nama_pelanggan)}<br><small style="color:#9CA3AF">${esc(o.telepon||'-')}</small></td>
-        <td class="num">${fmtRp(o.total)}</td>
-        <td><span class="pill" style="background:#DBEAFE;color:#1E40AF">${esc(o.status_proses)}</span></td>
-        <td><small>${new Date(o.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></td>
+        <td data-lbl="No Order"><strong>${esc(o.no_order)}</strong></td>
+        <td data-lbl="Mitra">${esc(o.nama_mitra)}</td>
+        <td data-lbl="Pelanggan">${esc(o.nama_pelanggan)}<br><small style="color:#9CA3AF">${esc(o.telepon||'-')}</small></td>
+        <td data-lbl="Total" class="num">${fmtRp(o.total)}</td>
+        <td data-lbl="Status"><span class="pill" style="background:#DBEAFE;color:#1E40AF">${esc(o.status_proses)}</span></td>
+        <td data-lbl="Waktu"><small>${new Date(o.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</small></td>
         <td>${o.status_proses==='masuk'?`<button class="btn btn-primary btn-sm" onclick="confirmPickup(${o.id})">✓ Pickup</button>`:''}</td>
       </tr>`;
     });

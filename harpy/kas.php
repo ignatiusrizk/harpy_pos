@@ -291,7 +291,7 @@ tfoot td.td-jumlah{font-family:var(--mono)}
           <span id="tableInfo" style="font-size:12px;color:var(--gray)"></span>
         </div>
         <div class="hl-table-wrap">
-          <table class="hl-table">
+          <table class="hl-table hl-stack-mobile">
             <thead>
               <tr>
                 <th>Tanggal</th><th>Tipe</th><th>Kategori</th><th>Keterangan</th>
@@ -399,18 +399,18 @@ async function loadKas() {
 
   document.getElementById('tableBody').innerHTML = d.data.map(row => `
     <tr>
-      <td style="white-space:nowrap;font-size:13px">${fmtDate(row.tanggal)}</td>
-      <td><span class="hl-badge b-${row.tipe}">${row.tipe==='masuk'?'💚 Masuk':'❤️ Keluar'}</span></td>
-      <td><span class="hl-badge b-kat" style="background:var(--light);color:var(--gray)">${esc(row.kategori)}</span></td>
-      <td style="font-size:13px;max-width:200px">${esc(row.keterangan)}</td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--teal-d)">${row.ref_order||'-'}</td>
-      <td class="td-jumlah ${row.tipe==='masuk'?'td-masuk':'td-keluar'}">
+      <td data-lbl="Tanggal" style="white-space:nowrap;font-size:13px">${fmtDate(row.tanggal)}</td>
+      <td data-lbl="Tipe"><span class="hl-badge b-${row.tipe}">${row.tipe==='masuk'?'💚 Masuk':'❤️ Keluar'}</span></td>
+      <td data-lbl="Kategori"><span class="hl-badge b-kat" style="background:var(--light);color:var(--gray)">${esc(row.kategori)}</span></td>
+      <td data-lbl="Keterangan" style="font-size:13px;max-width:200px">${esc(row.keterangan)}</td>
+      <td data-lbl="Ref Order" style="font-family:var(--mono);font-size:12px;color:var(--teal-d)">${row.ref_order||'-'}</td>
+      <td data-lbl="Jumlah" class="td-jumlah ${row.tipe==='masuk'?'td-masuk':'td-keluar'}">
         ${row.tipe==='masuk'?'+':'-'} Rp ${parseFloat(row.jumlah).toLocaleString('id-ID')}
       </td>
       <td>
         <div style="display:flex;gap:4px">
-          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="editKas(${row.id})">✏️</button>
-          <button class="hl-btn hl-btn-sm" style="background:#FEE2E2;color:#991B1B" onclick="deleteKas(${row.id})">🗑️</button>
+          <button class="hl-btn hl-btn-outline hl-btn-sm" onclick="editKas(${row.id})">✏️ Edit</button>
+          <button class="hl-btn hl-btn-sm" style="background:#FEE2E2;color:#991B1B" onclick="deleteKas(${row.id})">🗑️ Hapus</button>
         </div>
       </td>
     </tr>`).join('');

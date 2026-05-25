@@ -877,4 +877,56 @@ html, body { overflow-x: hidden; }
     max-height: 92vh !important;
   }
   .hl-modal-overlay, .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+
+  /* ── STACKED TABLE PATTERN ──────────────────────────
+     Apply class="hl-stack-mobile" ke <table>, lalu tambah
+     data-lbl="..." attr di tiap <td>. Di HP, table convert
+     jadi stacked card per row (UX mobile-friendly).
+     ────────────────────────────────────────────────── */
+  .hl-stack-mobile,
+  .hl-stack-mobile thead,
+  .hl-stack-mobile tbody,
+  .hl-stack-mobile tr,
+  .hl-stack-mobile th,
+  .hl-stack-mobile td { display: block; width: 100%; }
+
+  .hl-stack-mobile thead { display: none; }
+
+  .hl-stack-mobile tbody tr {
+    border: 1px solid rgba(27,45,90,.1) !important;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(27,45,90,.04);
+  }
+
+  .hl-stack-mobile tbody td {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center;
+    padding: 5px 0 !important;
+    border: none !important;
+    font-size: 13px;
+    gap: 8px;
+    text-align: left !important;
+  }
+
+  .hl-stack-mobile tbody td::before {
+    content: attr(data-lbl);
+    font-size: 11px;
+    color: var(--gray);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    flex-shrink: 0;
+  }
+  /* Td tanpa data-lbl (mis. tombol action) — full width, no label */
+  .hl-stack-mobile tbody td:not([data-lbl])::before { content: ''; }
+  .hl-stack-mobile tbody td:not([data-lbl]) {
+    justify-content: flex-end !important;
+    padding-top: 8px !important;
+    border-top: 1px dashed rgba(27,45,90,.08) !important;
+    margin-top: 6px;
+  }
 }

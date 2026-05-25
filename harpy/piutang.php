@@ -388,7 +388,7 @@ async function loadList(){
       <div class="e-title">Belum ada piutang</div>
       <div class="e-sub">Tagihan B2B yang belum lunas akan muncul di sini</div>
     </div>`; return; }
-    let html = '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Pelanggan</th><th>Periode</th><th>Jatuh Tempo</th><th style="text-align:right">Tagihan</th><th style="text-align:right">Sisa</th><th>Status</th><th></th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table class="tbl hl-stack-mobile"><thead><tr><th>Pelanggan</th><th>Periode</th><th>Jatuh Tempo</th><th style="text-align:right">Tagihan</th><th style="text-align:right">Sisa</th><th>Status</th><th></th></tr></thead><tbody>';
     d.rows.forEach(r => {
       const ht = parseInt(r.hari_tempo);
       let tempoStr = new Date(r.jatuh_tempo).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
@@ -403,12 +403,12 @@ async function loadList(){
         <button class="hl-btn hl-btn-primary btn-sm" onclick="openBayar(${r.id}, '${esc(r.pelanggan_nama)}', ${r.sisa_tagihan})">💵 Bayar</button>
       `;
       html += `<tr>
-        <td><strong>${esc(r.pelanggan_nama)}</strong><br><small style="color:#9CA3AF">${esc(r.pelanggan_wa||'-')}</small></td>
-        <td>${new Date(r.periode_start).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})} – ${new Date(r.periode_end).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}<br><small style="color:#9CA3AF">${r.total_order} order</small></td>
-        <td>${tempoStr}</td>
-        <td class="num">${fmtRp(r.total_tagihan)}</td>
-        <td class="num"><strong>${fmtRp(r.sisa_tagihan)}</strong></td>
-        <td><span class="pill pl-${r.status}">${r.status.replace('_',' ')}</span></td>
+        <td data-lbl="Pelanggan"><strong>${esc(r.pelanggan_nama)}</strong><br><small style="color:#9CA3AF">${esc(r.pelanggan_wa||'-')}</small></td>
+        <td data-lbl="Periode">${new Date(r.periode_start).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})} – ${new Date(r.periode_end).toLocaleDateString('id-ID',{day:'2-digit',month:'short'})}<br><small style="color:#9CA3AF">${r.total_order} order</small></td>
+        <td data-lbl="Jatuh Tempo">${tempoStr}</td>
+        <td data-lbl="Tagihan" class="num">${fmtRp(r.total_tagihan)}</td>
+        <td data-lbl="Sisa" class="num"><strong>${fmtRp(r.sisa_tagihan)}</strong></td>
+        <td data-lbl="Status"><span class="pill pl-${r.status}">${r.status.replace('_',' ')}</span></td>
         <td style="white-space:nowrap">${actions}</td>
       </tr>`;
     });

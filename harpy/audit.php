@@ -133,7 +133,7 @@ if ($action) {
       <span id="logInfo" style="font-size:12px;color:var(--gray)"></span>
     </div>
     <div class="hl-table-wrap">
-      <table class="hl-table">
+      <table class="hl-table hl-stack-mobile">
         <thead>
           <tr>
             <th>Waktu</th>
@@ -233,14 +233,14 @@ async function loadLog(page=1) {
 
   document.getElementById('logBody').innerHTML = d.data.map(row => `
     <tr>
-      <td class="log-time">${fmtDateTime(row.created_at)}</td>
-      <td style="font-weight:600;font-size:13px;color:var(--navy)">${esc(row.user_nama||'-')}</td>
-      <td><span class="modul-badge">${esc(row.user_role||'-')}</span></td>
-      <td><span class="modul-badge" style="background:var(--teal-bg);color:var(--teal-d)">${esc(row.modul)}</span></td>
-      <td><span class="aksi-badge ${aksiColor[row.aksi]||'aksi-default'}">${esc(row.aksi)}</span></td>
-      <td class="log-ket" title="${esc(row.keterangan||'')}">${esc(row.keterangan||'-')}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--teal-d)">${esc(row.ref_id||'-')}</td>
-      <td style="font-size:11px;color:var(--gray)">${esc(row.ip_address||'-')}</td>
+      <td data-lbl="Waktu" class="log-time">${fmtDateTime(row.created_at)}</td>
+      <td data-lbl="User" style="font-weight:600;font-size:13px;color:var(--navy)">${esc(row.user_nama||'-')}</td>
+      <td data-lbl="Role"><span class="modul-badge">${esc(row.user_role||'-')}</span></td>
+      <td data-lbl="Modul"><span class="modul-badge" style="background:var(--teal-bg);color:var(--teal-d)">${esc(row.modul)}</span></td>
+      <td data-lbl="Aksi"><span class="aksi-badge ${aksiColor[row.aksi]||'aksi-default'}">${esc(row.aksi)}</span></td>
+      <td data-lbl="Keterangan" class="log-ket" title="${esc(row.keterangan||'')}">${esc(row.keterangan||'-')}</td>
+      <td data-lbl="Ref" style="font-family:var(--mono);font-size:11px;color:var(--teal-d)">${esc(row.ref_id||'-')}</td>
+      <td data-lbl="IP" style="font-size:11px;color:var(--gray)">${esc(row.ip_address||'-')}</td>
     </tr>`).join('');
 
   document.getElementById('logInfo').textContent = `${d.total.toLocaleString('id-ID')} aktivitas · hal ${page}/${d.total_pages}`;

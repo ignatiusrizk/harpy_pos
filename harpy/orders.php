@@ -883,7 +883,7 @@ textarea{resize:vertical;min-height:64px}
       <button class="btn btn-outline btn-sm" style="background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)" onclick="clearBulkSelection()">✕ Batal</button>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="hl-stack-mobile">
         <thead>
           <tr>
             <th style="width:34px;text-align:center"><input type="checkbox" id="bulkAll" onclick="toggleAllBulk(this)" title="Pilih semua di halaman ini"/></th>
@@ -1184,17 +1184,17 @@ async function loadOrders(page=1) {
       + '<td onclick="event.stopPropagation()" style="text-align:center">'
       +   '<input type="checkbox" class="bulkCb" value="' + row.id + '" onclick="onBulkCbChange()"/>'
       + '</td>'
-      + '<td><span class="td-no">' + row.no_order + '</span></td>'
-      + '<td>' + fmtDate(row.tanggal) + '</td>'
-      + '<td><div class="td-nama">' + esc(row.nama_pelanggan)
+      + '<td data-lbl="No Order"><span class="td-no">' + row.no_order + '</span></td>'
+      + '<td data-lbl="Tanggal">' + fmtDate(row.tanggal) + '</td>'
+      + '<td data-lbl="Pelanggan"><div class="td-nama">' + esc(row.nama_pelanggan)
       +   (row.nama_mitra ? ' <span style="font-size:9px;font-weight:700;background:#FEF3C7;color:#92400E;padding:2px 7px;border-radius:100px;margin-left:4px">📦 ' + esc(row.nama_mitra) + '</span>' : '')
       +   '</div>' + telp + '</td>'
-      + '<td><div class="td-layanan">' + esc(row.layanan_list||'-') + '</div></td>'
-      + '<td><span class="badge b-' + row.status_proses + '">' + statusLabel(row.status_proses) + '</span></td>'
-      + '<td><span class="badge b-' + row.status_bayar + '">' + bayarLabel(row.status_bayar) + '</span></td>'
-      + '<td class="td-total">Rp ' + parseFloat(row.total).toLocaleString('id-ID') + '</td>'
-      + '<td style="font-family:var(--mono);font-size:12px;text-align:right;color:' + sisaColor + '">' + sisaText + '</td>'
-      + '<td style="font-size:12px;color:var(--gray)">' + est + '</td>'
+      + '<td data-lbl="Layanan"><div class="td-layanan">' + esc(row.layanan_list||'-') + '</div></td>'
+      + '<td data-lbl="Status"><span class="badge b-' + row.status_proses + '">' + statusLabel(row.status_proses) + '</span></td>'
+      + '<td data-lbl="Bayar"><span class="badge b-' + row.status_bayar + '">' + bayarLabel(row.status_bayar) + '</span></td>'
+      + '<td data-lbl="Total" class="td-total">Rp ' + parseFloat(row.total).toLocaleString('id-ID') + '</td>'
+      + '<td data-lbl="Sisa" style="font-family:var(--mono);font-size:12px;text-align:right;color:' + sisaColor + '">' + sisaText + '</td>'
+      + '<td data-lbl="Estimasi" style="font-size:12px;color:var(--gray)">' + est + '</td>'
       + '<td onclick="event.stopPropagation()">'
       + '<div class="action-btns">'
       + bayarBtn
