@@ -13,7 +13,8 @@
   background: var(--navy-d);
   color: var(--white);
   display: flex; flex-direction: column;
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0;
+  height: 100vh; max-height: 100vh; overflow: hidden;
   border-right: 1px solid rgba(53,232,213,.12);
   flex-shrink: 0;
 }
