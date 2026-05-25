@@ -34,9 +34,9 @@ require_once ROOT . '/core/CoinLedger.php';
 if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
     if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
         header('Content-Type: application/json');
-        echo json_encode(['error' => 'Sesi habis. Silakan login kembali.', 'redirect' => '/login']);
+        echo json_encode(['error' => 'Sesi habis. Silakan login kembali.', 'redirect' => '/ERP/harpy/login.php']);
     } else {
-        header('Location: /login?msg=session_expired');
+        header('Location: /ERP/harpy/login.php?msg=session_expired');
     }
     exit;
 }
@@ -51,9 +51,9 @@ if (isset($_SESSION['hl_last_activity'])) {
         session_destroy();
         if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
             header('Content-Type: application/json');
-            echo json_encode(['error' => 'Sesi habis. Silakan login kembali.', 'redirect' => '/login']);
+            echo json_encode(['error' => 'Sesi habis. Silakan login kembali.', 'redirect' => '/ERP/harpy/login.php']);
         } else {
-            header('Location: /login?msg=session_expired');
+            header('Location: /ERP/harpy/login.php?msg=session_expired');
         }
         exit;
     }
@@ -61,7 +61,7 @@ if (isset($_SESSION['hl_last_activity'])) {
 if (isset($_SESSION['hl_login_time'])) {
     if ($_now - $_SESSION['hl_login_time'] > SESSION_LIFETIME) {
         session_destroy();
-        header('Location: /login?msg=session_expired');
+        header('Location: /ERP/harpy/login.php?msg=session_expired');
         exit;
     }
 }

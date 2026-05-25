@@ -27,9 +27,37 @@ require_once ROOT . '/core/TenantResolver.php';
 
 // ── Auth check ────────────────────────────────────────
 if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
-    header('Location: /ERP/harpy/login.php?msg=not_logged_in');
+    if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error'=>'Sesi habis. Silakan login kembali.', 'redirect'=>'/ERP/harpy/login.php']);
+    } else {
+        header('Location: /ERP/harpy/login.php?msg=not_logged_in');
+    }
     exit;
 }
+
+// ── Session timeout (sama dengan tenant_guard) ────────
+$_now = time();
+if (isset($_SESSION['hl_last_activity'])
+    && defined('SESSION_TIMEOUT')
+    && ($_now - $_SESSION['hl_last_activity'] > SESSION_TIMEOUT)) {
+    session_destroy();
+    if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error'=>'Sesi habis. Silakan login kembali.', 'redirect'=>'/ERP/harpy/login.php']);
+    } else {
+        header('Location: /ERP/harpy/login.php?msg=session_expired');
+    }
+    exit;
+}
+if (isset($_SESSION['hl_login_time'])
+    && defined('SESSION_LIFETIME')
+    && ($_now - $_SESSION['hl_login_time'] > SESSION_LIFETIME)) {
+    session_destroy();
+    header('Location: /ERP/harpy/login.php?msg=session_expired');
+    exit;
+}
+$_SESSION['hl_last_activity'] = $_now;
 
 $db = Database::get();
 
