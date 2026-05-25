@@ -13,7 +13,7 @@ function renderHead(string $title = 'Harpy'): void {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/ERP/harpy/harpy-erp.css?v=<?= date('Ymd') ?>">
+    <link rel="stylesheet" href="/ERP/harpy/harpy-erp.css?v=<?= @filemtime(__DIR__.'/harpy-erp.css') ?: date('Ymd') ?>">
     <?php
 }
 
@@ -210,7 +210,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               <button class="ol-top-chip" type="button"
                       onclick="this.nextElementSibling.classList.toggle('open')"
                       style="border:none;cursor:pointer;font-family:inherit;min-width:0;max-width:100%">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;min-width:0"><?= htmlspecialchars($currentOutletNm) ?></span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;min-width:0;max-width:36vw"><?= htmlspecialchars($currentOutletNm) ?></span>
                 <span style="font-size:9px;opacity:.6;flex-shrink:0">▼</span>
               </button>
               <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);

@@ -793,12 +793,13 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
     cursor: pointer; font-size: 16px;
   }
   .ol-content { padding: 14px; }
-  /* Topbar: kompres elemen */
-  .ol-top { padding: 0 10px; gap: 6px; }
-  .ol-top-left, .ol-top-right { gap: 6px; min-width: 0; }
-  .ol-top-badge { display: none; }              /* sembunyikan badge "📍 OUTLET" */
-  .ol-top-title { display: none; }              /* outlet name sudah ada di switcher */
-  .ol-top-user { display: none; }               /* nama user sudah ada di sidebar */
+  /* Topbar: kompres elemen — pakai !important untuk override inline style */
+  .ol-top { padding: 0 10px !important; gap: 6px !important; }
+  .ol-top-left, .ol-top-right { gap: 6px !important; min-width: 0 !important; flex: 0 1 auto; }
+  .ol-top-right { flex-wrap: nowrap; overflow: hidden; }
+  .ol-top-badge { display: none !important; }
+  .ol-top-title { display: none !important; }
+  .ol-top-user { display: none !important; }
 }
 @media (min-width: 901px) {
   .ol-side-toggle { display: none; }

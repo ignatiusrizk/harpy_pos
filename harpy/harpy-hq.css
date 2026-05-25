@@ -167,11 +167,12 @@
   }
   .hq-content { padding: 16px; }
   /* Topbar compress */
-  .hq-top { padding: 0 10px; gap: 6px; }
-  .hq-top-left, .hq-top-right { gap: 6px; min-width: 0; }
-  .hq-top-badge { display: none; }
-  .hq-top-title { display: none; }
-  .hq-top-user { display: none; }
+  .hq-top { padding: 0 10px !important; gap: 6px !important; }
+  .hq-top-left, .hq-top-right { gap: 6px !important; min-width: 0 !important; flex: 0 1 auto; }
+  .hq-top-right { flex-wrap: nowrap; overflow: hidden; }
+  .hq-top-badge { display: none !important; }
+  .hq-top-title { display: none !important; }
+  .hq-top-user { display: none !important; }
 }
 @media (min-width: 901px) {
   .hq-side-toggle { display: none; }

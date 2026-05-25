@@ -31,8 +31,8 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ERP/harpy/harpy-erp.css?v=<?= date('Ymd') ?>">
-  <link rel="stylesheet" href="/ERP/harpy/harpy-hq.css?v=<?= date('Ymd') ?>">
+  <link rel="stylesheet" href="/ERP/harpy/harpy-erp.css?v=<?= @filemtime(dirname(__DIR__).'/harpy-erp.css') ?: date('Ymd') ?>">
+  <link rel="stylesheet" href="/ERP/harpy/harpy-hq.css?v=<?= @filemtime(dirname(__DIR__).'/harpy-hq.css') ?: date('Ymd') ?>">
   <?php if (function_exists('getCsrfToken')): ?>
   <meta name="csrf-token" content="<?= htmlspecialchars(getCsrfToken()) ?>">
   <?php endif; ?>
