@@ -516,19 +516,44 @@ textarea{resize:vertical;min-height:64px}
 }
 @media(max-width:680px){
   .main{padding:12px 10px 80px;max-width:100%;overflow-x:hidden}
-  .card{margin-bottom:14px}
+  .card{margin-bottom:14px;overflow:visible} /* lepas overflow:hidden supaya table wrap bisa scroll */
   /* card-header wrap + tombol stack */
   .card-header{padding:12px 14px;flex-wrap:wrap;gap:8px}
   .card-header .btn,.card-header button{flex-shrink:0}
   .card-body{padding:14px}
   .layanan-grid{grid-template-columns:repeat(2,1fr);gap:5px;max-height:180px}
-  .items-table thead th{font-size:10px;padding:7px 5px}
-  .items-table tbody td{font-size:12px;padding:5px 4px}
-  .items-table{font-size:12px}
-  /* Items table wrap — paksa scroll horizontal */
-  .items-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
-  .items-table-wrap::-webkit-scrollbar{height:6px}
-  .items-table-wrap::-webkit-scrollbar-thumb{background:rgba(27,45,90,.2);border-radius:3px}
+
+  /* TABEL ITEMS — convert ke layout stacked card per row di HP (UX lebih baik dari scroll horizontal) */
+  .items-table, .items-table thead, .items-table tbody,
+  .items-table tr, .items-table th, .items-table td { display:block; width:100% }
+  .items-table thead { display:none }  /* sembunyikan header — pakai label inline */
+  .items-table tbody tr {
+    border:1px solid rgba(27,45,90,.1); border-radius:10px;
+    margin-bottom:10px; padding:10px 12px; background:#fff;
+  }
+  .items-table tbody td {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:5px 0; border:none; font-size:13px; gap:8px;
+  }
+  /* Label kolom via pseudo-element */
+  .items-table tbody td::before {
+    content: attr(data-lbl); font-size:11px; color:var(--gray); font-weight:600;
+    text-transform:uppercase; letter-spacing:.05em; flex-shrink:0;
+  }
+  /* Hide labels jika tidak ada data-lbl */
+  .items-table tbody td:empty::before { content:'' }
+  /* Inputs di stacked layout */
+  .items-table tbody td input,
+  .items-table tbody td select {
+    text-align:right; flex:1; min-width:0; max-width:160px;
+  }
+  .items-table tbody td .item-sub { font-weight:700; color:var(--navy); }
+  /* Tombol remove di pojok kanan atas card */
+  .items-table tbody td:last-child {
+    justify-content:flex-end; padding-top:8px;
+    border-top:1px dashed rgba(27,45,90,.08); margin-top:6px;
+  }
+
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .btn-actions{flex-direction:column;gap:8px}
   .btn-actions .btn{width:100%}
@@ -998,19 +1023,19 @@ function renderItems() {
   document.getElementById('btnSave').disabled = false;
   tbody.innerHTML = items.map((item, i) => `
     <tr>
-      <td><input class="item-input" style="width:100%;min-width:120px" value="${esc(item.nama_layanan)}"
+      <td data-lbl="Layanan"><input class="item-input" style="width:100%;min-width:120px" value="${esc(item.nama_layanan)}"
         placeholder="Nama layanan" oninput="items[${i}].nama_layanan=this.value;recalc()"/></td>
-      <td><select class="item-input" style="width:64px" onchange="items[${i}].satuan=this.value">
+      <td data-lbl="Satuan"><select class="item-input" style="width:64px" onchange="items[${i}].satuan=this.value">
         ${['kg','pcs','set','pasang'].map(s=>`<option value="${s}" ${item.satuan===s?'selected':''}>${s}</option>`).join('')}
       </select></td>
-      <td><input class="item-input" type="number" value="${item.jumlah}" min="0.1" step="0.1" style="width:64px"
+      <td data-lbl="Jumlah"><input class="item-input" type="number" value="${item.jumlah}" min="0.1" step="0.1" style="width:64px"
         oninput="items[${i}].jumlah=parseFloat(this.value)||0;recalc()"/></td>
-      <td><input class="item-input" type="number" value="${item.harga_satuan}" min="0" step="500" style="width:96px"
+      <td data-lbl="Harga"><input class="item-input" type="number" value="${item.harga_satuan}" min="0" step="500" style="width:96px"
         oninput="items[${i}].harga_satuan=parseFloat(this.value)||0;recalc()"/></td>
-      <td class="item-subtotal">Rp ${(item.jumlah*item.harga_satuan).toLocaleString('id-ID')}</td>
-      <td><input class="item-input" value="${esc(item.catatan_item)}" placeholder="..."
+      <td data-lbl="Subtotal" class="item-subtotal">Rp ${(item.jumlah*item.harga_satuan).toLocaleString('id-ID')}</td>
+      <td data-lbl="Catatan"><input class="item-input" value="${esc(item.catatan_item)}" placeholder="..."
         style="width:72px" oninput="items[${i}].catatan_item=this.value"/></td>
-      <td><button class="btn-remove" onclick="removeItem(${i})">✕</button></td>
+      <td><button class="btn-remove" onclick="removeItem(${i})">✕ Hapus</button></td>
     </tr>`).join('');
 }
 
