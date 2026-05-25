@@ -40,6 +40,7 @@ $_canSwitch = !empty($hqIsOwner) || !empty($hqIsManager);
 <body>
 
 <div class="hq-shell" id="hqShell">
+  <div class="hq-shell-backdrop" onclick="document.getElementById('hqShell').classList.remove('open')"></div>
 
   <!-- ── SIDEBAR ── -->
   <aside class="hq-side">

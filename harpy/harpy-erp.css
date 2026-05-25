@@ -156,8 +156,8 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 .hl-btn-logout:hover { color: var(--white); border-color: rgba(255,255,255,.3); }
 
 /* ── MAIN CONTAINER ────────────────────────────────── */
-.hl-main { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 20px; }
-.hl-main-lg { max-width: 1400px; width: 100%; margin: 0 auto; padding: 24px 20px; }
+.hl-main { max-width: 1200px; width: 100%; margin: 0 auto; padding: 24px 20px; min-width: 0; }
+.hl-main-lg { max-width: 1400px; width: 100%; margin: 0 auto; padding: 24px 20px; min-width: 0; }
 
 /* ── CARDS ─────────────────────────────────────────── */
 .hl-card {
@@ -768,6 +768,8 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
 }
 
 /* ── RESPONSIVE ────────────────────────────────────── */
+.ol-main { overflow-x: hidden; }
+
 @media (max-width: 900px) {
   .ol-side {
     position: fixed; left: 0; top: 0; bottom: 0;
@@ -777,6 +779,12 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
     box-shadow: 0 0 40px rgba(0,0,0,.15);
   }
   .ol-shell.open .ol-side { transform: translateX(0); }
+  /* Backdrop saat sidebar terbuka — real div, clickable */
+  .ol-shell-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(15,28,58,.5);
+    z-index: 199; backdrop-filter: blur(2px);
+  }
+  .ol-shell.open .ol-shell-backdrop { display: block; }
   .ol-side-toggle {
     display: inline-flex; align-items: center; justify-content: center;
     width: 32px; height: 32px;
@@ -785,7 +793,47 @@ body { font-family: var(--font); background: var(--off); color: var(--dark); min
     cursor: pointer; font-size: 16px;
   }
   .ol-content { padding: 14px; }
+  /* Topbar: kompres elemen */
+  .ol-top { padding: 0 10px; gap: 6px; }
+  .ol-top-left, .ol-top-right { gap: 6px; min-width: 0; }
+  .ol-top-badge { display: none; }              /* sembunyikan badge "📍 OUTLET" */
+  .ol-top-title { display: none; }              /* outlet name sudah ada di switcher */
+  .ol-top-user { display: none; }               /* nama user sudah ada di sidebar */
 }
 @media (min-width: 901px) {
   .ol-side-toggle { display: none; }
 }
+
+/* Smartphone kecil (<= 600) — lebih agresif */
+@media (max-width: 600px) {
+  .ol-top { padding: 0 8px; }
+  .ol-top-chip {
+    font-size: 11px; padding: 4px 8px; max-width: 140px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ol-top-chip span:first-child {
+    max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* HQ button → icon only */
+  .ol-top-switch {
+    font-size: 0; padding: 5px 8px;
+  }
+  .ol-top-switch::before {
+    content: '🏢'; font-size: 14px;
+  }
+  /* Logout → icon only */
+  .ol-top-logout {
+    font-size: 0; padding: 5px 8px;
+  }
+  .ol-top-logout::before {
+    content: '⏻'; font-size: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .ol-top-chip { max-width: 110px; font-size: 10px; }
+  .ol-top-chip span:first-child { max-width: 80px; }
+}
+
+/* Body: prevent horizontal scroll bleed */
+html, body { overflow-x: hidden; }

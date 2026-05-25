@@ -142,6 +142,8 @@
 .hq-content-inner { max-width: 1400px; margin: 0 auto; }
 
 /* ── RESPONSIVE ──────────────────────────────────────── */
+.hq-main { overflow-x: hidden; }
+
 @media (max-width: 900px) {
   .hq-side {
     position: fixed; left: 0; top: 0; bottom: 0;
@@ -151,6 +153,11 @@
     box-shadow: 0 0 40px rgba(0,0,0,.4);
   }
   .hq-shell.open .hq-side { transform: translateX(0); }
+  .hq-shell-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(15,28,58,.6);
+    z-index: 199; backdrop-filter: blur(2px);
+  }
+  .hq-shell.open .hq-shell-backdrop { display: block; }
   .hq-side-toggle {
     display: inline-flex; align-items: center; justify-content: center;
     width: 32px; height: 32px;
@@ -159,7 +166,22 @@
     cursor: pointer; font-size: 16px;
   }
   .hq-content { padding: 16px; }
+  /* Topbar compress */
+  .hq-top { padding: 0 10px; gap: 6px; }
+  .hq-top-left, .hq-top-right { gap: 6px; min-width: 0; }
+  .hq-top-badge { display: none; }
+  .hq-top-title { display: none; }
+  .hq-top-user { display: none; }
 }
 @media (min-width: 901px) {
   .hq-side-toggle { display: none; }
+}
+
+@media (max-width: 600px) {
+  .hq-top { padding: 0 8px; }
+  /* Outlet switch button → icon only */
+  .hq-top-switch { font-size: 0; padding: 5px 8px; }
+  .hq-top-switch::before { content: '🏪'; font-size: 14px; }
+  .hq-top-logout { font-size: 0; padding: 5px 8px; }
+  .hq-top-logout::before { content: '⏻'; font-size: 14px; }
 }

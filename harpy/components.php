@@ -129,6 +129,7 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
     ];
     ?>
     <div class="ol-shell" id="olShell">
+      <div class="ol-shell-backdrop" onclick="document.getElementById('olShell').classList.remove('open')"></div>
 
       <!-- ── SIDEBAR ── -->
       <aside class="ol-side">
@@ -205,12 +206,12 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               $allOutlets = $stmt->fetchAll();
               $hasMulti = count($allOutlets) > 1;
             ?>
-            <div class="hl-outlet-switch" style="position:relative">
+            <div class="hl-outlet-switch" style="position:relative;min-width:0">
               <button class="ol-top-chip" type="button"
                       onclick="this.nextElementSibling.classList.toggle('open')"
-                      style="border:none;cursor:pointer;font-family:inherit">
-                <span><?= htmlspecialchars($currentOutletNm) ?></span>
-                <span style="font-size:9px;opacity:.6">▼</span>
+                      style="border:none;cursor:pointer;font-family:inherit;min-width:0;max-width:100%">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;min-width:0"><?= htmlspecialchars($currentOutletNm) ?></span>
+                <span style="font-size:9px;opacity:.6;flex-shrink:0">▼</span>
               </button>
               <div class="hl-outlet-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);
                            right:0;background:#fff;border:1px solid #D5DAE8;border-radius:10px;
