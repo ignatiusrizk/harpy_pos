@@ -175,19 +175,108 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
           </div>
           <div class="ol-top-right">
             <?php
-            // ── Trial / Grace / Coin chip ──
+            // ── Compute notif items (trial/grace/low-coin/unread-owner-notif) ──
+            $notifItems = [];
             if (!$minimalMode && TenantResolver::hasOutlet()):
               $isTrial   = TenantResolver::isTrial();
               $trialDays = $isTrial ? TenantResolver::trialDaysLeft() : 0;
               $coin      = TenantResolver::coinBalance();
               $isGrace   = TenantResolver::isGraceMode();
               $coinFmt   = number_format($coin, 0, ',', '.');
+
+              if ($isTrial) {
+                $sev = $trialDays <= 3 ? 'danger' : ($trialDays <= 7 ? 'warn' : 'info');
+                $notifItems[] = [
+                  'icon'  => '⏰', 'sev' => $sev,
+                  'title' => 'Masa Trial',
+                  'desc'  => "Sisa <strong>{$trialDays} hari</strong> sebelum akun aktif penuh.",
+                  'cta'   => ['url' => '/ERP/harpy/hq/billing.php', 'label' => 'Top Up'],
+                ];
+              } elseif ($isGrace) {
+                $g = TenantResolver::graceDaysLeft();
+                $notifItems[] = [
+                  'icon'  => '⚠️', 'sev' => 'danger',
+                  'title' => 'Grace Period — Bayar Segera',
+                  'desc'  => "Layanan terhenti dalam <strong>{$g} hari</strong> kalau tidak bayar.",
+                  'cta'   => ['url' => '/ERP/harpy/hq/billing.php', 'label' => 'Bayar'],
+                ];
+              }
+              if ($coin < 500 && !$isTrial) {
+                $notifItems[] = [
+                  'icon'  => '🪙', 'sev' => $coin < 100 ? 'danger' : 'warn',
+                  'title' => 'Saldo Coin Rendah',
+                  'desc'  => "Tinggal <strong>{$coinFmt}</strong> coin. Top up sebelum habis.",
+                  'cta'   => ['url' => '/ERP/harpy/hq/billing.php', 'label' => 'Top Up'],
+                ];
+              }
+              // Unread owner_report (hanya untuk role owner/manager/admin)
+              $unreadOwnerReport = 0;
+              if (in_array($user['role'] ?? '', ['owner','superadmin','admin','manager'], true)) {
+                try {
+                  require_once ROOT . '/core/Notifier.php';
+                  $unreadOwnerReport = (int)Notifier::unreadCount((int)TenantResolver::id(), (int)TenantResolver::outletId());
+                } catch (Throwable) {}
+                if ($unreadOwnerReport > 0) {
+                  $notifItems[] = [
+                    'icon'  => '📨', 'sev' => 'info',
+                    'title' => "{$unreadOwnerReport} notifikasi baru",
+                    'desc'  => "Daily report & alert anomali menanti dibaca.",
+                    'cta'   => ['url' => '/ERP/harpy/owner_report.php', 'label' => 'Lihat'],
+                  ];
+                }
+              }
+            endif;
+
+            $notifCount = count($notifItems);
+            $hasDanger  = false;
+            foreach ($notifItems as $n) { if ($n['sev'] === 'danger') { $hasDanger = true; break; } }
             ?>
-              <?php if ($isTrial): ?>
-                <span class="ol-top-chip warn" title="Trial outlet">⏰ Trial: <?= $trialDays ?>h</span>
-              <?php elseif ($isGrace): ?>
-                <span class="ol-top-chip danger" title="Grace period">⚠️ Grace: <?= TenantResolver::graceDaysLeft() ?>h</span>
-              <?php endif; ?>
+
+            <?php if (!$minimalMode && TenantResolver::hasOutlet()): ?>
+              <!-- Bell button + popover -->
+              <div class="hl-notif" style="position:relative">
+                <button type="button" class="ol-top-bell <?= $hasDanger ? 'has-danger' : '' ?>"
+                        onclick="this.nextElementSibling.classList.toggle('open')"
+                        title="Pemberitahuan"
+                        aria-label="Pemberitahuan">
+                  🔔
+                  <?php if ($notifCount > 0): ?>
+                    <span class="ol-top-bell-dot <?= $hasDanger ? 'danger' : '' ?>"><?= $notifCount > 9 ? '9+' : $notifCount ?></span>
+                  <?php endif; ?>
+                </button>
+                <div class="hl-notif-pop" style="display:none">
+                  <div class="hl-notif-head">
+                    <span>🔔 Pemberitahuan</span>
+                    <button onclick="this.closest('.hl-notif-pop').classList.remove('open')" aria-label="Tutup">✕</button>
+                  </div>
+                  <div class="hl-notif-body">
+                    <?php if (empty($notifItems)): ?>
+                      <div class="hl-notif-empty">
+                        <div style="font-size:2rem;margin-bottom:6px">✅</div>
+                        <div style="font-weight:700;color:var(--navy)">Semua aman</div>
+                        <div style="font-size:12px;color:var(--gray);margin-top:2px">Tidak ada pemberitahuan untuk akun & outlet ini.</div>
+                      </div>
+                    <?php else: ?>
+                      <?php foreach ($notifItems as $n): ?>
+                        <div class="hl-notif-item sev-<?= htmlspecialchars($n['sev']) ?>">
+                          <div class="hl-notif-icon"><?= $n['icon'] ?></div>
+                          <div class="hl-notif-content">
+                            <div class="hl-notif-title"><?= htmlspecialchars($n['title']) ?></div>
+                            <div class="hl-notif-desc"><?= $n['desc'] ?></div>
+                            <?php if (!empty($n['cta'])): ?>
+                              <a href="<?= htmlspecialchars($n['cta']['url']) ?>" class="hl-notif-cta">
+                                <?= htmlspecialchars($n['cta']['label']) ?> →
+                              </a>
+                            <?php endif; ?>
+                          </div>
+                        </div>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Coin chip tetap inline (info operasional, selalu terlihat) -->
               <span class="ol-top-chip" title="Saldo coin">🪙 <?= $coinFmt ?></span>
             <?php endif; ?>
 
@@ -280,6 +369,12 @@ function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
     <script>
     function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}
+    // Tutup notif popover saat klik di luar
+    document.addEventListener('click', function(e){
+      if (!e.target.closest('.hl-notif')) {
+        document.querySelectorAll('.hl-notif-pop.open').forEach(function(p){p.classList.remove('open');});
+      }
+    });
     function toggleFilter(id){
       var bar=document.getElementById(id),btn=document.getElementById(id+'Btn');
       if(!bar||!btn)return;
