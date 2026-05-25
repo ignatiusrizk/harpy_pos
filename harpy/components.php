@@ -236,18 +236,18 @@ function renderTopbar(string $activePage = '', bool $minimalMode = false): void 
               <!-- Bell button + popover -->
               <div class="hl-notif" id="hlNotif">
                 <button type="button" class="ol-top-bell <?= $hasDanger ? 'has-danger' : '' ?>"
-                        onclick="toggleNotif(event)"
+                        id="hlNotifBtn"
                         title="Pemberitahuan"
                         aria-label="Pemberitahuan">
                   🔔
                   <?php if ($notifCount > 0): ?>
-                    <span class="ol-top-bell-dot <?= $hasDanger ? 'danger' : '' ?>"><?= $notifCount > 9 ? '9+' : $notifCount ?></span>
+                    <span class="ol-top-bell-dot <?= $hasDanger ? 'danger' : '' ?>" style="pointer-events:none"><?= $notifCount > 9 ? '9+' : $notifCount ?></span>
                   <?php endif; ?>
                 </button>
                 <div class="hl-notif-pop" id="hlNotifPop">
                   <div class="hl-notif-head">
                     <span>🔔 Pemberitahuan</span>
-                    <button type="button" onclick="closeNotif(event)" aria-label="Tutup">✕</button>
+                    <button type="button" id="hlNotifClose" aria-label="Tutup">✕</button>
                   </div>
                   <div class="hl-notif-body">
                     <?php if (empty($notifItems)): ?>
@@ -369,24 +369,39 @@ function renderToast(): void { ?>
     <div class="hl-toast" id="toast"></div>
     <script>
     function csrfToken(){return document.querySelector('meta[name="csrf-token"]')?.content||'';}
-    // ── Notification bell ──
-    function toggleNotif(e){
-      if(e){ e.stopPropagation(); e.preventDefault(); }
-      var pop = document.getElementById('hlNotifPop');
-      if(pop) pop.classList.toggle('open');
-    }
-    function closeNotif(e){
-      if(e){ e.stopPropagation(); }
-      var pop = document.getElementById('hlNotifPop');
-      if(pop) pop.classList.remove('open');
-    }
-    // Tutup saat klik di luar
-    document.addEventListener('click', function(e){
-      if (!e.target.closest('#hlNotif')) {
+    // ── Notification bell — pakai event delegation, defensive ──
+    (function(){
+      function init(){
+        var btn = document.getElementById('hlNotifBtn');
         var pop = document.getElementById('hlNotifPop');
-        if(pop) pop.classList.remove('open');
+        var closeBtn = document.getElementById('hlNotifClose');
+        if (!btn || !pop) return;
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          e.preventDefault();
+          pop.classList.toggle('open');
+        });
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function(e){
+            e.stopPropagation();
+            pop.classList.remove('open');
+          });
+        }
+        // Click di dalam popover jangan close popover
+        pop.addEventListener('click', function(e){ e.stopPropagation(); });
+        // Click di luar = close
+        document.addEventListener('click', function(e){
+          if (!pop.classList.contains('open')) return;
+          if (e.target.closest('#hlNotif')) return;
+          pop.classList.remove('open');
+        });
       }
-    });
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
     function toggleFilter(id){
       var bar=document.getElementById(id),btn=document.getElementById(id+'Btn');
       if(!bar||!btn)return;
