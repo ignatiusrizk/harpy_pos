@@ -29,17 +29,18 @@ ALTER TABLE hl_pelanggan
   ADD COLUMN IF NOT EXISTS preferensi_suhu VARCHAR(20) NULL,
   ADD COLUMN IF NOT EXISTS catatan_tetap TEXT NULL;
 
--- Index untuk filter segmen/tier di customer.php (skip kalau sudah ada — error aman)
--- Jalankan satu-satu kalau MariaDB komplain.
-CREATE INDEX idx_pelanggan_segmen ON hl_pelanggan(tenant_id, segmen);
-CREATE INDEX idx_pelanggan_tier   ON hl_pelanggan(tenant_id, tier);
+-- Index untuk filter segmen/tier di customer.php
+-- Pakai IF NOT EXISTS (MariaDB 10.5+) — kalau MariaDB lama error #1061
+-- duplicate, abaikan saja.
+CREATE INDEX IF NOT EXISTS idx_pelanggan_segmen ON hl_pelanggan(tenant_id, segmen);
+CREATE INDEX IF NOT EXISTS idx_pelanggan_tier   ON hl_pelanggan(tenant_id, tier);
 
 -- 2) hl_loyalty_log — track reward redeem + poin expiry
 ALTER TABLE hl_loyalty_log
   ADD COLUMN IF NOT EXISTS reward_id INT NULL AFTER transaksi_id,
   ADD COLUMN IF NOT EXISTS expired_at DATE NULL AFTER keterangan;
 
-CREATE INDEX idx_loyalty_expired ON hl_loyalty_log(tenant_id, expired_at);
+CREATE INDEX IF NOT EXISTS idx_loyalty_expired ON hl_loyalty_log(tenant_id, expired_at);
 
 -- 3) hl_poin_reward — katalog reward yang bisa diredeem
 CREATE TABLE IF NOT EXISTS hl_poin_reward (
@@ -64,10 +65,9 @@ CREATE TABLE IF NOT EXISTS hl_poin_reward (
 ALTER TABLE hl_notif_log
   ADD COLUMN IF NOT EXISTS pelanggan_id INT NULL AFTER outlet_id;
 
--- Index untuk pencarian dormant reminder per pelanggan
-CREATE INDEX idx_notif_pel_type ON hl_notif_log(pelanggan_id, type, sent_at);
--- Index untuk daily quota check
-CREATE INDEX idx_notif_outlet_type ON hl_notif_log(tenant_id, outlet_id, type, sent_at);
+-- Index untuk pencarian dormant reminder per pelanggan + daily quota check
+CREATE INDEX IF NOT EXISTS idx_notif_pel_type ON hl_notif_log(pelanggan_id, type, sent_at);
+CREATE INDEX IF NOT EXISTS idx_notif_outlet_type ON hl_notif_log(tenant_id, outlet_id, type, sent_at);
 
 -- 5) tenants — config expiry poin
 ALTER TABLE tenants
