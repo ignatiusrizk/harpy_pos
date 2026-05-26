@@ -32,8 +32,8 @@ class RetentionManager
             // Quota harian: hitung sudah berapa yang dikirim hari ini
             $st = $db->prepare("SELECT COUNT(*) FROM hl_notif_log
                                  WHERE tenant_id=? AND outlet_id=?
-                                   AND tipe='dormant_reminder'
-                                   AND DATE(created_at)=CURDATE()");
+                                   AND type='dormant_reminder'
+                                   AND DATE(sent_at)=CURDATE()");
             $st->execute([$tenantId, $outletId]);
             $sentToday = (int)$st->fetchColumn();
             $remaining = max(0, $limit - $sentToday);
@@ -55,8 +55,8 @@ class RetentionManager
                        SELECT 1 FROM hl_notif_log n
                         WHERE n.tenant_id=p.tenant_id
                           AND n.pelanggan_id=p.id
-                          AND n.tipe='dormant_reminder'
-                          AND n.created_at > DATE_SUB(NOW(), INTERVAL ? DAY)
+                          AND n.type='dormant_reminder'
+                          AND n.sent_at > DATE_SUB(NOW(), INTERVAL ? DAY)
                    )
                  ORDER BY p.last_transaksi ASC
                  LIMIT ?
@@ -104,15 +104,16 @@ class RetentionManager
             // Anti-double: skip kalau sudah di-mark dalam 1 jam terakhir
             $chk = $db->prepare("SELECT 1 FROM hl_notif_log
                                   WHERE tenant_id=? AND outlet_id=? AND pelanggan_id=?
-                                    AND tipe='dormant_reminder'
-                                    AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+                                    AND type='dormant_reminder'
+                                    AND sent_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
                                   LIMIT 1");
             $chk->execute([$tenantId, $outletId, $pelangganId]);
             if ($chk->fetchColumn()) return true;
 
+            // Pakai schema existing hl_notif_log (dari Owner POV)
             $db->prepare("INSERT INTO hl_notif_log
-                            (tenant_id, outlet_id, pelanggan_id, tipe, keterangan)
-                          VALUES (?,?,?,'dormant_reminder', 'Reminder WA dikirim manual')")
+                            (tenant_id, outlet_id, pelanggan_id, type, channel, body_summary, status)
+                          VALUES (?,?,?,'dormant_reminder','inapp','Reminder WA dikirim manual','sent')")
                ->execute([$tenantId, $outletId, $pelangganId]);
             return true;
         } catch (Throwable $e) {

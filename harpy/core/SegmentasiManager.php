@@ -28,8 +28,8 @@ class SegmentasiManager
             try {
                 $db = Database::get();
                 $st = $db->prepare("SELECT 1 FROM hl_notif_log
-                                     WHERE tenant_id=? AND outlet_id=? AND tipe='segmentasi_run'
-                                       AND created_at > DATE_SUB(NOW(), INTERVAL 20 HOUR)
+                                     WHERE tenant_id=? AND outlet_id=? AND type='segmentasi_run'
+                                       AND sent_at > DATE_SUB(NOW(), INTERVAL 20 HOUR)
                                      LIMIT 1");
                 $st->execute([$tenantId, $outletId]);
                 if ($st->fetchColumn()) return 0;
@@ -58,9 +58,10 @@ class SegmentasiManager
                 }
             }
 
-            // Log run (anti-spam)
-            $db->prepare("INSERT INTO hl_notif_log (tenant_id, outlet_id, tipe, keterangan)
-                          VALUES (?,?,'segmentasi_run',?)")
+            // Log run (anti-spam) — pakai schema existing hl_notif_log
+            $db->prepare("INSERT INTO hl_notif_log
+                            (tenant_id, outlet_id, type, channel, body_summary, status)
+                          VALUES (?,?,'segmentasi_run','inapp',?,'sent')")
                ->execute([$tenantId, $outletId, "Updated $changed pelanggan"]);
         } catch (Throwable $e) {
             error_log('[SegmentasiManager::updateAll] '.$e->getMessage());

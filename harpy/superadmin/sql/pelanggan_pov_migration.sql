@@ -59,18 +59,15 @@ CREATE TABLE IF NOT EXISTS hl_poin_reward (
   INDEX idx_poin_needed   (poin_dibutuhkan)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 4) hl_notif_log — anti-spam tracker (untuk acceptance #7)
-CREATE TABLE IF NOT EXISTS hl_notif_log (
-  id           INT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id    INT NOT NULL,
-  outlet_id    INT NULL,
-  pelanggan_id INT NULL,
-  tipe         VARCHAR(40) NOT NULL,
-  keterangan   VARCHAR(255) NULL,
-  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_tipe_tanggal (tenant_id, tipe, created_at),
-  INDEX idx_pel_tipe     (pelanggan_id, tipe, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- 4) hl_notif_log — REUSE existing table dari Owner POV (owner_visibility_migration)
+-- Tambah kolom pelanggan_id supaya bisa di-pakai untuk dormant reminder per-pelanggan.
+ALTER TABLE hl_notif_log
+  ADD COLUMN IF NOT EXISTS pelanggan_id INT NULL AFTER outlet_id;
+
+-- Index untuk pencarian dormant reminder per pelanggan
+CREATE INDEX idx_notif_pel_type ON hl_notif_log(pelanggan_id, type, sent_at);
+-- Index untuk daily quota check
+CREATE INDEX idx_notif_outlet_type ON hl_notif_log(tenant_id, outlet_id, type, sent_at);
 
 -- 5) tenants — config expiry poin
 ALTER TABLE tenants
