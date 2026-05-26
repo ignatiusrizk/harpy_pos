@@ -41,6 +41,18 @@ if (empty($_SESSION['user_id']) || empty($_SESSION['tenant_id'])) {
     exit;
 }
 
+// ── Cross-redirect: mitra TIDAK boleh akses outlet pages ──
+// (brief acceptance #3 & #9)
+if (($_SESSION['role'] ?? '') === 'mitra') {
+    if (!empty($_GET['action']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Akses ditolak — Anda mitra drop point.', 'redirect' => '/ERP/harpy/droppoint/dashboard.php']);
+    } else {
+        header('Location: /ERP/harpy/droppoint/dashboard.php');
+    }
+    exit;
+}
+
 // ── Resolve & validasi tenant ─────────────────────────
 TenantResolver::resolve();
 

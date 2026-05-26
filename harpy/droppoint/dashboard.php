@@ -30,6 +30,18 @@ $s = $db->prepare("SELECT id, nama_pelanggan, total, status_proses, created_at
                     ORDER BY id DESC LIMIT 5");
 $s->execute([$tid,$dp]); $recent = $s->fetchAll(PDO::FETCH_ASSOC);
 
+// Kontak outlet (untuk tombol Hubungi Outlet)
+$s = $db->prepare("SELECT nama_outlet, telepon, alamat FROM outlets WHERE id=? AND tenant_id=?");
+$s->execute([$oid, $tid]);
+$outletInfo = $s->fetch(PDO::FETCH_ASSOC) ?: [];
+$outletWa = '';
+if (!empty($outletInfo['telepon'])) {
+    $w = preg_replace('/[^0-9]/','',$outletInfo['telepon']);
+    if (strpos($w,'0') === 0) $w = '62'.substr($w,1);
+    elseif (strpos($w,'62') !== 0) $w = '62'.$w;
+    $outletWa = $w;
+}
+
 require __DIR__ . '/_layout_open.php';
 ?>
 
@@ -69,5 +81,26 @@ require __DIR__ . '/_layout_open.php';
   <?php endforeach; endif; ?>
   <a href="orders.php" style="display:block;text-align:center;font-size:12px;color:#0891B2;font-weight:700;margin-top:10px">Lihat semua order →</a>
 </div>
+
+<!-- Kontak outlet -->
+<?php if ($outletInfo): ?>
+<div class="card">
+  <h2>📞 Butuh Bantuan?</h2>
+  <div style="font-size:13px;color:#374151;margin-bottom:4px">
+    <strong><?= mitraEsc($outletInfo['nama_outlet'] ?? '') ?></strong>
+  </div>
+  <?php if (!empty($outletInfo['alamat'])): ?>
+    <div style="font-size:11px;color:#9CA3AF;margin-bottom:10px"><?= mitraEsc($outletInfo['alamat']) ?></div>
+  <?php endif; ?>
+  <?php if ($outletWa): ?>
+    <a href="https://wa.me/<?= mitraEsc($outletWa) ?>?text=<?= urlencode('Halo, saya '.($mitra['dp']['nama_mitra'] ?? '').' (drop point). Saya mau tanya...') ?>"
+       target="_blank" class="btn btn-wa">
+      💬 Hubungi Outlet via WhatsApp
+    </a>
+  <?php else: ?>
+    <div style="font-size:11px;color:#9CA3AF">Nomor WhatsApp outlet belum diatur.</div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php require __DIR__ . '/_layout_close.php'; ?>

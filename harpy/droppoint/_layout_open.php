@@ -18,13 +18,13 @@ $_userNama  = $mitra['user_nama'] ?? 'Mitra';
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#F4F7FB;color:#0F1C3A;min-height:100vh;font-size:14px}
-.mt-top{background:#0F1C3A;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:90;box-shadow:0 1px 8px rgba(0,0,0,.12)}
-.mt-top-row{display:flex;justify-content:space-between;align-items:center}
-.mt-brand{font-size:13px;font-weight:800;color:#35E8D5;letter-spacing:.03em}
-.mt-brand small{display:block;font-size:10px;font-weight:500;color:rgba(255,255,255,.55);margin-top:1px}
-.mt-logout{font-size:11px;color:rgba(255,255,255,.6);text-decoration:none;border:1px solid rgba(255,255,255,.15);padding:4px 10px;border-radius:6px}
-.mt-main{max-width:560px;margin:0 auto;padding:14px 14px 80px}
-.mt-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E5E9F2;display:flex;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.05)}
+.mt-top{background:#0F1C3A;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:90;box-shadow:0 1px 8px rgba(0,0,0,.12);max-width:480px;margin:0 auto}
+.mt-top-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mt-brand{font-size:13px;font-weight:800;color:#35E8D5;letter-spacing:.03em;min-width:0;flex:1}
+.mt-brand small{display:block;font-size:10px;font-weight:500;color:rgba(255,255,255,.55);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-logout{font-size:11px;color:rgba(255,255,255,.6);text-decoration:none;border:1px solid rgba(255,255,255,.15);padding:5px 10px;border-radius:6px;flex-shrink:0}
+.mt-main{max-width:480px;margin:0 auto;padding:14px 14px 80px}
+.mt-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#fff;border-top:1px solid #E5E9F2;display:flex;z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
 .mt-nav a{flex:1;text-align:center;padding:10px 4px;text-decoration:none;color:#9CA3AF;font-size:10px;font-weight:600}
 .mt-nav a .ico{display:block;font-size:18px;margin-bottom:2px}
 .mt-nav a.active{color:#0891B2}
